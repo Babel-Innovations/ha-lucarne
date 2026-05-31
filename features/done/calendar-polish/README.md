@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 ---
 
 # calendar-polish — Post-visible-days bug fixes

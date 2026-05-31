@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 ---
 
 # visible-days — Rolling N-day window for the calendar card
