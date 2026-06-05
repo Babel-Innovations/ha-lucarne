@@ -14,9 +14,9 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
-    "pytest-cov>=6.0",
-    "pytest-homeassistant-custom-component>=0.13.334",
-    "ruff>=0.15.15",
+    "pytest-cov>=7.1.0",
+    "pytest-homeassistant-custom-component>=0.13.336",
+    "ruff>=0.15.16",
     "mypy>=2.1.0",
     "ical==13.2.5",
 ]
