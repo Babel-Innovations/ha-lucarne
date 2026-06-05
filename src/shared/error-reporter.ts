@@ -34,6 +34,10 @@ let latestHass: HomeAssistant | null = null;
 let debugEnabled = false;
 let globalHandlerInstalled = false;
 const lastReportedAt = new Map<string, number>();
+// Kept so __resetErrorReporterForTests can unregister them; otherwise a
+// install → reset → install cycle would leave duplicate listeners attached.
+let onWindowError: ((ev: ErrorEvent) => void) | null = null;
+let onUnhandledRejection: ((ev: PromiseRejectionEvent) => void) | null = null;
 
 /**
  * Stash the latest `hass` and the debug flag so the global window handlers (which
@@ -89,10 +93,12 @@ function hashSignature(s: string): string {
 
 function monotonicNow(): number {
   // performance.now() is monotonic and present in WKWebView; guard so a missing
-  // performance object can't make the reporter itself throw.
+  // performance object can't make the reporter itself throw. Fall back to
+  // Date.now() (not a constant) — a constant clock would make `ts - last` always
+  // 0, so the throttle would suppress every repeat after the first one forever.
   return typeof performance !== 'undefined' && typeof performance.now === 'function'
     ? performance.now()
-    : 0;
+    : Date.now();
 }
 
 /**
@@ -140,19 +146,26 @@ export function installGlobalErrorReporter(): void {
   if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
   globalHandlerInstalled = true;
 
-  window.addEventListener('error', (ev: ErrorEvent) => {
+  onWindowError = (ev: ErrorEvent) => {
     if (!isLucarneError(ev.error, ev.filename)) return;
     reportLucarneError(ev.error ?? new Error(ev.message), 'window.onerror');
-  });
-
-  window.addEventListener('unhandledrejection', (ev: PromiseRejectionEvent) => {
+  };
+  onUnhandledRejection = (ev: PromiseRejectionEvent) => {
     if (!isLucarneError(ev.reason)) return;
     reportLucarneError(ev.reason, 'unhandledrejection');
-  });
+  };
+  window.addEventListener('error', onWindowError);
+  window.addEventListener('unhandledrejection', onUnhandledRejection);
 }
 
 /** Test-only: reset module state between cases. */
 export function __resetErrorReporterForTests(): void {
+  if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+    if (onWindowError) window.removeEventListener('error', onWindowError);
+    if (onUnhandledRejection) window.removeEventListener('unhandledrejection', onUnhandledRejection);
+  }
+  onWindowError = null;
+  onUnhandledRejection = null;
   latestHass = null;
   debugEnabled = false;
   globalHandlerInstalled = false;
