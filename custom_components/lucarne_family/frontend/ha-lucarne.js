@@ -318,12 +318,12 @@ var _e = globalThis, ve = (e) => e, ye = _e.trustedTypes, be = ye ? ye.createPol
 	_$litType$: e,
 	strings: t,
 	values: n
-}), P = Le(1), Re = Le(2), F = Symbol.for("lit-noChange"), I = Symbol.for("lit-nothing"), ze = /* @__PURE__ */ new WeakMap(), Be = Te.createTreeWalker(Te, 129);
-function L(e, t) {
+}), P = Le(1), F = Le(2), I = Symbol.for("lit-noChange"), L = Symbol.for("lit-nothing"), Re = /* @__PURE__ */ new WeakMap(), ze = Te.createTreeWalker(Te, 129);
+function R(e, t) {
 	if (!Oe(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
 	return be === void 0 ? t : be.createHTML(t);
 }
-var R = (e, t) => {
+var z = (e, t) => {
 	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = je;
 	for (let t = 0; t < n; t++) {
 		let n = e[t], s, c, l = -1, u = 0;
@@ -331,17 +331,17 @@ var R = (e, t) => {
 		let d = o === Pe && e[t + 1].startsWith("/>") ? " " : "";
 		a += o === je ? n + we : l >= 0 ? (r.push(s), n.slice(0, l) + xe + n.slice(l) + Se + d) : n + Se + (l === -2 ? t : d);
 	}
-	return [L(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
-}, Ve = class e {
+	return [R(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
+}, Be = class e {
 	constructor({ strings: t, _$litType$: n }, r) {
 		let i;
 		this.parts = [];
-		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = R(t, n);
-		if (this.el = e.createElement(l, r), Be.currentNode = this.el.content, n === 2 || n === 3) {
+		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = z(t, n);
+		if (this.el = e.createElement(l, r), ze.currentNode = this.el.content, n === 2 || n === 3) {
 			let e = this.el.content.firstChild;
 			e.replaceWith(...e.childNodes);
 		}
-		for (; (i = Be.nextNode()) !== null && c.length < s;) {
+		for (; (i = ze.nextNode()) !== null && c.length < s;) {
 			if (i.nodeType === 1) {
 				if (i.hasAttributes()) for (let e of i.getAttributeNames()) if (e.endsWith(xe)) {
 					let t = u[o++], n = i.getAttribute(e).split(Se), r = /([.?@])?(.*)/.exec(t);
@@ -350,7 +350,7 @@ var R = (e, t) => {
 						index: a,
 						name: r[2],
 						strings: n,
-						ctor: r[1] === "." ? z : r[1] === "?" ? Ke : r[1] === "@" ? qe : Ge
+						ctor: r[1] === "." ? B : r[1] === "?" ? Ge : r[1] === "@" ? Ke : We
 					}), i.removeAttribute(e);
 				} else e.startsWith(Se) && (c.push({
 					type: 6,
@@ -360,7 +360,7 @@ var R = (e, t) => {
 					let e = i.textContent.split(Se), t = e.length - 1;
 					if (t > 0) {
 						i.textContent = ye ? ye.emptyScript : "";
-						for (let n = 0; n < t; n++) i.append(e[n], Ee()), Be.nextNode(), c.push({
+						for (let n = 0; n < t; n++) i.append(e[n], Ee()), ze.nextNode(), c.push({
 							type: 2,
 							index: ++a
 						});
@@ -386,12 +386,12 @@ var R = (e, t) => {
 		return n.innerHTML = e, n;
 	}
 };
-function He(e, t, n = e, r) {
-	if (t === F) return t;
+function Ve(e, t, n = e, r) {
+	if (t === I) return t;
 	let i = r === void 0 ? n._$Cl : n._$Co?.[r], a = De(t) ? void 0 : t._$litDirective$;
-	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = He(e, i._$AS(e, t.values), i, r)), t;
+	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = Ve(e, i._$AS(e, t.values), i, r)), t;
 }
-var Ue = class {
+var He = class {
 	constructor(e, t) {
 		this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
 	}
@@ -403,27 +403,27 @@ var Ue = class {
 	}
 	u(e) {
 		let { el: { content: t }, parts: n } = this._$AD, r = (e?.creationScope ?? Te).importNode(t, !0);
-		Be.currentNode = r;
-		let i = Be.nextNode(), a = 0, o = 0, s = n[0];
+		ze.currentNode = r;
+		let i = ze.nextNode(), a = 0, o = 0, s = n[0];
 		for (; s !== void 0;) {
 			if (a === s.index) {
 				let t;
-				s.type === 2 ? t = new We(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new Je(i, this, e)), this._$AV.push(t), s = n[++o];
+				s.type === 2 ? t = new Ue(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new qe(i, this, e)), this._$AV.push(t), s = n[++o];
 			}
-			a !== s?.index && (i = Be.nextNode(), a++);
+			a !== s?.index && (i = ze.nextNode(), a++);
 		}
-		return Be.currentNode = Te, r;
+		return ze.currentNode = Te, r;
 	}
 	p(e) {
 		let t = 0;
 		for (let n of this._$AV) n !== void 0 && (n.strings === void 0 ? n._$AI(e[t]) : (n._$AI(e, n, t), t += n.strings.length - 2)), t++;
 	}
-}, We = class e {
+}, Ue = class e {
 	get _$AU() {
 		return this._$AM?._$AU ?? this._$Cv;
 	}
 	constructor(e, t, n, r) {
-		this.type = 2, this._$AH = I, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
+		this.type = 2, this._$AH = L, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
 	}
 	get parentNode() {
 		let e = this._$AA.parentNode, t = this._$AM;
@@ -436,7 +436,7 @@ var Ue = class {
 		return this._$AB;
 	}
 	_$AI(e, t = this) {
-		e = He(this, e, t), De(e) ? e === I || e == null || e === "" ? (this._$AH !== I && this._$AR(), this._$AH = I) : e !== this._$AH && e !== F && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? ke(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
+		e = Ve(this, e, t), De(e) ? e === L || e == null || e === "" ? (this._$AH !== L && this._$AR(), this._$AH = L) : e !== this._$AH && e !== I && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? ke(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
 	}
 	O(e) {
 		return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -445,19 +445,19 @@ var Ue = class {
 		this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
 	}
 	_(e) {
-		this._$AH !== I && De(this._$AH) ? this._$AA.nextSibling.data = e : this.T(Te.createTextNode(e)), this._$AH = e;
+		this._$AH !== L && De(this._$AH) ? this._$AA.nextSibling.data = e : this.T(Te.createTextNode(e)), this._$AH = e;
 	}
 	$(e) {
-		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = Ve.createElement(L(n.h, n.h[0]), this.options)), n);
+		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = Be.createElement(R(n.h, n.h[0]), this.options)), n);
 		if (this._$AH?._$AD === r) this._$AH.p(t);
 		else {
-			let e = new Ue(r, this), n = e.u(this.options);
+			let e = new He(r, this), n = e.u(this.options);
 			e.p(t), this.T(n), this._$AH = e;
 		}
 	}
 	_$AC(e) {
-		let t = ze.get(e.strings);
-		return t === void 0 && ze.set(e.strings, t = new Ve(e)), t;
+		let t = Re.get(e.strings);
+		return t === void 0 && Re.set(e.strings, t = new Be(e)), t;
 	}
 	k(t) {
 		Oe(this._$AH) || (this._$AH = [], this._$AR());
@@ -474,7 +474,7 @@ var Ue = class {
 	setConnected(e) {
 		this._$AM === void 0 && (this._$Cv = e, this._$AP?.(e));
 	}
-}, Ge = class {
+}, We = class {
 	get tagName() {
 		return this.element.tagName;
 	}
@@ -482,47 +482,47 @@ var Ue = class {
 		return this._$AM._$AU;
 	}
 	constructor(e, t, n, r, i) {
-		this.type = 1, this._$AH = I, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = I;
+		this.type = 1, this._$AH = L, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = L;
 	}
 	_$AI(e, t = this, n, r) {
 		let i = this.strings, a = !1;
-		if (i === void 0) e = He(this, e, t, 0), a = !De(e) || e !== this._$AH && e !== F, a && (this._$AH = e);
+		if (i === void 0) e = Ve(this, e, t, 0), a = !De(e) || e !== this._$AH && e !== I, a && (this._$AH = e);
 		else {
 			let r = e, o, s;
-			for (e = i[0], o = 0; o < i.length - 1; o++) s = He(this, r[n + o], t, o), s === F && (s = this._$AH[o]), a ||= !De(s) || s !== this._$AH[o], s === I ? e = I : e !== I && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
+			for (e = i[0], o = 0; o < i.length - 1; o++) s = Ve(this, r[n + o], t, o), s === I && (s = this._$AH[o]), a ||= !De(s) || s !== this._$AH[o], s === L ? e = L : e !== L && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
 		}
 		a && !r && this.j(e);
 	}
 	j(e) {
-		e === I ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
+		e === L ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
 	}
-}, z = class extends Ge {
+}, B = class extends We {
 	constructor() {
 		super(...arguments), this.type = 3;
 	}
 	j(e) {
-		this.element[this.name] = e === I ? void 0 : e;
+		this.element[this.name] = e === L ? void 0 : e;
 	}
-}, Ke = class extends Ge {
+}, Ge = class extends We {
 	constructor() {
 		super(...arguments), this.type = 4;
 	}
 	j(e) {
-		this.element.toggleAttribute(this.name, !!e && e !== I);
+		this.element.toggleAttribute(this.name, !!e && e !== L);
 	}
-}, qe = class extends Ge {
+}, Ke = class extends We {
 	constructor(e, t, n, r, i) {
 		super(e, t, n, r, i), this.type = 5;
 	}
 	_$AI(e, t = this) {
-		if ((e = He(this, e, t, 0) ?? I) === F) return;
-		let n = this._$AH, r = e === I && n !== I || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== I && (n === I || r);
+		if ((e = Ve(this, e, t, 0) ?? L) === I) return;
+		let n = this._$AH, r = e === L && n !== L || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== L && (n === L || r);
 		r && this.element.removeEventListener(this.name, this, n), i && this.element.addEventListener(this.name, this, e), this._$AH = e;
 	}
 	handleEvent(e) {
 		typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
 	}
-}, Je = class {
+}, qe = class {
 	constructor(e, t, n) {
 		this.element = e, this.type = 6, this._$AN = void 0, this._$AM = t, this.options = n;
 	}
@@ -530,18 +530,18 @@ var Ue = class {
 		return this._$AM._$AU;
 	}
 	_$AI(e) {
-		He(this, e);
+		Ve(this, e);
 	}
-}, Ye = _e.litHtmlPolyfillSupport;
-Ye?.(Ve, We), (_e.litHtmlVersions ??= []).push("3.3.3");
-var Xe = (e, t, n) => {
+}, Je = _e.litHtmlPolyfillSupport;
+Je?.(Be, Ue), (_e.litHtmlVersions ??= []).push("3.3.3");
+var Ye = (e, t, n) => {
 	let r = n?.renderBefore ?? t, i = r._$litPart$;
 	if (i === void 0) {
 		let e = n?.renderBefore ?? null;
-		r._$litPart$ = i = new We(t.insertBefore(Ee(), e), e, void 0, n ?? {});
+		r._$litPart$ = i = new Ue(t.insertBefore(Ee(), e), e, void 0, n ?? {});
 	}
 	return i._$AI(e), i;
-}, Ze = globalThis, B = class extends ge {
+}, Xe = globalThis, V = class extends ge {
 	constructor() {
 		super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
 	}
@@ -551,7 +551,7 @@ var Xe = (e, t, n) => {
 	}
 	update(e) {
 		let t = this.render();
-		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Xe(t, this.renderRoot, this.renderOptions);
+		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Ye(t, this.renderRoot, this.renderOptions);
 	}
 	connectedCallback() {
 		super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -560,25 +560,25 @@ var Xe = (e, t, n) => {
 		super.disconnectedCallback(), this._$Do?.setConnected(!1);
 	}
 	render() {
-		return F;
+		return I;
 	}
 };
-B._$litElement$ = !0, B.finalized = !0, Ze.litElementHydrateSupport?.({ LitElement: B });
-var Qe = Ze.litElementPolyfillSupport;
-Qe?.({ LitElement: B }), (Ze.litElementVersions ??= []).push("4.2.2");
+V._$litElement$ = !0, V.finalized = !0, Xe.litElementHydrateSupport?.({ LitElement: V });
+var Ze = Xe.litElementPolyfillSupport;
+Ze?.({ LitElement: V }), (Xe.litElementVersions ??= []).push("4.2.2");
 //#endregion
 //#region node_modules/@lit/reactive-element/decorators/custom-element.js
-var V = (e) => (t, n) => {
+var H = (e) => (t, n) => {
 	n === void 0 ? customElements.define(e, t) : n.addInitializer(() => {
 		customElements.define(e, t);
 	});
-}, H = {
+}, Qe = {
 	attribute: !0,
 	type: String,
 	converter: pe,
 	reflect: !1,
 	hasChanged: me
-}, U = (e = H, t, n) => {
+}, U = (e = Qe, t, n) => {
 	let { kind: r, metadata: i } = n, a = globalThis.litPropertyMetadata.get(i);
 	if (a === void 0 && globalThis.litPropertyMetadata.set(i, a = /* @__PURE__ */ new Map()), r === "setter" && ((e = Object.create(e)).wrapped = !0), a.set(n.name, e), r === "accessor") {
 		let { name: r } = n;
@@ -706,7 +706,7 @@ var K = k`
       --lucarne-skeleton-highlight: rgba(255, 255, 255, 0.16);
     }
   }
-`, tt = class e extends B {
+`, tt = class e extends V {
 	render() {
 		let t = this;
 		v(t.hass, t._config?.debug);
@@ -1008,7 +1008,7 @@ function yt(e, t, n) {
 function bt(e) {
 	return e.start.length === 10 && e.end.length === 10;
 }
-var xt = class extends B {
+var xt = class extends V {
 	constructor(...e) {
 		super(...e), this.events = [], this.calendarColors = /* @__PURE__ */ new Map(), this.windowDays = 1;
 	}
@@ -1136,20 +1136,20 @@ var xt = class extends B {
 		return "var(--lucarne-color-family)";
 	}
 };
-J([W({ type: Array })], xt.prototype, "events", void 0), J([W({ type: Object })], xt.prototype, "calendarColors", void 0), J([W({ type: Number })], xt.prototype, "windowDays", void 0), xt = J([V("lucarne-agenda-strip")], xt);
+J([W({ type: Array })], xt.prototype, "events", void 0), J([W({ type: Object })], xt.prototype, "calendarColors", void 0), J([W({ type: Number })], xt.prototype, "windowDays", void 0), xt = J([H("lucarne-agenda-strip")], xt);
 //#endregion
 //#region src/shared/icons.ts
-var St = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+var St = F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <circle cx="12" cy="12" r="4"/>
   <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-</svg>`, Ct = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, Ct = F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
-</svg>`, wt = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, wt = F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/>
   <line x1="8" y1="19" x2="8" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
   <line x1="12" y1="19" x2="12" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
   <line x1="16" y1="19" x2="16" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-</svg>`, Tt = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+</svg>`, Tt = F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
   <path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/>
   <line x1="8" y1="21" x2="8" y2="19"/>
   <line x1="8" y1="19" x2="10" y2="17"/>
@@ -1160,24 +1160,24 @@ var St = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="cu
   <line x1="12" y1="22" x2="12" y2="20"/>
   <line x1="12" y1="20" x2="14" y2="18"/>
   <line x1="12" y1="20" x2="10" y2="18"/>
-</svg>`, Et = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, Et = F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M12 2v2M4.22 4.22l1.42 1.42M2 12h2M4.22 19.78l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
   <circle cx="10" cy="10" r="3" fill="currentColor"/>
   <path d="M20 15h-1.26A6 6 0 1 0 8 20h12a4 4 0 0 0 0-8z" fill="currentColor" opacity="0.7"/>
 </svg>`;
-Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <circle cx="12" cy="7" r="4"/>
   <path d="M20 21a8 8 0 1 0-16 0"/>
-</svg>`, Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+</svg>`, F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <polyline points="9 18 15 12 9 6"/>
 </svg>`;
-var Dt = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+var Dt = F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
   <polyline points="20 6 9 17 4 12"/>
-</svg>`, Ot = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, Ot = F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M3,12H7A5,5 0 0,1 12,7A5,5 0 0,1 17,12H21A1,1 0 0,1 22,13A1,1 0 0,1 21,14H3A1,1 0 0,1 2,13A1,1 0 0,1 3,12M15,12A3,3 0 0,0 12,9A3,3 0 0,0 9,12H15M12,2L14.39,5.42C13.65,5.15 12.84,5 12,5C11.16,5 10.35,5.15 9.61,5.42L12,2M3.34,7L7.5,6.65C6.9,7.16 6.36,7.78 5.94,8.5C5.5,9.24 5.25,10 5.11,10.79L3.34,7M20.65,7L18.88,10.79C18.74,10 18.47,9.23 18.05,8.5C17.63,7.78 17.1,7.15 16.5,6.64L20.65,7M12.71,16.3L15.82,19.41C16.21,19.8 16.21,20.43 15.82,20.82C15.43,21.21 14.8,21.21 14.41,20.82L12,18.41L9.59,20.82C9.2,21.21 8.57,21.21 8.18,20.82C7.79,20.43 7.79,19.8 8.18,19.41L11.29,16.3C11.5,16.1 11.74,16 12,16C12.26,16 12.5,16.1 12.71,16.3Z"/>
-</svg>`, kt = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, kt = F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,2L14.39,5.42C13.65,5.15 12.84,5 12,5C11.16,5 10.35,5.15 9.61,5.42L12,2M3.34,7L7.5,6.65C6.9,7.16 6.36,7.78 5.94,8.5C5.5,9.24 5.25,10 5.11,10.79L3.34,7M3.36,17L5.12,13.23C5.26,14 5.53,14.78 5.95,15.5C6.37,16.24 6.91,16.86 7.5,17.37L3.36,17M20.65,7L18.88,10.79C18.74,10 18.47,9.23 18.05,8.5C17.63,7.78 17.1,7.15 16.5,6.64L20.65,7M20.64,17L16.5,17.36C17.09,16.85 17.62,16.22 18.04,15.5C18.46,14.77 18.73,14 18.87,13.21L20.64,17M12,22L9.59,18.56C10.33,18.83 11.14,19 12,19C12.82,19 13.63,18.83 14.37,18.56L12,22Z"/>
-</svg>`, At = Re`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, At = F`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M17.75,4.09L15.22,6.03L16.13,9.09L13.5,7.28L10.87,9.09L11.78,6.03L9.25,4.09L12.44,4L13.5,1L14.56,4L17.75,4.09M21.25,11L19.61,12.25L20.2,14.23L18.5,13.06L16.8,14.23L17.39,12.25L15.75,11L17.81,10.95L18.5,9L19.19,10.95L21.25,11M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.08,19.07C15.17,23 8.84,23 4.94,19.07C1.03,15.17 1.03,8.83 4.94,4.93C5.34,4.53 5.76,4.17 6.21,3.85C6.96,3.32 8.14,4.21 8.06,5.04C7.79,7.9 8.75,10.87 10.95,13.06C13.14,15.26 16.1,16.22 18.97,15.95M17.33,17.97C14.5,17.81 11.7,16.64 9.53,14.5C7.36,12.31 6.2,9.5 6.04,6.68C3.23,9.82 3.34,14.64 6.35,17.66C9.37,20.67 14.19,20.78 17.33,17.97Z"/>
 </svg>`, jt = {
 	sunny: St,
@@ -1230,7 +1230,7 @@ function Ft(e) {
 }
 //#endregion
 //#region src/components/weather-block.ts
-var It = class extends B {
+var It = class extends V {
 	constructor(...e) {
 		super(...e), this.forecast = [];
 	}
@@ -1328,10 +1328,10 @@ var It = class extends B {
     `;
 	}
 };
-J([W({ attribute: !1 })], It.prototype, "weatherEntity", void 0), J([W({ type: Array })], It.prototype, "forecast", void 0), It = J([V("lucarne-weather-block")], It);
+J([W({ attribute: !1 })], It.prototype, "weatherEntity", void 0), J([W({ type: Array })], It.prototype, "forecast", void 0), It = J([H("lucarne-weather-block")], It);
 //#endregion
 //#region src/components/member-avatar.ts
-var Lt = /^(?=.*[\p{Extended_Pictographic}\p{Regional_Indicator}])[\p{Extended_Pictographic}\p{Emoji_Component}\p{Emoji_Modifier}\p{Regional_Indicator}‍️]+$/u, Rt = class extends B {
+var Lt = /^(?=.*[\p{Extended_Pictographic}\p{Regional_Indicator}])[\p{Extended_Pictographic}\p{Emoji_Component}\p{Emoji_Modifier}\p{Regional_Indicator}‍️]+$/u, Rt = class extends V {
 	constructor(...e) {
 		super(...e), this.name = "", this.color = "#a8d8b9", this.avatar = null;
 	}
@@ -1389,10 +1389,10 @@ var Lt = /^(?=.*[\p{Extended_Pictographic}\p{Regional_Indicator}])[\p{Extended_P
     `;
 	}
 };
-J([W()], Rt.prototype, "name", void 0), J([W()], Rt.prototype, "color", void 0), J([W()], Rt.prototype, "avatar", void 0), Rt = J([V("lucarne-member-avatar")], Rt);
+J([W()], Rt.prototype, "name", void 0), J([W()], Rt.prototype, "color", void 0), J([W()], Rt.prototype, "avatar", void 0), Rt = J([H("lucarne-member-avatar")], Rt);
 //#endregion
 //#region src/components/task-row.ts
-var zt = 500, Bt = class extends B {
+var zt = 500, Bt = class extends V {
 	constructor(...e) {
 		super(...e), this.memberColor = "#a8d8b9", this.compact = !1, this._pressTimer = null, this._longPressed = !1;
 	}
@@ -1561,7 +1561,7 @@ var zt = 500, Bt = class extends B {
 J([W({ attribute: !1 })], Bt.prototype, "task", void 0), J([W()], Bt.prototype, "memberColor", void 0), J([W({
 	type: Boolean,
 	reflect: !0
-})], Bt.prototype, "compact", void 0), Bt = J([V("lucarne-task-row")], Bt);
+})], Bt.prototype, "compact", void 0), Bt = J([H("lucarne-task-row")], Bt);
 //#endregion
 //#region src/components/tasks-summary.ts
 var Vt = "household";
@@ -1606,7 +1606,7 @@ function Wt(e) {
 		}
 	};
 }
-var Gt = class extends B {
+var Gt = class extends V {
 	constructor(...e) {
 		super(...e), this.items = [], this.integrationMode = !1, this.renderableTasks = [], this.members = [], this.limit = 5, this.refillOnComplete = !1, this._admitted = /* @__PURE__ */ new Set(), this._burned = /* @__PURE__ */ new Set(), this._windowKey = "";
 	}
@@ -1776,10 +1776,10 @@ var Gt = class extends B {
 		return !t || t === Vt ? null : this.members.find((e) => e.slug === t) ?? null;
 	}
 };
-J([W({ type: Array })], Gt.prototype, "items", void 0), J([W({ type: String })], Gt.prototype, "todoEntityId", void 0), J([W({ type: Boolean })], Gt.prototype, "integrationMode", void 0), J([W({ attribute: !1 })], Gt.prototype, "renderableTasks", void 0), J([W({ attribute: !1 })], Gt.prototype, "members", void 0), J([W({ type: Number })], Gt.prototype, "limit", void 0), J([W({ type: Boolean })], Gt.prototype, "refillOnComplete", void 0), Gt = J([V("lucarne-tasks-summary")], Gt);
+J([W({ type: Array })], Gt.prototype, "items", void 0), J([W({ type: String })], Gt.prototype, "todoEntityId", void 0), J([W({ type: Boolean })], Gt.prototype, "integrationMode", void 0), J([W({ attribute: !1 })], Gt.prototype, "renderableTasks", void 0), J([W({ attribute: !1 })], Gt.prototype, "members", void 0), J([W({ type: Number })], Gt.prototype, "limit", void 0), J([W({ type: Boolean })], Gt.prototype, "refillOnComplete", void 0), Gt = J([H("lucarne-tasks-summary")], Gt);
 //#endregion
 //#region src/components/presence-pills.ts
-var Kt = class extends B {
+var Kt = class extends V {
 	constructor(...e) {
 		super(...e), this.entries = [];
 	}
@@ -1838,7 +1838,7 @@ var Kt = class extends B {
     `;
 	}
 };
-J([W({ type: Array })], Kt.prototype, "entries", void 0), Kt = J([V("lucarne-presence-pills")], Kt);
+J([W({ type: Array })], Kt.prototype, "entries", void 0), Kt = J([H("lucarne-presence-pills")], Kt);
 //#endregion
 //#region src/shared/recurrence.ts
 var qt = [
@@ -2076,7 +2076,7 @@ function rn(e, t = /* @__PURE__ */ new Date()) {
 }
 //#endregion
 //#region src/components/family-ready-pill.ts
-var an = class extends B {
+var an = class extends V {
 	constructor(...e) {
 		super(...e), this.members = [], this.tasksByMember = /* @__PURE__ */ new Map();
 	}
@@ -2148,7 +2148,7 @@ var an = class extends B {
     `;
 	}
 };
-J([W({ attribute: !1 })], an.prototype, "members", void 0), J([W({ attribute: !1 })], an.prototype, "tasksByMember", void 0), an = J([V("lucarne-family-ready-pill")], an);
+J([W({ attribute: !1 })], an.prototype, "members", void 0), J([W({ attribute: !1 })], an.prototype, "tasksByMember", void 0), an = J([H("lucarne-family-ready-pill")], an);
 //#endregion
 //#region src/cards/lucarne-today-card.ts
 var on = [
@@ -2473,7 +2473,7 @@ var cn = class extends tt {
     `;
 	}
 };
-J([W({ attribute: !1 })], cn.prototype, "hass", void 0), J([G()], cn.prototype, "_config", void 0), J([G()], cn.prototype, "_calendarEvents", void 0), J([G()], cn.prototype, "_forecast", void 0), J([G()], cn.prototype, "_todoItems", void 0), J([G()], cn.prototype, "_familyState", void 0), cn = J([V("lucarne-today-card")], cn);
+J([W({ attribute: !1 })], cn.prototype, "hass", void 0), J([G()], cn.prototype, "_config", void 0), J([G()], cn.prototype, "_calendarEvents", void 0), J([G()], cn.prototype, "_forecast", void 0), J([G()], cn.prototype, "_todoItems", void 0), J([G()], cn.prototype, "_familyState", void 0), cn = J([H("lucarne-today-card")], cn);
 //#endregion
 //#region src/shared/editor-styles.ts
 var ln = k`
@@ -2709,7 +2709,7 @@ var vn = (e, t, n, r) => {
 		composed: r.composed === void 0 ? !0 : r.composed
 	});
 	return i.detail = n, e.dispatchEvent(i), i;
-}, yn = class extends B {
+}, yn = class extends V {
 	constructor(...e) {
 		super(...e), this.items = [], this.label = "Reorderable list", this._dragIndex = null, this._dragOverIndex = null;
 	}
@@ -2836,7 +2836,7 @@ var vn = (e, t, n, r) => {
     `;
 	}
 };
-J([W({ attribute: !1 })], yn.prototype, "items", void 0), J([W()], yn.prototype, "label", void 0), J([G()], yn.prototype, "_dragIndex", void 0), J([G()], yn.prototype, "_dragOverIndex", void 0), yn = J([V("lucarne-reorder-list")], yn);
+J([W({ attribute: !1 })], yn.prototype, "items", void 0), J([W()], yn.prototype, "label", void 0), J([G()], yn.prototype, "_dragIndex", void 0), J([G()], yn.prototype, "_dragOverIndex", void 0), yn = J([H("lucarne-reorder-list")], yn);
 //#endregion
 //#region src/editors/lucarne-today-card-editor.ts
 var bn = {
@@ -2848,7 +2848,7 @@ var bn = {
     font-size: var(--lucarne-fs-md);
     color: var(--lucarne-on-surface);
   }
-`, Sn = class extends B {
+`, Sn = class extends V {
 	constructor(...e) {
 		super(...e), this._haReady = !1;
 	}
@@ -3157,7 +3157,7 @@ var bn = {
     `;
 	}
 };
-J([W({ attribute: !1 })], Sn.prototype, "hass", void 0), J([G()], Sn.prototype, "_config", void 0), J([G()], Sn.prototype, "_haReady", void 0), Sn = J([V("lucarne-today-card-editor")], Sn);
+J([W({ attribute: !1 })], Sn.prototype, "hass", void 0), J([G()], Sn.prototype, "_config", void 0), J([G()], Sn.prototype, "_haReady", void 0), Sn = J([H("lucarne-today-card-editor")], Sn);
 //#endregion
 //#region src/shared/calendar-helpers.ts
 function Cn(e, t) {
@@ -3460,7 +3460,21 @@ var zn = class {
 			console.warn("[lucarne] RollingWindowController fetch failed:", e);
 		});
 	}
-}, Bn = class extends B {
+};
+//#endregion
+//#region src/shared/calendar-scroll.ts
+function Bn(e) {
+	let { now: t, bandStartH: n, bandEndH: r, timeGridTopPx: i, timeGridHeightPx: a, paddingPx: o, maxScrollTop: s } = e, c = r - n;
+	if (c <= 0) return 0;
+	let l = t.getHours() + t.getMinutes() / 60 + t.getSeconds() / 3600;
+	if (l <= n) return 0;
+	if (l >= r) return Math.max(0, s);
+	let u = i + (l - n) / c * a - o;
+	return Math.max(0, Math.min(s, u));
+}
+//#endregion
+//#region src/components/visibility-pills.ts
+var Vn = class extends V {
 	constructor(...e) {
 		super(...e), this.calendars = [], this.visibleIds = /* @__PURE__ */ new Set();
 	}
@@ -3533,20 +3547,20 @@ var zn = class {
     `;
 	}
 };
-J([W({ type: Array })], Bn.prototype, "calendars", void 0), J([W({ type: Object })], Bn.prototype, "visibleIds", void 0), Bn = J([V("lucarne-visibility-pills")], Bn);
+J([W({ type: Array })], Vn.prototype, "calendars", void 0), J([W({ type: Object })], Vn.prototype, "visibleIds", void 0), Vn = J([H("lucarne-visibility-pills")], Vn);
 //#endregion
 //#region node_modules/lit-html/directive.js
-var Vn = {
+var Hn = {
 	ATTRIBUTE: 1,
 	CHILD: 2,
 	PROPERTY: 3,
 	BOOLEAN_ATTRIBUTE: 4,
 	EVENT: 5,
 	ELEMENT: 6
-}, Hn = (e) => (...t) => ({
+}, Un = (e) => (...t) => ({
 	_$litDirective$: e,
 	values: t
-}), Un = class {
+}), Wn = class {
 	constructor(e) {}
 	get _$AU() {
 		return this._$AM._$AU;
@@ -3560,9 +3574,9 @@ var Vn = {
 	update(e, t) {
 		return this.render(...t);
 	}
-}, Wn = "important", Gn = " !important", Kn = Hn(class extends Un {
+}, Gn = "important", Kn = " !important", qn = Un(class extends Wn {
 	constructor(e) {
-		if (super(e), e.type !== Vn.ATTRIBUTE || e.name !== "style" || e.strings?.length > 2) throw Error("The `styleMap` directive must be used in the `style` attribute and must be the only part in the attribute.");
+		if (super(e), e.type !== Hn.ATTRIBUTE || e.name !== "style" || e.strings?.length > 2) throw Error("The `styleMap` directive must be used in the `style` attribute and must be the only part in the attribute.");
 	}
 	render(e) {
 		return Object.keys(e).reduce((t, n) => {
@@ -3578,23 +3592,23 @@ var Vn = {
 			let r = t[e];
 			if (r != null) {
 				this.ft.add(e);
-				let t = typeof r == "string" && r.endsWith(Gn);
-				e.includes("-") || t ? n.setProperty(e, t ? r.slice(0, -11) : r, t ? Wn : "") : n[e] = r;
+				let t = typeof r == "string" && r.endsWith(Kn);
+				e.includes("-") || t ? n.setProperty(e, t ? r.slice(0, -11) : r, t ? Gn : "") : n[e] = r;
 			}
 		}
-		return F;
+		return I;
 	}
 });
 //#endregion
 //#region src/components/calendar-event-block.ts
-function qn(e) {
+function Jn(e) {
 	return e.toLocaleTimeString("en-US", {
 		hour: "numeric",
 		minute: "2-digit",
 		hour12: !0
 	});
 }
-var Jn = class extends B {
+var Yn = class extends V {
 	constructor(...e) {
 		super(...e), this.color = "#a8d8b9", this.lane = 0, this.laneCount = 1, this.topPercent = 0, this.heightPercent = 10;
 	}
@@ -3650,7 +3664,7 @@ var Jn = class extends B {
 		}));
 	}
 	render() {
-		let e = new Date(this.event.start), t = new Date(this.event.end), n = `${qn(e)}–${qn(t)}`, r = this.event.pending ? "0.5" : "1";
+		let e = new Date(this.event.start), t = new Date(this.event.end), n = `${Jn(e)}–${Jn(t)}`, r = this.event.pending ? "0.5" : "1";
 		return P`
       <div @click=${this._handleClick} style="height:100%;width:100%;overflow:hidden;opacity:${r}">
         <div class="event-summary">${this.event.summary}</div>
@@ -3659,10 +3673,10 @@ var Jn = class extends B {
     `;
 	}
 };
-J([W({ type: Object })], Jn.prototype, "event", void 0), J([W({ type: String })], Jn.prototype, "color", void 0), J([W({ type: Number })], Jn.prototype, "lane", void 0), J([W({ type: Number })], Jn.prototype, "laneCount", void 0), J([W({ type: Number })], Jn.prototype, "topPercent", void 0), J([W({ type: Number })], Jn.prototype, "heightPercent", void 0), Jn = J([V("lucarne-calendar-event-block")], Jn);
+J([W({ type: Object })], Yn.prototype, "event", void 0), J([W({ type: String })], Yn.prototype, "color", void 0), J([W({ type: Number })], Yn.prototype, "lane", void 0), J([W({ type: Number })], Yn.prototype, "laneCount", void 0), J([W({ type: Number })], Yn.prototype, "topPercent", void 0), J([W({ type: Number })], Yn.prototype, "heightPercent", void 0), Yn = J([H("lucarne-calendar-event-block")], Yn);
 //#endregion
 //#region src/components/out-of-band-stub.ts
-var Yn = class extends B {
+var Xn = class extends V {
 	constructor(...e) {
 		super(...e), this.events = [], this.label = "earlier", this.eventColors = /* @__PURE__ */ new Map(), this._open = !1;
 	}
@@ -3793,16 +3807,16 @@ var Yn = class extends B {
     `;
 	}
 };
-J([W({ type: Array })], Yn.prototype, "events", void 0), J([W({ type: String })], Yn.prototype, "label", void 0), J([W({ type: Object })], Yn.prototype, "eventColors", void 0), J([G()], Yn.prototype, "_open", void 0), Yn = J([V("lucarne-out-of-band-stub")], Yn);
+J([W({ type: Array })], Xn.prototype, "events", void 0), J([W({ type: String })], Xn.prototype, "label", void 0), J([W({ type: Object })], Xn.prototype, "eventColors", void 0), J([G()], Xn.prototype, "_open", void 0), Xn = J([H("lucarne-out-of-band-stub")], Xn);
 //#endregion
 //#region src/components/skeleton-day-column.ts
-function Xn(e) {
+function Zn(e) {
 	return 20 + (e * 37 + 11) % 30;
 }
-function Zn(e) {
+function Qn(e) {
 	return 10 + (e * 53 + 7) % 60;
 }
-var Qn = class extends B {
+var $n = class extends V {
 	constructor(...e) {
 		super(...e), this.bandStart = "07:00", this.bandEnd = "21:00", this.hourHeightPx = 60;
 	}
@@ -3865,7 +3879,7 @@ var Qn = class extends B {
         ${[0, 1].map((e) => P`
             <div
               class="fake-event"
-              style="top: ${Zn(e) / 100 * n}px; height: ${Xn(e)}px;"
+              style="top: ${Qn(e) / 100 * n}px; height: ${Zn(e)}px;"
             >
               <div class="shimmer-sweep"></div>
             </div>
@@ -3874,13 +3888,13 @@ var Qn = class extends B {
     `;
 	}
 };
-J([W({ type: String })], Qn.prototype, "bandStart", void 0), J([W({ type: String })], Qn.prototype, "bandEnd", void 0), J([W({ type: Number })], Qn.prototype, "hourHeightPx", void 0), Qn = J([V("lucarne-skeleton-day-column")], Qn);
+J([W({ type: String })], $n.prototype, "bandStart", void 0), J([W({ type: String })], $n.prototype, "bandEnd", void 0), J([W({ type: Number })], $n.prototype, "hourHeightPx", void 0), $n = J([H("lucarne-skeleton-day-column")], $n);
 //#endregion
 //#region src/components/calendar-grid.ts
-function $n(e, t) {
+function er(e, t) {
 	return e.getFullYear() === t.getFullYear() && e.getMonth() === t.getMonth() && e.getDate() === t.getDate();
 }
-var er = class extends B {
+var tr = class extends V {
 	constructor(...e) {
 		super(...e), this.layout = null, this.bandStart = "07:00", this.bandEnd = "21:00", this.calendars = [], this.hourHeightPx = 60, this.showCreateButton = !1, this.dayWidthPx = 0, this.bufferDays = 0, this.cachedDayKeys = /* @__PURE__ */ new Set();
 	}
@@ -4189,7 +4203,7 @@ var er = class extends B {
 		if (!this.layout) return P``;
 		let n = Y(e), r = this.layout.perDay.get(n);
 		if (!r) return P``;
-		let i = Tn(this.bandStart, this.bandEnd), a = (i.length - 1) * this.hourHeightPx, o = $n(e, t), [s] = this.bandStart.split(":").map(Number), [c] = this.bandEnd.split(":").map(Number), l = (c - s) * 36e5, u = null;
+		let i = Tn(this.bandStart, this.bandEnd), a = (i.length - 1) * this.hourHeightPx, o = er(e, t), [s] = this.bandStart.split(":").map(Number), [c] = this.bandEnd.split(":").map(Number), l = (c - s) * 36e5, u = null;
 		if (o) {
 			let n = new Date(e);
 			n.setHours(s, 0, 0, 0);
@@ -4268,7 +4282,7 @@ var er = class extends B {
 		if (!this.layout) return P`<div>Loading…</div>`;
 		let e = /* @__PURE__ */ new Date(), t = Tn(this.bandStart, this.bandEnd), n = (t.length - 1) * this.hourHeightPx, r = new Intl.DateTimeFormat("en-US", { weekday: "short" }), i = { "--lucarne-day-render-count": String(this.layout.days.length) };
 		return this.dayWidthPx > 0 && (i["--lucarne-day-width-px"] = `${this.dayWidthPx}px`, i["--lucarne-day-baseline-px"] = `${-this.bufferDays * this.dayWidthPx}px`), P`
-      <div class="grid-wrapper" style=${Kn(i)}>
+      <div class="grid-wrapper" style=${qn(i)}>
         <!-- Time-column gutter cells (col 1): stay fixed during pan -->
         <div class="header-spacer" style="grid-row:1; grid-column:1"></div>
         <div class="allday-spacer" style="grid-row:2; grid-column:1">all-day</div>
@@ -4287,7 +4301,7 @@ var er = class extends B {
         <div class="day-cols-track" style="grid-row:1">
           ${this.layout.days.map((t, n) => P`
               <div
-                class="day-header ${$n(t, e) ? "today" : ""}"
+                class="day-header ${er(t, e) ? "today" : ""}"
                 style="grid-column: ${n + 1}"
               >
                 <div class="day-pill">
@@ -4351,21 +4365,21 @@ var er = class extends B {
     `;
 	}
 };
-J([W({ type: Object })], er.prototype, "layout", void 0), J([W({ type: String })], er.prototype, "bandStart", void 0), J([W({ type: String })], er.prototype, "bandEnd", void 0), J([W({ type: Array })], er.prototype, "calendars", void 0), J([W({ type: Number })], er.prototype, "hourHeightPx", void 0), J([W({ type: Boolean })], er.prototype, "showCreateButton", void 0), J([W({ type: Number })], er.prototype, "dayWidthPx", void 0), J([W({ type: Number })], er.prototype, "bufferDays", void 0), J([W({ attribute: !1 })], er.prototype, "cachedDayKeys", void 0), er = J([V("lucarne-calendar-grid")], er);
+J([W({ type: Object })], tr.prototype, "layout", void 0), J([W({ type: String })], tr.prototype, "bandStart", void 0), J([W({ type: String })], tr.prototype, "bandEnd", void 0), J([W({ type: Array })], tr.prototype, "calendars", void 0), J([W({ type: Number })], tr.prototype, "hourHeightPx", void 0), J([W({ type: Boolean })], tr.prototype, "showCreateButton", void 0), J([W({ type: Number })], tr.prototype, "dayWidthPx", void 0), J([W({ type: Number })], tr.prototype, "bufferDays", void 0), J([W({ attribute: !1 })], tr.prototype, "cachedDayKeys", void 0), tr = J([H("lucarne-calendar-grid")], tr);
 //#endregion
 //#region src/shared/pan-math.ts
-var tr = 500;
-function nr(e, t, n) {
-	return t <= 0 ? 0 : Math.abs(n) >= tr ? n > 0 ? Math.ceil(e / t) : Math.floor(e / t) : Math.round(e / t);
+var nr = 500;
+function rr(e, t, n) {
+	return t <= 0 ? 0 : Math.abs(n) >= nr ? n > 0 ? Math.ceil(e / t) : Math.floor(e / t) : Math.round(e / t);
 }
-function rr(e, t) {
+function ir(e, t) {
 	if (Math.abs(e) <= t) return e;
 	let n = Math.abs(e) - t;
 	return Math.sign(e) * (t + n * .33);
 }
 //#endregion
 //#region src/components/calendar-day-pan.ts
-var ir = class extends B {
+var ar = class extends V {
 	constructor(...e) {
 		super(...e), this.dayWidthPx = 0, this.bufferDays = 0, this.canPanBack = !0, this.canPanForward = !0, this._startX = 0, this._startY = 0, this._startTime = 0, this._isDragging = !1, this._cachedTargets = [];
 	}
@@ -4396,7 +4410,7 @@ var ir = class extends B {
 		this._cachedTargets = this._panTargets;
 	}
 	_applyRubberBand(e) {
-		return e > 0 && !this.canPanBack || e < 0 && !this.canPanForward ? rr(e, 0) : e;
+		return e > 0 && !this.canPanBack || e < 0 && !this.canPanForward ? ir(e, 0) : e;
 	}
 	_baselinePx() {
 		return -this.bufferDays * this.dayWidthPx;
@@ -4473,7 +4487,7 @@ var ir = class extends B {
 				e.currentTarget.releasePointerCapture(e.pointerId);
 			} catch {}
 			if (this._isDragging) {
-				let t = e.clientX - this._startX, n = performance.now() - this._startTime, r = n > 0 ? t / n * 1e3 : 0, i = nr(this._applyRubberBand(t), this.dayWidthPx, r);
+				let t = e.clientX - this._startX, n = performance.now() - this._startTime, r = n > 0 ? t / n * 1e3 : 0, i = rr(this._applyRubberBand(t), this.dayWidthPx, r);
 				(i > 0 && !this.canPanBack || i < 0 && !this.canPanForward) && (i = 0), this._snapAndCommit(i);
 			}
 			this._pointerId = void 0, this._isDragging = !1, this._cachedTargets = [];
@@ -4493,10 +4507,10 @@ var ir = class extends B {
     `;
 	}
 };
-J([W({ type: Number })], ir.prototype, "dayWidthPx", void 0), J([W({ type: Number })], ir.prototype, "bufferDays", void 0), J([W({ type: Boolean })], ir.prototype, "canPanBack", void 0), J([W({ type: Boolean })], ir.prototype, "canPanForward", void 0), J([et("slot")], ir.prototype, "_slot", void 0), ir = J([V("lucarne-calendar-day-pan")], ir);
+J([W({ type: Number })], ar.prototype, "dayWidthPx", void 0), J([W({ type: Number })], ar.prototype, "bufferDays", void 0), J([W({ type: Boolean })], ar.prototype, "canPanBack", void 0), J([W({ type: Boolean })], ar.prototype, "canPanForward", void 0), J([et("slot")], ar.prototype, "_slot", void 0), ar = J([H("lucarne-calendar-day-pan")], ar);
 //#endregion
 //#region src/components/calendar-event-popover.ts
-function ar(e) {
+function or(e) {
 	return new Date(e).toLocaleString("en-US", {
 		weekday: "short",
 		month: "short",
@@ -4506,7 +4520,7 @@ function ar(e) {
 		hour12: !0
 	});
 }
-var or = class extends B {
+var sr = class extends V {
 	constructor(...e) {
 		super(...e), this.event = null, this.color = "#a8d8b9", this.calendarLabel = "", this.entityId = "", this._confirmingDelete = !1, this._deleting = !1, this._deleteError = "";
 	}
@@ -4684,7 +4698,7 @@ var or = class extends B {
 	}
 	render() {
 		if (!this.event) return P``;
-		let e = this.event, t = e.start.length === 10 && !e.start.includes("T") ? "All day" : `${ar(e.start)} – ${new Date(e.end).toLocaleTimeString("en-US", {
+		let e = this.event, t = e.start.length === 10 && !e.start.includes("T") ? "All day" : `${or(e.start)} – ${new Date(e.end).toLocaleTimeString("en-US", {
 			hour: "numeric",
 			minute: "2-digit",
 			hour12: !0
@@ -4754,20 +4768,20 @@ var or = class extends B {
     `;
 	}
 };
-J([W({ attribute: !1 })], or.prototype, "hass", void 0), J([W({ type: Object })], or.prototype, "event", void 0), J([W({ type: String })], or.prototype, "color", void 0), J([W({ type: String })], or.prototype, "calendarLabel", void 0), J([W({ type: String })], or.prototype, "entityId", void 0), J([G()], or.prototype, "_confirmingDelete", void 0), J([G()], or.prototype, "_deleting", void 0), J([G()], or.prototype, "_deleteError", void 0), or = J([V("lucarne-calendar-event-popover")], or);
+J([W({ attribute: !1 })], sr.prototype, "hass", void 0), J([W({ type: Object })], sr.prototype, "event", void 0), J([W({ type: String })], sr.prototype, "color", void 0), J([W({ type: String })], sr.prototype, "calendarLabel", void 0), J([W({ type: String })], sr.prototype, "entityId", void 0), J([G()], sr.prototype, "_confirmingDelete", void 0), J([G()], sr.prototype, "_deleting", void 0), J([G()], sr.prototype, "_deleteError", void 0), sr = J([H("lucarne-calendar-event-popover")], sr);
 //#endregion
 //#region src/components/create-event-popover.ts
-function sr(e, t) {
+function cr(e, t) {
 	let n = -(/* @__PURE__ */ new Date(`${e}T${t}:00`)).getTimezoneOffset();
 	return `${e}T${t}:00${n >= 0 ? "+" : "-"}${Math.floor(Math.abs(n) / 60).toString().padStart(2, "0")}:${(Math.abs(n) % 60).toString().padStart(2, "0")}`;
 }
-function cr(e) {
+function lr(e) {
 	return `${Math.floor(e).toString().padStart(2, "0")}:${e % 1 == .5 ? "30" : "00"}`;
 }
-function lr(e) {
+function ur(e) {
 	return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
 }
-var X = class extends B {
+var X = class extends V {
 	constructor(...e) {
 		super(...e), this.day = null, this.startHour = 9, this.calendars = [], this._title = "", this._calendarEntityId = "", this._date = "", this._startTime = "", this._endTime = "", this._allDay = !1, this._description = "", this._location = "", this._error = "", this._saving = !1;
 	}
@@ -4958,9 +4972,9 @@ var X = class extends B {
 	}
 	_initDefaults() {
 		let e = this.day ?? /* @__PURE__ */ new Date();
-		this._date = lr(e), this._startTime = cr(Math.max(0, Math.min(23, this.startHour)));
+		this._date = ur(e), this._startTime = lr(Math.max(0, Math.min(23, this.startHour)));
 		let t = Math.min(24, this.startHour + 1);
-		this._endTime = cr(t < 24 ? t : 23.5), this._calendarEntityId = this.calendars[0]?.entity ?? "", this._title = "", this._allDay = !1, this._description = "", this._location = "", this._error = "", this._saving = !1;
+		this._endTime = lr(t < 24 ? t : 23.5), this._calendarEntityId = this.calendars[0]?.entity ?? "", this._title = "", this._allDay = !1, this._description = "", this._location = "", this._error = "", this._saving = !1;
 	}
 	_close() {
 		this.dispatchEvent(new CustomEvent("popover-close", {
@@ -4986,10 +5000,10 @@ var X = class extends B {
 			e.start_date = this._date;
 			let r = /* @__PURE__ */ new Date(`${this._date}T00:00:00`);
 			r.setDate(r.getDate() + 1);
-			let i = lr(r);
+			let i = ur(r);
 			e.end_date = i, t = this._date, n = i;
 		} else {
-			let r = sr(this._date, this._startTime), i = sr(this._date, this._endTime);
+			let r = cr(this._date, this._startTime), i = cr(this._date, this._endTime);
 			e.start_date_time = r, e.end_date_time = i, t = r, n = i;
 		}
 		try {
@@ -5123,7 +5137,11 @@ var X = class extends B {
     ` : P``;
 	}
 };
-J([W({ attribute: !1 })], X.prototype, "hass", void 0), J([W({ type: Object })], X.prototype, "day", void 0), J([W({ type: Number })], X.prototype, "startHour", void 0), J([W({ type: Array })], X.prototype, "calendars", void 0), J([G()], X.prototype, "_title", void 0), J([G()], X.prototype, "_calendarEntityId", void 0), J([G()], X.prototype, "_date", void 0), J([G()], X.prototype, "_startTime", void 0), J([G()], X.prototype, "_endTime", void 0), J([G()], X.prototype, "_allDay", void 0), J([G()], X.prototype, "_description", void 0), J([G()], X.prototype, "_location", void 0), J([G()], X.prototype, "_error", void 0), J([G()], X.prototype, "_saving", void 0), X = J([V("lucarne-create-event-popover")], X), window.customCards = window.customCards || [], window.customCards.push({
+J([W({ attribute: !1 })], X.prototype, "hass", void 0), J([W({ type: Object })], X.prototype, "day", void 0), J([W({ type: Number })], X.prototype, "startHour", void 0), J([W({ type: Array })], X.prototype, "calendars", void 0), J([G()], X.prototype, "_title", void 0), J([G()], X.prototype, "_calendarEntityId", void 0), J([G()], X.prototype, "_date", void 0), J([G()], X.prototype, "_startTime", void 0), J([G()], X.prototype, "_endTime", void 0), J([G()], X.prototype, "_allDay", void 0), J([G()], X.prototype, "_description", void 0), J([G()], X.prototype, "_location", void 0), J([G()], X.prototype, "_error", void 0), J([G()], X.prototype, "_saving", void 0), X = J([H("lucarne-create-event-popover")], X);
+//#endregion
+//#region src/cards/lucarne-calendar-card.ts
+var dr = 6e4, fr = 4, pr = 60;
+window.customCards = window.customCards || [], window.customCards.push({
 	type: "lucarne-calendar-card",
 	name: "Lucarne Calendar",
 	description: "Week view calendar with per-person color, visibility pills, and create-event flow",
@@ -5131,7 +5149,7 @@ J([W({ attribute: !1 })], X.prototype, "hass", void 0), J([W({ type: Object })],
 });
 var Z = class extends tt {
 	constructor(...e) {
-		super(...e), this._layout = null, this._visibleIds = /* @__PURE__ */ new Set(), this._openEvent = null, this._openEventColor = "", this._openEventCalLabel = "", this._openEventEntityId = "", this._createDay = null, this._createStartHour = 9, this._creatableCalendars = [], this._dayWidthPx = 0, this._deletedUids = /* @__PURE__ */ new Set(), this._pendingEvents = [], this._lastVisibleCount = 3;
+		super(...e), this._layout = null, this._visibleIds = /* @__PURE__ */ new Set(), this._openEvent = null, this._openEventColor = "", this._openEventCalLabel = "", this._openEventEntityId = "", this._createDay = null, this._createStartHour = 9, this._creatableCalendars = [], this._dayWidthPx = 0, this._deletedUids = /* @__PURE__ */ new Set(), this._pendingEvents = [], this._lastVisibleCount = 3, this._didInitialScroll = !1, this._initialScrollScheduled = !1, this._initialScrollAttempts = 0, this._autoFollow = !0, this._lastAutoScrollTop = null;
 	}
 	static {
 		this.styles = [K, k`
@@ -5279,16 +5297,66 @@ var Z = class extends tt {
 	connectedCallback() {
 		super.connectedCallback(), this._previewOverrideRaf = requestAnimationFrame(() => {
 			this._previewOverrideRaf = void 0, this.isConnected && (this._previewOverride = ft(this));
-		});
+		}), this._followTimer = setInterval(() => this._followNow(), dr);
 	}
 	disconnectedCallback() {
-		super.disconnectedCallback(), this._previewOverrideRaf !== void 0 && (cancelAnimationFrame(this._previewOverrideRaf), this._previewOverrideRaf = void 0), this._resizeObserver?.disconnect(), this._previewOverride?.uninstall(), this._previewOverride = void 0;
+		super.disconnectedCallback(), this._previewOverrideRaf !== void 0 && (cancelAnimationFrame(this._previewOverrideRaf), this._previewOverrideRaf = void 0), this._followTimer !== void 0 && (clearInterval(this._followTimer), this._followTimer = void 0), this._initialScrollRaf !== void 0 && (cancelAnimationFrame(this._initialScrollRaf), this._initialScrollRaf = void 0), this._didInitialScroll = !1, this._initialScrollScheduled = !1, this._initialScrollAttempts = 0, this._autoFollow = !0, this._lastAutoScrollTop = null, this._resizeObserver?.disconnect(), this._previewOverride?.uninstall(), this._previewOverride = void 0;
 	}
 	firstUpdated() {
 		!this._resizeObserver && this._gridAreaEl && (this._resizeObserver = new ResizeObserver(() => this._onResize()), this._resizeObserver.observe(this._gridAreaEl), this._onResize());
 	}
 	updated(e) {
-		super.updated(e), !(!e.has("hass") || !this._config) && (this._rolling.setHass(this.hass), this._updateCreatableCalendars());
+		super.updated(e), !this._didInitialScroll && !this._initialScrollScheduled && this._layout && this._dayWidthPx > 0 && (this._initialScrollScheduled = !0, this._scheduleInitialScroll()), !(!e.has("hass") || !this._config) && (this._rolling.setHass(this.hass), this._updateCreatableCalendars());
+	}
+	_scheduleInitialScroll() {
+		this._initialScrollRaf = requestAnimationFrame(() => {
+			if (this._initialScrollRaf = void 0, !this.isConnected || this._didInitialScroll) {
+				this._initialScrollScheduled = !1;
+				return;
+			}
+			if (this._performAutoScroll("auto")) {
+				this._didInitialScroll = !0, this._initialScrollScheduled = !1;
+				return;
+			}
+			++this._initialScrollAttempts < pr ? this._scheduleInitialScroll() : this._initialScrollScheduled = !1;
+		});
+	}
+	_performAutoScroll(e) {
+		let t = this._gridAreaEl;
+		if (!t || !this._config) return !1;
+		let n = this.renderRoot.querySelector("lucarne-calendar-grid")?.shadowRoot?.querySelector(".time-col");
+		if (!n) return !1;
+		let r = t.getBoundingClientRect(), i = n.getBoundingClientRect();
+		if (i.height <= 0) return !1;
+		let [a] = (this._config.visible_hours?.start ?? "07:00").split(":").map(Number), [o] = (this._config.visible_hours?.end ?? "21:00").split(":").map(Number), s = o - a;
+		if (s <= 0) return !1;
+		let c = Bn({
+			now: /* @__PURE__ */ new Date(),
+			bandStartH: a,
+			bandEndH: o,
+			timeGridTopPx: i.top - r.top + t.scrollTop,
+			timeGridHeightPx: i.height,
+			paddingPx: i.height / s,
+			maxScrollTop: t.scrollHeight - t.clientHeight
+		});
+		return t.scrollTo({
+			top: c,
+			behavior: e
+		}), this._lastAutoScrollTop = c, !0;
+	}
+	_followNow() {
+		if (!this._autoFollow || !this._rolling?.isAtToday || typeof document < "u" && document.visibilityState === "hidden") return;
+		let e = this._gridAreaEl;
+		if (e) {
+			if (this._lastAutoScrollTop !== null && Math.abs(e.scrollTop - this._lastAutoScrollTop) > fr) {
+				this._autoFollow = !1;
+				return;
+			}
+			this._performAutoScroll("smooth");
+		}
+	}
+	_onTodayClick() {
+		this._rolling.goToToday(), this._autoFollow = !0, this.updateComplete.then(() => requestAnimationFrame(() => this._performAutoScroll("smooth")));
 	}
 	_effectiveConfig() {
 		let e = this._config;
@@ -5406,7 +5474,7 @@ var Z = class extends tt {
               ?disabled=${!this._rolling.canPanBack}
               aria-label="Previous ${this._lastVisibleCount} days"
             >←</button>
-            ${this._rolling.isAtToday ? "" : P`<button class="nav-btn" @click=${() => this._rolling.goToToday()} aria-label="Today">Today</button>`}
+            ${this._rolling.isAtToday ? "" : P`<button class="nav-btn" @click=${() => this._onTodayClick()} aria-label="Today">Today</button>`}
             <span class="week-label">${this._rangeLabel()}</span>
             <button
               class="nav-btn"
@@ -5476,10 +5544,10 @@ var Z = class extends tt {
     `;
 	}
 };
-J([W({ attribute: !1 })], Z.prototype, "hass", void 0), J([et(".grid-area")], Z.prototype, "_gridAreaEl", void 0), J([G()], Z.prototype, "_config", void 0), J([G()], Z.prototype, "_layout", void 0), J([G()], Z.prototype, "_visibleIds", void 0), J([G()], Z.prototype, "_openEvent", void 0), J([G()], Z.prototype, "_openEventColor", void 0), J([G()], Z.prototype, "_openEventCalLabel", void 0), J([G()], Z.prototype, "_openEventEntityId", void 0), J([G()], Z.prototype, "_createDay", void 0), J([G()], Z.prototype, "_createStartHour", void 0), J([G()], Z.prototype, "_creatableCalendars", void 0), J([G()], Z.prototype, "_dayWidthPx", void 0), J([G()], Z.prototype, "_deletedUids", void 0), Z = J([V("lucarne-calendar-card")], Z);
+J([W({ attribute: !1 })], Z.prototype, "hass", void 0), J([et(".grid-area")], Z.prototype, "_gridAreaEl", void 0), J([G()], Z.prototype, "_config", void 0), J([G()], Z.prototype, "_layout", void 0), J([G()], Z.prototype, "_visibleIds", void 0), J([G()], Z.prototype, "_openEvent", void 0), J([G()], Z.prototype, "_openEventColor", void 0), J([G()], Z.prototype, "_openEventCalLabel", void 0), J([G()], Z.prototype, "_openEventEntityId", void 0), J([G()], Z.prototype, "_createDay", void 0), J([G()], Z.prototype, "_createStartHour", void 0), J([G()], Z.prototype, "_creatableCalendars", void 0), J([G()], Z.prototype, "_dayWidthPx", void 0), J([G()], Z.prototype, "_deletedUids", void 0), Z = J([H("lucarne-calendar-card")], Z);
 //#endregion
 //#region src/editors/lucarne-calendar-card-editor.ts
-var ur = class extends B {
+var mr = class extends V {
 	constructor(...e) {
 		super(...e), this._haReady = !1, this._invalid = {};
 	}
@@ -5716,21 +5784,21 @@ var ur = class extends B {
     `;
 	}
 };
-J([W({ attribute: !1 })], ur.prototype, "hass", void 0), J([G()], ur.prototype, "_config", void 0), J([G()], ur.prototype, "_haReady", void 0), J([G()], ur.prototype, "_invalid", void 0), ur = J([V("lucarne-calendar-card-editor")], ur);
+J([W({ attribute: !1 })], mr.prototype, "hass", void 0), J([G()], mr.prototype, "_config", void 0), J([G()], mr.prototype, "_haReady", void 0), J([G()], mr.prototype, "_invalid", void 0), mr = J([H("lucarne-calendar-card-editor")], mr);
 //#endregion
 //#region src/shared/types.ts
-var dr = [
+var hr = [
 	"anytime",
 	"morning",
 	"afternoon",
 	"night"
 ];
-function fr(e) {
-	return typeof e == "string" && dr.includes(e) ? e : "anytime";
+function gr(e) {
+	return typeof e == "string" && hr.includes(e) ? e : "anytime";
 }
 //#endregion
 //#region src/components/streak-display.ts
-var pr = class extends B {
+var _r = class extends V {
 	constructor(...e) {
 		super(...e), this.streak = 0;
 	}
@@ -5784,10 +5852,10 @@ var pr = class extends B {
     `;
 	}
 };
-J([W({ type: Number })], pr.prototype, "streak", void 0), pr = J([V("lucarne-streak-display")], pr);
+J([W({ type: Number })], _r.prototype, "streak", void 0), _r = J([H("lucarne-streak-display")], _r);
 //#endregion
 //#region src/components/celebration-overlay.ts
-var mr = class extends B {
+var vr = class extends V {
 	constructor(...e) {
 		super(...e), this.kidSlug = "", this.active = !1, this._dots = [];
 	}
@@ -5845,48 +5913,48 @@ var mr = class extends B {
     ` : P``;
 	}
 };
-J([W({ attribute: "kid-slug" })], mr.prototype, "kidSlug", void 0), J([W({ type: Boolean })], mr.prototype, "active", void 0), mr = J([V("lucarne-celebration-overlay")], mr);
+J([W({ attribute: "kid-slug" })], vr.prototype, "kidSlug", void 0), J([W({ type: Boolean })], vr.prototype, "active", void 0), vr = J([H("lucarne-celebration-overlay")], vr);
 //#endregion
 //#region src/components/member-column.ts
-var hr = [
+var yr = [
 	"morning",
 	"afternoon",
 	"night",
 	"anytime"
-], gr = {
+], br = {
 	morning: "Morning",
 	afternoon: "Afternoon",
 	night: "Night",
 	anytime: "Anytime"
-}, _r = {
+}, xr = {
 	morning: Ot,
 	afternoon: kt,
 	night: At
 };
-function vr(e, t) {
+function Sr(e, t) {
 	return e.due && t.due ? e.due.localeCompare(t.due) : e.due ? -1 : t.due ? 1 : e.summary.localeCompare(t.summary);
 }
-function yr(e) {
-	let t = e.filter((e) => e.metadata.type === "routine").sort((e, t) => e.summary.localeCompare(t.summary)), n = e.filter((e) => e.metadata.type === "chore").sort(vr);
+function Cr(e) {
+	let t = e.filter((e) => e.metadata.type === "routine").sort((e, t) => e.summary.localeCompare(t.summary)), n = e.filter((e) => e.metadata.type === "chore").sort(Sr);
 	return [...t, ...n];
 }
-function br(e) {
+function wr(e) {
 	let t = /* @__PURE__ */ new Map();
 	for (let n of e) {
-		let e = fr(n.metadata.time_of_day), r = t.get(e) ?? [];
+		let e = gr(n.metadata.time_of_day), r = t.get(e) ?? [];
 		r.push(n), t.set(e, r);
 	}
 	let n = [];
-	for (let e of hr) {
+	for (let e of yr) {
 		let r = t.get(e);
 		!r || r.length === 0 || n.push({
 			bucket: e,
-			tasks: yr(r)
+			tasks: Cr(r)
 		});
 	}
 	return n;
 }
-var xr = class extends B {
+var Tr = class extends V {
 	constructor(...e) {
 		super(...e), this.tasks = [], this.streak = 0, this.showRoutines = !0, this.showTasks = !0, this.showStreak = !0, this.hideName = !1, this._celebrating = !1, this._celebrationTimer = null, this._lastAllRoutinesDone = null;
 	}
@@ -6008,7 +6076,7 @@ var xr = class extends B {
 	}
 	render() {
 		if (!this.member) return P``;
-		let e = br(this.tasks.filter((e) => e.metadata.type === "routine" ? this.showRoutines : e.metadata.type === "chore" ? this.showTasks : !1));
+		let e = wr(this.tasks.filter((e) => e.metadata.type === "routine" ? this.showRoutines : e.metadata.type === "chore" ? this.showTasks : !1));
 		return P`
       <div class="column" style="--member-color:${this.member.color}">
         <lucarne-celebration-overlay
@@ -6035,8 +6103,8 @@ var xr = class extends B {
           ${e.map(({ bucket: e, tasks: t }) => P`
             <div class="section">
               <div class="section-header">
-                ${_r[e] ? P`<span class="section-icon">${_r[e]}</span>` : ""}
-                ${gr[e]}
+                ${xr[e] ? P`<span class="section-icon">${xr[e]}</span>` : ""}
+                ${br[e]}
               </div>
               ${t.map((e) => P`
                 <lucarne-task-row
@@ -6064,22 +6132,22 @@ var xr = class extends B {
 		}));
 	}
 };
-J([W({ attribute: !1 })], xr.prototype, "member", void 0), J([W({ attribute: !1 })], xr.prototype, "tasks", void 0), J([W({ type: Number })], xr.prototype, "streak", void 0), J([W({
+J([W({ attribute: !1 })], Tr.prototype, "member", void 0), J([W({ attribute: !1 })], Tr.prototype, "tasks", void 0), J([W({ type: Number })], Tr.prototype, "streak", void 0), J([W({
 	type: Boolean,
 	attribute: "show-routines"
-})], xr.prototype, "showRoutines", void 0), J([W({
+})], Tr.prototype, "showRoutines", void 0), J([W({
 	type: Boolean,
 	attribute: "show-tasks"
-})], xr.prototype, "showTasks", void 0), J([W({
+})], Tr.prototype, "showTasks", void 0), J([W({
 	type: Boolean,
 	attribute: "show-streak"
-})], xr.prototype, "showStreak", void 0), J([W({
+})], Tr.prototype, "showStreak", void 0), J([W({
 	type: Boolean,
 	attribute: "hide-name"
-})], xr.prototype, "hideName", void 0), J([G()], xr.prototype, "_celebrating", void 0), xr = J([V("lucarne-member-column")], xr);
+})], Tr.prototype, "hideName", void 0), J([G()], Tr.prototype, "_celebrating", void 0), Tr = J([H("lucarne-member-column")], Tr);
 //#endregion
 //#region src/shared/integration-services.ts
-async function Sr(e, t) {
+async function Er(e, t) {
 	let n = {
 		member: t.member,
 		summary: t.summary,
@@ -6087,14 +6155,14 @@ async function Sr(e, t) {
 	};
 	t.recurrence !== void 0 && (n.recurrence = t.recurrence), t.icon !== void 0 && (n.icon = t.icon), t.due !== void 0 && (n.due = t.due), t.source !== void 0 && (n.source = t.source), t.assignee !== void 0 && (n.assignee = t.assignee), t.time_of_day !== void 0 && (n.time_of_day = t.time_of_day), await e.callService("lucarne_family", "add_task", n);
 }
-async function Cr(e, t, n) {
+async function Dr(e, t, n) {
 	let r = { uid: t };
 	n.type !== void 0 && (r.type = n.type), n.recurrence !== void 0 && (r.recurrence = n.recurrence), n.icon !== void 0 && (r.icon = n.icon), n.assignee !== void 0 && (r.assignee = n.assignee), n.time_of_day !== void 0 && (r.time_of_day = n.time_of_day), await e.callService("lucarne_family", "update_task_metadata", r);
 }
-async function wr(e, t) {
+async function Or(e, t) {
 	await e.callService("lucarne_family", "delete_task", { uid: t });
 }
-async function Tr(e, t, n) {
+async function kr(e, t, n) {
 	let r = await n.arrayBuffer(), i = new Uint8Array(r), a = "";
 	for (let e of i) a += String.fromCharCode(e);
 	let o = btoa(a);
@@ -6104,7 +6172,7 @@ async function Tr(e, t, n) {
 		mime_type: n.type
 	});
 }
-async function Er(e, t, n) {
+async function Ar(e, t, n) {
 	await e.callService("lucarne_family", "set_member_avatar", {
 		member: t,
 		avatar: n
@@ -6112,7 +6180,7 @@ async function Er(e, t, n) {
 }
 //#endregion
 //#region src/components/add-task-popover.ts
-var Dr = [
+var jr = [
 	"🪥",
 	"🛏️",
 	"🎒",
@@ -6125,7 +6193,7 @@ var Dr = [
 	"🍽️",
 	"🐕",
 	"🌱"
-], Q = class extends B {
+], Q = class extends V {
 	constructor(...e) {
 		super(...e), this.members = [], this._selectedMemberSlug = "", this._summary = "", this._type = "chore", this._icon = "", this._recurrenceMode = "none", this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._due = "", this._timeOfDay = "anytime", this._error = "", this._saving = !1;
 	}
@@ -6353,7 +6421,7 @@ var Dr = [
 			this._saving = !0, this._error = "";
 			try {
 				let e = this._type === "routine" ? this._buildRRule() : "", t = this._type === "chore" ? this._due : "";
-				await Sr(this.hass, {
+				await Er(this.hass, {
 					member: this._selectedMemberSlug,
 					summary: this._summary.trim(),
 					type: this._type,
@@ -6442,7 +6510,7 @@ var Dr = [
         <div class="field">
           <label>Icon</label>
           <div class="emoji-picker">
-            ${Dr.map((e) => P`
+            ${jr.map((e) => P`
               <button
                 class="emoji-btn ${this._icon === e ? "selected" : ""}"
                 @click=${() => this._icon = this._icon === e ? "" : e}
@@ -6644,10 +6712,10 @@ var Dr = [
     `;
 	}
 };
-J([W({ attribute: !1 })], Q.prototype, "hass", void 0), J([W({ attribute: !1 })], Q.prototype, "member", void 0), J([W({ attribute: !1 })], Q.prototype, "members", void 0), J([G()], Q.prototype, "_selectedMemberSlug", void 0), J([G()], Q.prototype, "_summary", void 0), J([G()], Q.prototype, "_type", void 0), J([G()], Q.prototype, "_icon", void 0), J([G()], Q.prototype, "_recurrenceMode", void 0), J([G()], Q.prototype, "_recurrenceDays", void 0), J([G()], Q.prototype, "_recurrenceInterval", void 0), J([G()], Q.prototype, "_recurrenceMonthDay", void 0), J([G()], Q.prototype, "_recurrenceNth", void 0), J([G()], Q.prototype, "_recurrenceNthDay", void 0), J([G()], Q.prototype, "_recurrenceMonth", void 0), J([G()], Q.prototype, "_due", void 0), J([G()], Q.prototype, "_timeOfDay", void 0), J([G()], Q.prototype, "_error", void 0), J([G()], Q.prototype, "_saving", void 0), Q = J([V("lucarne-add-task-popover")], Q);
+J([W({ attribute: !1 })], Q.prototype, "hass", void 0), J([W({ attribute: !1 })], Q.prototype, "member", void 0), J([W({ attribute: !1 })], Q.prototype, "members", void 0), J([G()], Q.prototype, "_selectedMemberSlug", void 0), J([G()], Q.prototype, "_summary", void 0), J([G()], Q.prototype, "_type", void 0), J([G()], Q.prototype, "_icon", void 0), J([G()], Q.prototype, "_recurrenceMode", void 0), J([G()], Q.prototype, "_recurrenceDays", void 0), J([G()], Q.prototype, "_recurrenceInterval", void 0), J([G()], Q.prototype, "_recurrenceMonthDay", void 0), J([G()], Q.prototype, "_recurrenceNth", void 0), J([G()], Q.prototype, "_recurrenceNthDay", void 0), J([G()], Q.prototype, "_recurrenceMonth", void 0), J([G()], Q.prototype, "_due", void 0), J([G()], Q.prototype, "_timeOfDay", void 0), J([G()], Q.prototype, "_error", void 0), J([G()], Q.prototype, "_saving", void 0), Q = J([H("lucarne-add-task-popover")], Q);
 //#endregion
 //#region src/components/edit-task-popover.ts
-var $ = class extends B {
+var $ = class extends V {
 	constructor(...e) {
 		super(...e), this.members = [], this._summary = "", this._type = "chore", this._icon = "", this._recurrenceMode = "none", this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._due = "", this._assignee = "", this._timeOfDay = "anytime", this._isCustomRecurrence = !1, this._rawRecurrence = "", this._error = "", this._saving = !1, this._confirmingDelete = !1;
 	}
@@ -6878,7 +6946,7 @@ var $ = class extends B {
 	}
 	_prefill() {
 		let e = this.task;
-		this._summary = e.summary, this._type = e.metadata.type, this._icon = e.metadata.icon, this._due = e.due ?? "", this._assignee = e.metadata.assignee_slug, this._timeOfDay = fr(e.metadata.time_of_day), this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._rawRecurrence = "", this._isCustomRecurrence = !1;
+		this._summary = e.summary, this._type = e.metadata.type, this._icon = e.metadata.icon, this._due = e.due ?? "", this._assignee = e.metadata.assignee_slug, this._timeOfDay = gr(e.metadata.time_of_day), this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._rawRecurrence = "", this._isCustomRecurrence = !1;
 		let t = Jt(e.metadata.recurrence);
 		t.mode === "unknown" ? (this._isCustomRecurrence = !0, this._rawRecurrence = t.raw, this._recurrenceMode = "unknown") : (this._isCustomRecurrence = !1, this._recurrenceMode = t.mode, t.mode === "daily" ? this._recurrenceInterval = t.interval ?? 1 : t.mode === "weekly" ? (this._recurrenceDays = [...t.days], this._recurrenceInterval = t.interval ?? 1) : t.mode === "monthly-date" ? (this._recurrenceMonthDay = t.dayOfMonth, this._recurrenceInterval = t.interval ?? 1) : t.mode === "monthly-nth" ? (this._recurrenceNth = t.nth, this._recurrenceNthDay = t.day, this._recurrenceInterval = t.interval ?? 1) : t.mode === "yearly" && (this._recurrenceMonth = t.month, this._recurrenceMonthDay = t.dayOfMonth, this._recurrenceInterval = t.interval ?? 1));
 	}
@@ -6943,7 +7011,7 @@ var $ = class extends B {
 				}
 				if (r) {
 					let e = this.task.metadata.member_slug === "household";
-					await Cr(this.hass, this.task.uid, {
+					await Dr(this.hass, this.task.uid, {
 						...this._type === this.task.metadata.type ? {} : { type: this._type },
 						...this._icon === this.task.metadata.icon ? {} : { icon: this._icon },
 						...this._buildRRule() === this.task.metadata.recurrence ? {} : { recurrence: this._buildRRule() },
@@ -6961,7 +7029,7 @@ var $ = class extends B {
 		if (!this._saving) {
 			this._saving = !0, this._error = "";
 			try {
-				await wr(this.hass, this.task.uid), this._close();
+				await Or(this.hass, this.task.uid), this._close();
 			} catch (e) {
 				this._error = e instanceof Error ? e.message : "Failed to delete", this._saving = !1, this._confirmingDelete = !1;
 			}
@@ -7250,13 +7318,13 @@ var $ = class extends B {
     `;
 	}
 };
-J([W({ attribute: !1 })], $.prototype, "hass", void 0), J([W({ attribute: !1 })], $.prototype, "task", void 0), J([W({ attribute: !1 })], $.prototype, "members", void 0), J([G()], $.prototype, "_summary", void 0), J([G()], $.prototype, "_type", void 0), J([G()], $.prototype, "_icon", void 0), J([G()], $.prototype, "_recurrenceMode", void 0), J([G()], $.prototype, "_recurrenceDays", void 0), J([G()], $.prototype, "_recurrenceInterval", void 0), J([G()], $.prototype, "_recurrenceMonthDay", void 0), J([G()], $.prototype, "_recurrenceNth", void 0), J([G()], $.prototype, "_recurrenceNthDay", void 0), J([G()], $.prototype, "_recurrenceMonth", void 0), J([G()], $.prototype, "_due", void 0), J([G()], $.prototype, "_assignee", void 0), J([G()], $.prototype, "_timeOfDay", void 0), J([G()], $.prototype, "_isCustomRecurrence", void 0), J([G()], $.prototype, "_rawRecurrence", void 0), J([G()], $.prototype, "_error", void 0), J([G()], $.prototype, "_saving", void 0), J([G()], $.prototype, "_confirmingDelete", void 0), $ = J([V("lucarne-edit-task-popover")], $), window.customCards = window.customCards || [], window.customCards.push({
+J([W({ attribute: !1 })], $.prototype, "hass", void 0), J([W({ attribute: !1 })], $.prototype, "task", void 0), J([W({ attribute: !1 })], $.prototype, "members", void 0), J([G()], $.prototype, "_summary", void 0), J([G()], $.prototype, "_type", void 0), J([G()], $.prototype, "_icon", void 0), J([G()], $.prototype, "_recurrenceMode", void 0), J([G()], $.prototype, "_recurrenceDays", void 0), J([G()], $.prototype, "_recurrenceInterval", void 0), J([G()], $.prototype, "_recurrenceMonthDay", void 0), J([G()], $.prototype, "_recurrenceNth", void 0), J([G()], $.prototype, "_recurrenceNthDay", void 0), J([G()], $.prototype, "_recurrenceMonth", void 0), J([G()], $.prototype, "_due", void 0), J([G()], $.prototype, "_assignee", void 0), J([G()], $.prototype, "_timeOfDay", void 0), J([G()], $.prototype, "_isCustomRecurrence", void 0), J([G()], $.prototype, "_rawRecurrence", void 0), J([G()], $.prototype, "_error", void 0), J([G()], $.prototype, "_saving", void 0), J([G()], $.prototype, "_confirmingDelete", void 0), $ = J([H("lucarne-edit-task-popover")], $), window.customCards = window.customCards || [], window.customCards.push({
 	type: "lucarne-chores-card",
 	name: "Lucarne Chores",
 	description: "Family chore grid with streaks and celebration",
 	preview: !0
 });
-var Or = class extends tt {
+var Mr = class extends tt {
 	constructor(...e) {
 		super(...e), this._familyState = null, this._addTaskMember = null, this._editTask = null, this._optimistic = /* @__PURE__ */ new Map(), this._onFamilyState = (e) => {
 			if (this._optimistic.size > 0) {
@@ -7515,10 +7583,10 @@ var Or = class extends tt {
     `;
 	}
 };
-J([W({ attribute: !1 })], Or.prototype, "hass", void 0), J([G()], Or.prototype, "_config", void 0), J([G()], Or.prototype, "_familyState", void 0), J([G()], Or.prototype, "_addTaskMember", void 0), J([G()], Or.prototype, "_editTask", void 0), J([G()], Or.prototype, "_optimistic", void 0), Or = J([V("lucarne-chores-card")], Or);
+J([W({ attribute: !1 })], Mr.prototype, "hass", void 0), J([G()], Mr.prototype, "_config", void 0), J([G()], Mr.prototype, "_familyState", void 0), J([G()], Mr.prototype, "_addTaskMember", void 0), J([G()], Mr.prototype, "_editTask", void 0), J([G()], Mr.prototype, "_optimistic", void 0), Mr = J([H("lucarne-chores-card")], Mr);
 //#endregion
 //#region src/shared/cropper-styles.ts
-var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
+var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	(function(n, r) {
 		typeof e == "object" && t !== void 0 ? t.exports = r() : typeof define == "function" && define.amd ? define(r) : (n = typeof globalThis < "u" ? globalThis : n || self, n.Cropper = r());
 	})(e, (function() {
@@ -7663,57 +7731,57 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		function P(e) {
 			return i(e) === "object" && e !== null;
 		}
-		var Re = Object.prototype.hasOwnProperty;
-		function F(e) {
+		var F = Object.prototype.hasOwnProperty;
+		function I(e) {
 			if (!P(e)) return !1;
 			try {
 				var t = e.constructor, n = t.prototype;
-				return t && n && Re.call(n, "isPrototypeOf");
+				return t && n && F.call(n, "isPrototypeOf");
 			} catch {
 				return !1;
 			}
 		}
-		function I(e) {
+		function L(e) {
 			return typeof e == "function";
 		}
-		var ze = Array.prototype.slice;
-		function Be(e) {
-			return Array.from ? Array.from(e) : ze.call(e);
+		var Re = Array.prototype.slice;
+		function ze(e) {
+			return Array.from ? Array.from(e) : Re.call(e);
 		}
-		function L(e, t) {
-			return e && I(t) && (Array.isArray(e) || N(e.length) ? Be(e).forEach(function(n, r) {
+		function R(e, t) {
+			return e && L(t) && (Array.isArray(e) || N(e.length) ? ze(e).forEach(function(n, r) {
 				t.call(e, n, r, e);
 			}) : P(e) && Object.keys(e).forEach(function(n) {
 				t.call(e, e[n], n, e);
 			})), e;
 		}
-		var R = Object.assign || function(e) {
+		var z = Object.assign || function(e) {
 			var t = [...arguments].slice(1);
 			return P(e) && t.length > 0 && t.forEach(function(t) {
 				P(t) && Object.keys(t).forEach(function(n) {
 					e[n] = t[n];
 				});
 			}), e;
-		}, Ve = /\.\d*(?:0|9){12}\d*$/;
-		function He(e) {
+		}, Be = /\.\d*(?:0|9){12}\d*$/;
+		function Ve(e) {
 			var t = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : 1e11;
-			return Ve.test(e) ? Math.round(e * t) / t : e;
+			return Be.test(e) ? Math.round(e * t) / t : e;
 		}
-		var Ue = /^width|height|left|top|marginLeft|marginTop$/;
-		function We(e, t) {
+		var He = /^width|height|left|top|marginLeft|marginTop$/;
+		function Ue(e, t) {
 			var n = e.style;
-			L(t, function(e, t) {
-				Ue.test(t) && N(e) && (e = `${e}px`), n[t] = e;
+			R(t, function(e, t) {
+				He.test(t) && N(e) && (e = `${e}px`), n[t] = e;
 			});
 		}
-		function Ge(e, t) {
+		function We(e, t) {
 			return e.classList ? e.classList.contains(t) : e.className.indexOf(t) > -1;
 		}
-		function z(e, t) {
+		function B(e, t) {
 			if (t) {
 				if (N(e.length)) {
-					L(e, function(e) {
-						z(e, t);
+					R(e, function(e) {
+						B(e, t);
 					});
 					return;
 				}
@@ -7725,11 +7793,11 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				n ? n.indexOf(t) < 0 && (e.className = `${n} ${t}`) : e.className = t;
 			}
 		}
-		function Ke(e, t) {
+		function Ge(e, t) {
 			if (t) {
 				if (N(e.length)) {
-					L(e, function(e) {
-						Ke(e, t);
+					R(e, function(e) {
+						Ge(e, t);
 					});
 					return;
 				}
@@ -7740,28 +7808,28 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				e.className.indexOf(t) >= 0 && (e.className = e.className.replace(t, ""));
 			}
 		}
-		function qe(e, t, n) {
+		function Ke(e, t, n) {
 			if (t) {
 				if (N(e.length)) {
-					L(e, function(e) {
-						qe(e, t, n);
+					R(e, function(e) {
+						Ke(e, t, n);
 					});
 					return;
 				}
-				n ? z(e, t) : Ke(e, t);
+				n ? B(e, t) : Ge(e, t);
 			}
 		}
-		var Je = /([a-z\d])([A-Z])/g;
-		function Ye(e) {
-			return e.replace(Je, "$1-$2").toLowerCase();
+		var qe = /([a-z\d])([A-Z])/g;
+		function Je(e) {
+			return e.replace(qe, "$1-$2").toLowerCase();
 		}
-		function Xe(e, t) {
-			return P(e[t]) ? e[t] : e.dataset ? e.dataset[t] : e.getAttribute(`data-${Ye(t)}`);
+		function Ye(e, t) {
+			return P(e[t]) ? e[t] : e.dataset ? e.dataset[t] : e.getAttribute(`data-${Je(t)}`);
 		}
-		function Ze(e, t, n) {
-			P(n) ? e[t] = n : e.dataset ? e.dataset[t] = n : e.setAttribute(`data-${Ye(t)}`, n);
+		function Xe(e, t, n) {
+			P(n) ? e[t] = n : e.dataset ? e.dataset[t] = n : e.setAttribute(`data-${Je(t)}`, n);
 		}
-		function B(e, t) {
+		function V(e, t) {
 			if (P(e[t])) try {
 				delete e[t];
 			} catch {
@@ -7772,9 +7840,9 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			} catch {
 				e.dataset[t] = void 0;
 			}
-			else e.removeAttribute(`data-${Ye(t)}`);
+			else e.removeAttribute(`data-${Je(t)}`);
 		}
-		var Qe = /\s\s*/, V = function() {
+		var Ze = /\s\s*/, H = function() {
 			var e = !1;
 			if (h) {
 				var t = !1, n = function() {}, r = Object.defineProperty({}, "once", {
@@ -7789,10 +7857,10 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			}
 			return e;
 		}();
-		function H(e, t, n) {
+		function Qe(e, t, n) {
 			var r = arguments.length > 3 && arguments[3] !== void 0 ? arguments[3] : {}, i = n;
-			t.trim().split(Qe).forEach(function(t) {
-				if (!V) {
+			t.trim().split(Ze).forEach(function(t) {
+				if (!H) {
 					var a = e.listeners;
 					a && a[t] && a[t][n] && (i = a[t][n], delete a[t][n], Object.keys(a[t]).length === 0 && delete a[t], Object.keys(a).length === 0 && delete e.listeners);
 				}
@@ -7801,8 +7869,8 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		}
 		function U(e, t, n) {
 			var r = arguments.length > 3 && arguments[3] !== void 0 ? arguments[3] : {}, i = n;
-			t.trim().split(Qe).forEach(function(t) {
-				if (r.once && !V) {
+			t.trim().split(Ze).forEach(function(t) {
+				if (r.once && !H) {
 					var a = e.listeners, o = a === void 0 ? {} : a;
 					i = function() {
 						delete o[t][n], e.removeEventListener(t, i, r);
@@ -7815,7 +7883,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		}
 		function W(e, t, n) {
 			var r;
-			return I(Event) && I(CustomEvent) ? r = new CustomEvent(t, {
+			return L(Event) && L(CustomEvent) ? r = new CustomEvent(t, {
 				detail: n,
 				bubbles: !0,
 				cancelable: !0
@@ -7849,8 +7917,8 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		}
 		function rt(e) {
 			var n = t({}, e), r = 0;
-			return L(e, function(e, t) {
-				delete n[t], L(n, function(t) {
+			return R(e, function(e, t) {
+				delete n[t], R(n, function(t) {
 					var n = Math.abs(e.startX - t.startX), i = Math.abs(e.startY - t.startY), a = Math.abs(e.endX - t.endX), o = Math.abs(e.endY - t.endY), s = Math.sqrt(n * n + i * i), c = (Math.sqrt(a * a + o * o) - s) / s;
 					Math.abs(c) > Math.abs(r) && (r = c);
 				});
@@ -7868,7 +7936,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		}
 		function at(e) {
 			var t = 0, n = 0, r = 0;
-			return L(e, function(e) {
+			return R(e, function(e) {
 				var i = e.startX, a = e.startY;
 				t += i, n += a, r += 1;
 			}), t /= r, n /= r, {
@@ -7925,8 +7993,8 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				oe,
 				se
 			];
-			return O.width = He(M), O.height = He(re), k.fillStyle = v, k.fillRect(0, 0, M, re), k.save(), k.translate(M / 2, re / 2), k.rotate(c * Math.PI / 180), k.scale(d, p), k.imageSmoothingEnabled = ee, k.imageSmoothingQuality = ne, k.drawImage.apply(k, [e].concat(l(ce.map(function(e) {
-				return Math.floor(He(e));
+			return O.width = Ve(M), O.height = Ve(re), k.fillStyle = v, k.fillRect(0, 0, M, re), k.save(), k.translate(M / 2, re / 2), k.rotate(c * Math.PI / 180), k.scale(d, p), k.imageSmoothingEnabled = ee, k.imageSmoothingQuality = ne, k.drawImage.apply(k, [e].concat(l(ce.map(function(e) {
+				return Math.floor(Ve(e));
 			})))), k.restore(), O;
 		}
 		var lt = String.fromCharCode;
@@ -7939,12 +8007,12 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		var dt = /^data:.*,/;
 		function ft(e) {
 			var t = e.replace(dt, ""), n = atob(t), r = new ArrayBuffer(n.length), i = new Uint8Array(r);
-			return L(i, function(e, t) {
+			return R(i, function(e, t) {
 				i[t] = n.charCodeAt(t);
 			}), r;
 		}
 		function pt(e, t) {
-			for (var n = [], r = 8192, i = new Uint8Array(e); i.length > 0;) n.push(lt.apply(null, Be(i.subarray(0, r)))), i = i.subarray(r);
+			for (var n = [], r = 8192, i = new Uint8Array(e); i.length > 0;) n.push(lt.apply(null, ze(i.subarray(0, r)))), i = i.subarray(r);
 			return `data:${t};base64,${btoa(n.join(""))}`;
 		}
 		function mt(e) {
@@ -8017,15 +8085,15 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			initContainer: function() {
 				var e = this.element, t = this.options, n = this.container, r = this.cropper, i = Number(t.minContainerWidth), a = Number(t.minContainerHeight);
-				z(r, j), Ke(e, j);
+				B(r, j), Ge(e, j);
 				var o = {
 					width: Math.max(n.offsetWidth, i >= 0 ? i : je),
 					height: Math.max(n.offsetHeight, a >= 0 ? a : Me)
 				};
-				this.containerData = o, We(r, {
+				this.containerData = o, Ue(r, {
 					width: o.width,
 					height: o.height
-				}), z(e, j), Ke(r, j);
+				}), B(e, j), Ge(r, j);
 			},
 			initCanvas: function() {
 				var e = this.containerData, t = this.imageData, n = this.options.viewMode, r = Math.abs(t.rotate) % 180 == 90, i = r ? t.naturalHeight : t.naturalWidth, a = r ? t.naturalWidth : t.naturalHeight, o = i / a, s = e.width, c = e.height;
@@ -8037,7 +8105,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					width: s,
 					height: c
 				};
-				this.canvasData = l, this.limited = n === 1 || n === 2, this.limitCanvas(!0, !0), l.width = Math.min(Math.max(l.width, l.minWidth), l.maxWidth), l.height = Math.min(Math.max(l.height, l.minHeight), l.maxHeight), l.left = (e.width - l.width) / 2, l.top = (e.height - l.height) / 2, l.oldLeft = l.left, l.oldTop = l.top, this.initialCanvasData = R({}, l);
+				this.canvasData = l, this.limited = n === 1 || n === 2, this.limitCanvas(!0, !0), l.width = Math.min(Math.max(l.width, l.minWidth), l.maxWidth), l.height = Math.min(Math.max(l.height, l.minHeight), l.maxHeight), l.left = (e.width - l.width) / 2, l.top = (e.height - l.height) / 2, l.oldLeft = l.left, l.oldTop = l.top, this.initialCanvasData = z({}, l);
 			},
 			limitCanvas: function(e, t) {
 				var n = this.options, r = this.containerData, i = this.canvasData, a = this.cropBoxData, o = n.viewMode, s = i.aspectRatio, c = this.cropped && a;
@@ -8066,7 +8134,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					}), a = i.width, o = i.height, s = n.width * (a / n.naturalWidth), c = n.height * (o / n.naturalHeight);
 					n.left -= (s - n.width) / 2, n.top -= (c - n.height) / 2, n.width = s, n.height = c, n.aspectRatio = a / o, n.naturalWidth = a, n.naturalHeight = o, this.limitCanvas(!0, !1);
 				}
-				(n.width > n.maxWidth || n.width < n.minWidth) && (n.left = n.oldLeft), (n.height > n.maxHeight || n.height < n.minHeight) && (n.top = n.oldTop), n.width = Math.min(Math.max(n.width, n.minWidth), n.maxWidth), n.height = Math.min(Math.max(n.height, n.minHeight), n.maxHeight), this.limitCanvas(!1, !0), n.left = Math.min(Math.max(n.left, n.minLeft), n.maxLeft), n.top = Math.min(Math.max(n.top, n.minTop), n.maxTop), n.oldLeft = n.left, n.oldTop = n.top, We(this.canvas, R({
+				(n.width > n.maxWidth || n.width < n.minWidth) && (n.left = n.oldLeft), (n.height > n.maxHeight || n.height < n.minHeight) && (n.top = n.oldTop), n.width = Math.min(Math.max(n.width, n.minWidth), n.maxWidth), n.height = Math.min(Math.max(n.height, n.minHeight), n.maxHeight), this.limitCanvas(!1, !0), n.left = Math.min(Math.max(n.left, n.minLeft), n.maxLeft), n.top = Math.min(Math.max(n.top, n.minTop), n.maxTop), n.oldLeft = n.left, n.oldTop = n.top, Ue(this.canvas, z({
 					width: n.width,
 					height: n.height
 				}, nt({
@@ -8076,15 +8144,15 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			renderImage: function(e) {
 				var t = this.canvasData, n = this.imageData, r = n.naturalWidth * (t.width / t.naturalWidth), i = n.naturalHeight * (t.height / t.naturalHeight);
-				R(n, {
+				z(n, {
 					width: r,
 					height: i,
 					left: (t.width - r) / 2,
 					top: (t.height - i) / 2
-				}), We(this.image, R({
+				}), Ue(this.image, z({
 					width: n.width,
 					height: n.height
-				}, nt(R({
+				}, nt(z({
 					translateX: n.left,
 					translateY: n.top
 				}, n)))), e && this.output();
@@ -8094,7 +8162,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					width: t.width,
 					height: t.height
 				};
-				n && (t.height * n > t.width ? i.height = i.width / n : i.width = i.height * n), this.cropBoxData = i, this.limitCropBox(!0, !0), i.width = Math.min(Math.max(i.width, i.minWidth), i.maxWidth), i.height = Math.min(Math.max(i.height, i.minHeight), i.maxHeight), i.width = Math.max(i.minWidth, i.width * r), i.height = Math.max(i.minHeight, i.height * r), i.left = t.left + (t.width - i.width) / 2, i.top = t.top + (t.height - i.height) / 2, i.oldLeft = i.left, i.oldTop = i.top, this.initialCropBoxData = R({}, i);
+				n && (t.height * n > t.width ? i.height = i.width / n : i.width = i.height * n), this.cropBoxData = i, this.limitCropBox(!0, !0), i.width = Math.min(Math.max(i.width, i.minWidth), i.maxWidth), i.height = Math.min(Math.max(i.height, i.minHeight), i.maxHeight), i.width = Math.max(i.minWidth, i.width * r), i.height = Math.max(i.minHeight, i.height * r), i.left = t.left + (t.width - i.width) / 2, i.top = t.top + (t.height - i.height) / 2, i.oldLeft = i.left, i.oldTop = i.top, this.initialCropBoxData = z({}, i);
 			},
 			limitCropBox: function(e, t) {
 				var n = this.options, r = this.containerData, i = this.canvasData, a = this.cropBoxData, o = this.limited, s = n.aspectRatio;
@@ -8106,7 +8174,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			renderCropBox: function() {
 				var e = this.options, t = this.containerData, n = this.cropBoxData;
-				(n.width > n.maxWidth || n.width < n.minWidth) && (n.left = n.oldLeft), (n.height > n.maxHeight || n.height < n.minHeight) && (n.top = n.oldTop), n.width = Math.min(Math.max(n.width, n.minWidth), n.maxWidth), n.height = Math.min(Math.max(n.height, n.minHeight), n.maxHeight), this.limitCropBox(!1, !0), n.left = Math.min(Math.max(n.left, n.minLeft), n.maxLeft), n.top = Math.min(Math.max(n.top, n.minTop), n.maxTop), n.oldLeft = n.left, n.oldTop = n.top, e.movable && e.cropBoxMovable && Ze(this.face, oe, n.width >= t.width && n.height >= t.height ? ne : ee), We(this.cropBox, R({
+				(n.width > n.maxWidth || n.width < n.minWidth) && (n.left = n.oldLeft), (n.height > n.maxHeight || n.height < n.minHeight) && (n.top = n.oldTop), n.width = Math.min(Math.max(n.width, n.minWidth), n.maxWidth), n.height = Math.min(Math.max(n.height, n.minHeight), n.maxHeight), this.limitCropBox(!1, !0), n.left = Math.min(Math.max(n.left, n.minLeft), n.maxLeft), n.top = Math.min(Math.max(n.top, n.minTop), n.maxTop), n.oldLeft = n.left, n.oldTop = n.top, e.movable && e.cropBoxMovable && Xe(this.face, oe, n.width >= t.width && n.height >= t.height ? ne : ee), Ue(this.cropBox, z({
 					width: n.width,
 					height: n.height
 				}, nt({
@@ -8122,9 +8190,9 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				var e = this.element, t = this.crossOrigin, n = this.options.preview, r = t ? this.crossOriginUrl : this.url, i = e.alt || "The image to preview", a = document.createElement("img");
 				if (t && (a.crossOrigin = t), a.src = r, a.alt = i, this.viewBox.appendChild(a), this.viewBoxImage = a, n) {
 					var o = n;
-					typeof n == "string" ? o = e.ownerDocument.querySelectorAll(n) : n.querySelector && (o = [n]), this.previews = o, L(o, function(e) {
+					typeof n == "string" ? o = e.ownerDocument.querySelectorAll(n) : n.querySelector && (o = [n]), this.previews = o, R(o, function(e) {
 						var n = document.createElement("img");
-						Ze(e, se, {
+						Xe(e, se, {
 							width: e.offsetWidth,
 							height: e.offsetHeight,
 							html: e.innerHTML
@@ -8133,31 +8201,31 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				}
 			},
 			resetPreview: function() {
-				L(this.previews, function(e) {
-					var t = Xe(e, se);
-					We(e, {
+				R(this.previews, function(e) {
+					var t = Ye(e, se);
+					Ue(e, {
 						width: t.width,
 						height: t.height
-					}), e.innerHTML = t.html, B(e, se);
+					}), e.innerHTML = t.html, V(e, se);
 				});
 			},
 			preview: function() {
 				var e = this.imageData, t = this.canvasData, n = this.cropBoxData, r = n.width, i = n.height, a = e.width, o = e.height, s = n.left - t.left - e.left, c = n.top - t.top - e.top;
-				!this.cropped || this.disabled || (We(this.viewBoxImage, R({
+				!this.cropped || this.disabled || (Ue(this.viewBoxImage, z({
 					width: a,
 					height: o
-				}, nt(R({
+				}, nt(z({
 					translateX: -s,
 					translateY: -c
-				}, e)))), L(this.previews, function(t) {
-					var n = Xe(t, se), l = n.width, u = n.height, d = l, f = u, p = 1;
-					r && (p = l / r, f = i * p), i && f > u && (p = u / i, d = r * p, f = u), We(t, {
+				}, e)))), R(this.previews, function(t) {
+					var n = Ye(t, se), l = n.width, u = n.height, d = l, f = u, p = 1;
+					r && (p = l / r, f = i * p), i && f > u && (p = u / i, d = r * p, f = u), Ue(t, {
 						width: d,
 						height: f
-					}), We(t.getElementsByTagName("img")[0], R({
+					}), Ue(t.getElementsByTagName("img")[0], z({
 						width: a * p,
 						height: o * p
-					}, nt(R({
+					}, nt(z({
 						translateX: -s * p,
 						translateY: -c * p
 					}, e))));
@@ -8166,17 +8234,17 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		}, J = {
 			bind: function() {
 				var e = this.element, t = this.options, n = this.cropper;
-				I(t.cropstart) && U(e, me, t.cropstart), I(t.cropmove) && U(e, pe, t.cropmove), I(t.cropend) && U(e, fe, t.cropend), I(t.crop) && U(e, de, t.crop), I(t.zoom) && U(e, Te, t.zoom), U(n, ye, this.onCropStart = this.cropStart.bind(this)), t.zoomable && t.zoomOnWheel && U(n, we, this.onWheel = this.wheel.bind(this), {
+				L(t.cropstart) && U(e, me, t.cropstart), L(t.cropmove) && U(e, pe, t.cropmove), L(t.cropend) && U(e, fe, t.cropend), L(t.crop) && U(e, de, t.crop), L(t.zoom) && U(e, Te, t.zoom), U(n, ye, this.onCropStart = this.cropStart.bind(this)), t.zoomable && t.zoomOnWheel && U(n, we, this.onWheel = this.wheel.bind(this), {
 					passive: !1,
 					capture: !0
 				}), t.toggleDragModeOnDblclick && U(n, he, this.onDblclick = this.dblclick.bind(this)), U(e.ownerDocument, be, this.onCropMove = this.cropMove.bind(this)), U(e.ownerDocument, xe, this.onCropEnd = this.cropEnd.bind(this)), t.responsive && U(window, Ce, this.onResize = this.resize.bind(this));
 			},
 			unbind: function() {
 				var e = this.element, t = this.options, n = this.cropper;
-				I(t.cropstart) && H(e, me, t.cropstart), I(t.cropmove) && H(e, pe, t.cropmove), I(t.cropend) && H(e, fe, t.cropend), I(t.crop) && H(e, de, t.crop), I(t.zoom) && H(e, Te, t.zoom), H(n, ye, this.onCropStart), t.zoomable && t.zoomOnWheel && H(n, we, this.onWheel, {
+				L(t.cropstart) && Qe(e, me, t.cropstart), L(t.cropmove) && Qe(e, pe, t.cropmove), L(t.cropend) && Qe(e, fe, t.cropend), L(t.crop) && Qe(e, de, t.crop), L(t.zoom) && Qe(e, Te, t.zoom), Qe(n, ye, this.onCropStart), t.zoomable && t.zoomOnWheel && Qe(n, we, this.onWheel, {
 					passive: !1,
 					capture: !0
-				}), t.toggleDragModeOnDblclick && H(n, he, this.onDblclick), H(e.ownerDocument, be, this.onCropMove), H(e.ownerDocument, xe, this.onCropEnd), t.responsive && H(window, Ce, this.onResize);
+				}), t.toggleDragModeOnDblclick && Qe(n, he, this.onDblclick), Qe(e.ownerDocument, be, this.onCropMove), Qe(e.ownerDocument, xe, this.onCropEnd), t.responsive && Qe(window, Ce, this.onResize);
 			}
 		}, _t = {
 			resize: function() {
@@ -8184,16 +8252,16 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					var e = this.options, t = this.container, n = this.containerData, r = t.offsetWidth / n.width, i = t.offsetHeight / n.height, a = Math.abs(r - 1) > Math.abs(i - 1) ? r : i;
 					if (a !== 1) {
 						var o, s;
-						e.restore && (o = this.getCanvasData(), s = this.getCropBoxData()), this.render(), e.restore && (this.setCanvasData(L(o, function(e, t) {
+						e.restore && (o = this.getCanvasData(), s = this.getCropBoxData()), this.render(), e.restore && (this.setCanvasData(R(o, function(e, t) {
 							o[t] = e * a;
-						})), this.setCropBoxData(L(s, function(e, t) {
+						})), this.setCropBoxData(R(s, function(e, t) {
 							s[t] = e * a;
 						})));
 					}
 				}
 			},
 			dblclick: function() {
-				this.disabled || this.options.dragMode === ue || this.setDragMode(Ge(this.dragBox, k) ? le : ce);
+				this.disabled || this.options.dragMode === ue || this.setDragMode(We(this.dragBox, k) ? le : ce);
 			},
 			wheel: function(e) {
 				var t = this, n = Number(this.options.wheelZoomRatio) || .1, r = 1;
@@ -8205,12 +8273,12 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				var t = e.buttons, n = e.button;
 				if (!(this.disabled || (e.type === "mousedown" || e.type === "pointerdown" && e.pointerType === "mouse") && (N(t) && t !== 1 || N(n) && n !== 0 || e.ctrlKey))) {
 					var r = this.options, i = this.pointers, a;
-					e.changedTouches ? L(e.changedTouches, function(e) {
+					e.changedTouches ? R(e.changedTouches, function(e) {
 						i[e.identifier] = it(e);
-					}) : i[e.pointerId || 0] = it(e), a = Object.keys(i).length > 1 && r.zoomable && r.zoomOnTouch ? b : Xe(e.target, oe), De.test(a) && W(this.element, me, {
+					}) : i[e.pointerId || 0] = it(e), a = Object.keys(i).length > 1 && r.zoomable && r.zoomOnTouch ? b : Ye(e.target, oe), De.test(a) && W(this.element, me, {
 						originalEvent: e,
 						action: a
-					}) !== !1 && (e.preventDefault(), this.action = a, this.cropping = !1, a === te && (this.cropping = !0, z(this.dragBox, ie)));
+					}) !== !1 && (e.preventDefault(), this.action = a, this.cropping = !1, a === te && (this.cropping = !0, B(this.dragBox, ie)));
 				}
 			},
 			cropMove: function(e) {
@@ -8220,17 +8288,17 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					e.preventDefault(), W(this.element, pe, {
 						originalEvent: e,
 						action: t
-					}) !== !1 && (e.changedTouches ? L(e.changedTouches, function(e) {
-						R(n[e.identifier] || {}, it(e, !0));
-					}) : R(n[e.pointerId || 0] || {}, it(e, !0)), this.change(e));
+					}) !== !1 && (e.changedTouches ? R(e.changedTouches, function(e) {
+						z(n[e.identifier] || {}, it(e, !0));
+					}) : z(n[e.pointerId || 0] || {}, it(e, !0)), this.change(e));
 				}
 			},
 			cropEnd: function(e) {
 				if (!this.disabled) {
 					var t = this.action, n = this.pointers;
-					e.changedTouches ? L(e.changedTouches, function(e) {
+					e.changedTouches ? R(e.changedTouches, function(e) {
 						delete n[e.identifier];
-					}) : delete n[e.pointerId || 0], t && (e.preventDefault(), Object.keys(n).length || (this.action = ""), this.cropping && (this.cropping = !1, qe(this.dragBox, ie, this.cropped && this.options.modal)), W(this.element, fe, {
+					}) : delete n[e.pointerId || 0], t && (e.preventDefault(), Object.keys(n).length || (this.action = ""), this.cropping && (this.cropping = !1, Ke(this.dragBox, ie, this.cropped && this.options.modal)), W(this.element, fe, {
 						originalEvent: e,
 						action: t
 					}));
@@ -8341,38 +8409,38 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 						v = !1;
 						break;
 					}
-					y = G(this.cropper), c = k.startX - y.left, l = k.startY - y.top, u = i.minWidth, d = i.minHeight, A.x > 0 ? o = A.y > 0 ? D : T : A.x < 0 && (c -= u, o = A.y > 0 ? O : E), A.y < 0 && (l -= d), this.cropped || (Ke(this.cropBox, j), this.cropped = !0, this.limited && this.limitCropBox(!0, !0));
+					y = G(this.cropper), c = k.startX - y.left, l = k.startY - y.top, u = i.minWidth, d = i.minHeight, A.x > 0 ? o = A.y > 0 ? D : T : A.x < 0 && (c -= u, o = A.y > 0 ? O : E), A.y < 0 && (l -= d), this.cropped || (Ge(this.cropBox, j), this.cropped = !0, this.limited && this.limitCropBox(!0, !0));
 					break;
 			}
-			v && (i.width = u, i.height = d, i.left = c, i.top = l, this.action = o, this.renderCropBox()), L(a, function(e) {
+			v && (i.width = u, i.height = d, i.left = c, i.top = l, this.action = o, this.renderCropBox()), R(a, function(e) {
 				e.startX = e.endX, e.startY = e.endY;
 			});
 		} }, yt = {
 			crop: function() {
-				return this.ready && !this.cropped && !this.disabled && (this.cropped = !0, this.limitCropBox(!0, !0), this.options.modal && z(this.dragBox, ie), Ke(this.cropBox, j), this.setCropBoxData(this.initialCropBoxData)), this;
+				return this.ready && !this.cropped && !this.disabled && (this.cropped = !0, this.limitCropBox(!0, !0), this.options.modal && B(this.dragBox, ie), Ge(this.cropBox, j), this.setCropBoxData(this.initialCropBoxData)), this;
 			},
 			reset: function() {
-				return this.ready && !this.disabled && (this.imageData = R({}, this.initialImageData), this.canvasData = R({}, this.initialCanvasData), this.cropBoxData = R({}, this.initialCropBoxData), this.renderCanvas(), this.cropped && this.renderCropBox()), this;
+				return this.ready && !this.disabled && (this.imageData = z({}, this.initialImageData), this.canvasData = z({}, this.initialCanvasData), this.cropBoxData = z({}, this.initialCropBoxData), this.renderCanvas(), this.cropped && this.renderCropBox()), this;
 			},
 			clear: function() {
-				return this.cropped && !this.disabled && (R(this.cropBoxData, {
+				return this.cropped && !this.disabled && (z(this.cropBoxData, {
 					left: 0,
 					top: 0,
 					width: 0,
 					height: 0
-				}), this.cropped = !1, this.renderCropBox(), this.limitCanvas(!0, !0), this.renderCanvas(), Ke(this.dragBox, ie), z(this.cropBox, j)), this;
+				}), this.cropped = !1, this.renderCropBox(), this.limitCanvas(!0, !0), this.renderCanvas(), Ge(this.dragBox, ie), B(this.cropBox, j)), this;
 			},
 			replace: function(e) {
 				var t = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : !1;
-				return !this.disabled && e && (this.isImg && (this.element.src = e), t ? (this.url = e, this.image.src = e, this.ready && (this.viewBoxImage.src = e, L(this.previews, function(t) {
+				return !this.disabled && e && (this.isImg && (this.element.src = e), t ? (this.url = e, this.image.src = e, this.ready && (this.viewBoxImage.src = e, R(this.previews, function(t) {
 					t.getElementsByTagName("img")[0].src = e;
 				}))) : (this.isImg && (this.replaced = !0), this.options.data = null, this.uncreate(), this.load(e))), this;
 			},
 			enable: function() {
-				return this.ready && this.disabled && (this.disabled = !1, Ke(this.cropper, A)), this;
+				return this.ready && this.disabled && (this.disabled = !1, Ge(this.cropper, A)), this;
 			},
 			disable: function() {
-				return this.ready && !this.disabled && (this.disabled = !0, z(this.cropper, A)), this;
+				return this.ready && !this.disabled && (this.disabled = !0, B(this.cropper, A)), this;
 			},
 			destroy: function() {
 				var e = this.element;
@@ -8405,7 +8473,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 							pageY: n.pageY
 						};
 						i.left -= (l - a) * ((p.pageX - f.left - i.left) / a), i.top -= (u - o) * ((p.pageY - f.top - i.top) / o);
-					} else F(t) && N(t.x) && N(t.y) ? (i.left -= (l - a) * ((t.x - i.left) / a), i.top -= (u - o) * ((t.y - i.top) / o)) : (i.left -= (l - a) / 2, i.top -= (u - o) / 2);
+					} else I(t) && N(t.x) && N(t.y) ? (i.left -= (l - a) * ((t.x - i.left) / a), i.top -= (u - o) * ((t.y - i.top) / o)) : (i.left -= (l - a) / 2, i.top -= (u - o) / 2);
 					i.width = l, i.height = u, this.renderCanvas(!0);
 				}
 				return this;
@@ -8438,7 +8506,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 						height: i.height
 					};
 					var o = n.width / n.naturalWidth;
-					if (L(a, function(e, t) {
+					if (R(a, function(e, t) {
 						a[t] = e / o;
 					}), e) {
 						var s = Math.round(a.y + a.height), c = Math.round(a.x + a.width);
@@ -8454,7 +8522,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			setData: function(e) {
 				var t = this.options, n = this.imageData, r = this.canvasData, i = {};
-				if (this.ready && !this.disabled && F(e)) {
+				if (this.ready && !this.disabled && I(e)) {
 					var a = !1;
 					t.rotatable && N(e.rotate) && e.rotate !== n.rotate && (n.rotate = e.rotate, a = !0), t.scalable && (N(e.scaleX) && e.scaleX !== n.scaleX && (n.scaleX = e.scaleX, a = !0), N(e.scaleY) && e.scaleY !== n.scaleY && (n.scaleY = e.scaleY, a = !0)), a && this.renderCanvas(!0, !0);
 					var o = n.width / n.naturalWidth;
@@ -8463,14 +8531,14 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				return this;
 			},
 			getContainerData: function() {
-				return this.ready ? R({}, this.containerData) : {};
+				return this.ready ? z({}, this.containerData) : {};
 			},
 			getImageData: function() {
-				return this.sized ? R({}, this.imageData) : {};
+				return this.sized ? z({}, this.imageData) : {};
 			},
 			getCanvasData: function() {
 				var e = this.canvasData, t = {};
-				return this.ready && L([
+				return this.ready && R([
 					"left",
 					"top",
 					"width",
@@ -8483,7 +8551,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			setCanvasData: function(e) {
 				var t = this.canvasData, n = t.aspectRatio;
-				return this.ready && !this.disabled && F(e) && (N(e.left) && (t.left = e.left), N(e.top) && (t.top = e.top), N(e.width) ? (t.width = e.width, t.height = e.width / n) : N(e.height) && (t.height = e.height, t.width = e.height * n), this.renderCanvas(!0)), this;
+				return this.ready && !this.disabled && I(e) && (N(e.left) && (t.left = e.left), N(e.top) && (t.top = e.top), N(e.width) ? (t.width = e.width, t.height = e.width / n) : N(e.height) && (t.height = e.height, t.width = e.height * n), this.renderCanvas(!0)), this;
 			},
 			getCropBoxData: function() {
 				var e = this.cropBoxData, t;
@@ -8496,7 +8564,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			setCropBoxData: function(e) {
 				var t = this.cropBoxData, n = this.options.aspectRatio, r, i;
-				return this.ready && this.cropped && !this.disabled && F(e) && (N(e.left) && (t.left = e.left), N(e.top) && (t.top = e.top), N(e.width) && e.width !== t.width && (r = !0, t.width = e.width), N(e.height) && e.height !== t.height && (i = !0, t.height = e.height), n && (r ? t.height = t.width / n : i && (t.width = t.height * n)), this.renderCropBox()), this;
+				return this.ready && this.cropped && !this.disabled && I(e) && (N(e.left) && (t.left = e.left), N(e.top) && (t.top = e.top), N(e.width) && e.width !== t.width && (r = !0, t.width = e.width), N(e.height) && e.height !== t.height && (i = !0, t.height = e.height), n && (r ? t.height = t.width / n : i && (t.width = t.height * n)), this.renderCropBox()), this;
 			},
 			getCroppedCanvas: function() {
 				var e = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
@@ -8520,7 +8588,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				}), m = p.width, h = p.height;
 				m = Math.min(d.width, Math.max(f.width, m)), h = Math.min(d.height, Math.max(f.height, h));
 				var g = document.createElement("canvas"), _ = g.getContext("2d");
-				g.width = He(m), g.height = He(h), _.fillStyle = e.fillColor || "transparent", _.fillRect(0, 0, m, h);
+				g.width = Ve(m), g.height = Ve(h), _.fillStyle = e.fillColor || "transparent", _.fillRect(0, 0, m, h);
 				var v = e.imageSmoothingEnabled, y = v === void 0 ? !0 : v, ee = e.imageSmoothingQuality;
 				_.imageSmoothingEnabled = y, ee && (_.imageSmoothingQuality = ee);
 				var te = n.width, ne = n.height, b = i, x = a, S, C, w, T, E, D;
@@ -8536,7 +8604,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					O.push(w * k, T * k, E * k, D * k);
 				}
 				return _.drawImage.apply(_, [n].concat(l(O.map(function(e) {
-					return Math.floor(He(e));
+					return Math.floor(Ve(e));
 				})))), g;
 			},
 			setAspectRatio: function(e) {
@@ -8547,7 +8615,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				var t = this.options, n = this.dragBox, r = this.face;
 				if (this.ready && !this.disabled) {
 					var i = e === ce, a = t.movable && e === le;
-					e = i || a ? e : ue, t.dragMode = e, Ze(n, oe, e), qe(n, k, i), qe(n, ae, a), t.cropBoxMovable || (Ze(r, oe, e), qe(r, k, i), qe(r, ae, a));
+					e = i || a ? e : ue, t.dragMode = e, Xe(n, oe, e), Ke(n, k, i), Ke(n, ae, a), t.cropBoxMovable || (Xe(r, oe, e), Ke(r, k, i), Ke(r, ae, a));
 				}
 				return this;
 			}
@@ -8555,7 +8623,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			function e(t) {
 				var n = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
 				if (a(this, e), !t || !Ae.test(t.tagName)) throw Error("The first argument is required and must be an <img> or <canvas> element.");
-				this.element = t, this.options = R({}, Ne, F(n) && n), this.cropped = !1, this.disabled = !1, this.pointers = {}, this.ready = !1, this.reloading = !1, this.replaced = !1, this.sized = !1, this.sizing = !1, this.init();
+				this.element = t, this.options = z({}, Ne, I(n) && n), this.cropped = !1, this.disabled = !1, this.pointers = {}, this.ready = !1, this.reloading = !1, this.replaced = !1, this.sized = !1, this.sizing = !1, this.init();
 			}
 			return s(e, [
 				{
@@ -8615,7 +8683,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 						var e = this.element, t = this.url, n = e.crossOrigin, r = t;
 						this.options.checkCrossOrigin && K(t) && (n ||= "anonymous", r = tt(t)), this.crossOrigin = n, this.crossOriginUrl = r;
 						var i = document.createElement("img");
-						n && (i.crossOrigin = n), i.src = r || t, i.alt = e.alt || "The image to crop", this.image = i, i.onload = this.start.bind(this), i.onerror = this.stop.bind(this), z(i, M), e.parentNode.insertBefore(i, e.nextSibling);
+						n && (i.crossOrigin = n), i.src = r || t, i.alt = e.alt || "The image to crop", this.image = i, i.onload = this.start.bind(this), i.onerror = this.stop.bind(this), B(i, M), e.parentNode.insertBefore(i, e.nextSibling);
 					}
 				},
 				{
@@ -8624,11 +8692,11 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 						var e = this, t = this.image;
 						t.onload = null, t.onerror = null, this.sizing = !0;
 						var n = g.navigator && /(?:iPad|iPhone|iPod).*?AppleWebKit/i.test(g.navigator.userAgent), r = function(t, n) {
-							R(e.imageData, {
+							z(e.imageData, {
 								naturalWidth: t,
 								naturalHeight: n,
 								aspectRatio: t / n
-							}), e.initialImageData = R({}, e.imageData), e.sizing = !1, e.sized = !0, e.build();
+							}), e.initialImageData = z({}, e.imageData), e.sizing = !1, e.sized = !0, e.build();
 						};
 						if (t.naturalWidth && !n) {
 							r(t.naturalWidth, t.naturalHeight);
@@ -8654,7 +8722,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 							var e = this.element, t = this.options, n = this.image, r = e.parentNode, i = document.createElement("div");
 							i.innerHTML = Pe;
 							var a = i.querySelector(`.${y}-container`), o = a.querySelector(`.${y}-canvas`), s = a.querySelector(`.${y}-drag-box`), c = a.querySelector(`.${y}-crop-box`), l = c.querySelector(`.${y}-face`);
-							this.container = r, this.cropper = a, this.canvas = o, this.dragBox = s, this.cropBox = c, this.viewBox = a.querySelector(`.${y}-view-box`), this.face = l, o.appendChild(n), z(e, j), r.insertBefore(a, e.nextSibling), Ke(n, M), this.initPreview(), this.bind(), t.initialAspectRatio = Math.max(0, t.initialAspectRatio) || NaN, t.aspectRatio = Math.max(0, t.aspectRatio) || NaN, t.viewMode = Math.max(0, Math.min(3, Math.round(t.viewMode))) || 0, z(c, j), t.guides || z(c.getElementsByClassName(`${y}-dashed`), j), t.center || z(c.getElementsByClassName(`${y}-center`), j), t.background && z(a, `${y}-bg`), t.highlight || z(l, re), t.cropBoxMovable && (z(l, ae), Ze(l, oe, ee)), t.cropBoxResizable || (z(c.getElementsByClassName(`${y}-line`), j), z(c.getElementsByClassName(`${y}-point`), j)), this.render(), this.ready = !0, this.setDragMode(t.dragMode), t.autoCrop && this.crop(), this.setData(t.data), I(t.ready) && U(e, Se, t.ready, { once: !0 }), W(e, Se);
+							this.container = r, this.cropper = a, this.canvas = o, this.dragBox = s, this.cropBox = c, this.viewBox = a.querySelector(`.${y}-view-box`), this.face = l, o.appendChild(n), B(e, j), r.insertBefore(a, e.nextSibling), Ge(n, M), this.initPreview(), this.bind(), t.initialAspectRatio = Math.max(0, t.initialAspectRatio) || NaN, t.aspectRatio = Math.max(0, t.aspectRatio) || NaN, t.viewMode = Math.max(0, Math.min(3, Math.round(t.viewMode))) || 0, B(c, j), t.guides || B(c.getElementsByClassName(`${y}-dashed`), j), t.center || B(c.getElementsByClassName(`${y}-center`), j), t.background && B(a, `${y}-bg`), t.highlight || B(l, re), t.cropBoxMovable && (B(l, ae), Xe(l, oe, ee)), t.cropBoxResizable || (B(c.getElementsByClassName(`${y}-line`), j), B(c.getElementsByClassName(`${y}-point`), j)), this.render(), this.ready = !0, this.setDragMode(t.dragMode), t.autoCrop && this.crop(), this.setData(t.data), L(t.ready) && U(e, Se, t.ready, { once: !0 }), W(e, Se);
 						}
 					}
 				},
@@ -8664,7 +8732,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 						if (this.ready) {
 							this.ready = !1, this.unbind(), this.resetPreview();
 							var e = this.cropper.parentNode;
-							e && e.removeChild(this.cropper), Ke(this.element, j);
+							e && e.removeChild(this.cropper), Ge(this.element, j);
 						}
 					}
 				},
@@ -8682,24 +8750,24 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			}, {
 				key: "setDefaults",
 				value: function(e) {
-					R(Ne, F(e) && e);
+					z(Ne, I(e) && e);
 				}
 			}]);
 		}();
-		return R(xt.prototype, gt, q, J, _t, vt, yt), xt;
+		return z(xt.prototype, gt, q, J, _t, vt, yt), xt;
 	}));
-})))(), 1), Ar = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", jr = 2 * 1024 * 1024, Mr = new Set([
+})))(), 1), Pr = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", Fr = 2 * 1024 * 1024, Ir = new Set([
 	"image/png",
 	"image/jpeg",
 	"image/webp"
-]), Nr = 512, Pr = /* @__PURE__ */ "👶.🧒.👧.🧑.👦.👩.👨.🧓.👴.👵.🐶.🐱.🐻.🐼.🐨.🦊.🦁.🐯.🐸.🦄.🌟.⭐.🌈.🌸.🌺.🌻.🍀.🎈.🎨.🎯.🏃.⚽.🎸.🎤.📚.🎮.🏆.❤️.💙.💚".split("."), Fr = class extends B {
+]), Lr = 512, Rr = /* @__PURE__ */ "👶.🧒.👧.🧑.👦.👩.👨.🧓.👴.👵.🐶.🐱.🐻.🐼.🐨.🦊.🦁.🐯.🐸.🦄.🌟.⭐.🌈.🌸.🌺.🌻.🍀.🎈.🎨.🎯.🏃.⚽.🎸.🎤.📚.🎮.🏆.❤️.💙.💚".split("."), zr = class extends V {
 	constructor(...e) {
 		super(...e), this._mode = "emoji", this._selectedEmoji = null, this._sourceUrl = null, this._error = null, this._submitting = !1, this._cropper = null;
 	}
 	static {
 		this.styles = [
 			K,
-			O(Ar),
+			O(Pr),
 			k`
       :host {
         display: block;
@@ -8895,11 +8963,11 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	_onFileChange(e) {
 		let t = e.target, n = t.files?.[0];
 		if (t.value = "", n) {
-			if (!Mr.has(n.type)) {
+			if (!Ir.has(n.type)) {
 				this._error = "Only PNG, JPEG, and WebP images are accepted.";
 				return;
 			}
-			if (n.size > jr) {
+			if (n.size > Fr) {
 				this._error = "Image must be 2 MB or smaller.";
 				return;
 			}
@@ -8911,7 +8979,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	}
 	_onCropImageLoad() {
 		let e = this._cropImage;
-		e && (this._cropper && this._cropper.destroy(), this._cropper = new kr.default(e, {
+		e && (this._cropper && this._cropper.destroy(), this._cropper = new Nr.default(e, {
 			aspectRatio: 1,
 			viewMode: 1,
 			dragMode: "move",
@@ -8936,7 +9004,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				}
 				this._submitting = !0;
 				try {
-					await Er(this.hass, this.memberSlug, this._selectedEmoji), this.dispatchEvent(new CustomEvent("avatar-changed", { detail: { avatar: this._selectedEmoji } })), this._close();
+					await Ar(this.hass, this.memberSlug, this._selectedEmoji), this.dispatchEvent(new CustomEvent("avatar-changed", { detail: { avatar: this._selectedEmoji } })), this._close();
 				} catch (e) {
 					this._error = e instanceof Error ? e.message : String(e);
 				} finally {
@@ -8951,7 +9019,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			this._submitting = !0;
 			try {
 				let e = await this._getCroppedFile();
-				await Tr(this.hass, this.memberSlug, e), this.dispatchEvent(new CustomEvent("avatar-changed")), this._close();
+				await kr(this.hass, this.memberSlug, e), this.dispatchEvent(new CustomEvent("avatar-changed")), this._close();
 			} catch (e) {
 				this._error = e instanceof Error ? e.message : String(e);
 			} finally {
@@ -8966,8 +9034,8 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				return;
 			}
 			let n = this._cropper.getCroppedCanvas({
-				width: Nr,
-				height: Nr,
+				width: Lr,
+				height: Lr,
 				imageSmoothingQuality: "high"
 			});
 			if (!n) {
@@ -9031,7 +9099,7 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	_renderEmojiMode() {
 		return P`
       <div class="emoji-grid">
-        ${Pr.map((e) => P`
+        ${Rr.map((e) => P`
             <button
               class="emoji-btn ${this._selectedEmoji === e ? "selected" : ""}"
               @click=${() => this._selectEmoji(e)}
@@ -9077,10 +9145,10 @@ var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		this.renderRoot.querySelector("#avatar-file-input")?.click();
 	}
 };
-J([W({ attribute: !1 })], Fr.prototype, "hass", void 0), J([W()], Fr.prototype, "memberSlug", void 0), J([W()], Fr.prototype, "memberName", void 0), J([G()], Fr.prototype, "_mode", void 0), J([G()], Fr.prototype, "_selectedEmoji", void 0), J([G()], Fr.prototype, "_sourceUrl", void 0), J([G()], Fr.prototype, "_error", void 0), J([G()], Fr.prototype, "_submitting", void 0), J([et("#crop-image")], Fr.prototype, "_cropImage", void 0), Fr = J([V("lucarne-avatar-upload-modal")], Fr);
+J([W({ attribute: !1 })], zr.prototype, "hass", void 0), J([W()], zr.prototype, "memberSlug", void 0), J([W()], zr.prototype, "memberName", void 0), J([G()], zr.prototype, "_mode", void 0), J([G()], zr.prototype, "_selectedEmoji", void 0), J([G()], zr.prototype, "_sourceUrl", void 0), J([G()], zr.prototype, "_error", void 0), J([G()], zr.prototype, "_submitting", void 0), J([et("#crop-image")], zr.prototype, "_cropImage", void 0), zr = J([H("lucarne-avatar-upload-modal")], zr);
 //#endregion
 //#region src/editors/lucarne-chores-card-editor.ts
-var Ir = class extends B {
+var Br = class extends V {
 	constructor(...e) {
 		super(...e), this._familyState = null, this._avatarModalMember = null;
 	}
@@ -9386,5 +9454,5 @@ var Ir = class extends B {
 };
 //#endregion
 //#region src/index.ts
-J([W({ attribute: !1 })], Ir.prototype, "hass", void 0), J([G()], Ir.prototype, "_config", void 0), J([G()], Ir.prototype, "_familyState", void 0), J([G()], Ir.prototype, "_avatarModalMember", void 0), Ir = J([V("lucarne-chores-card-editor")], Ir), S();
+J([W({ attribute: !1 })], Br.prototype, "hass", void 0), J([G()], Br.prototype, "_config", void 0), J([G()], Br.prototype, "_familyState", void 0), J([G()], Br.prototype, "_avatarModalMember", void 0), Br = J([H("lucarne-chores-card-editor")], Br), S();
 //#endregion

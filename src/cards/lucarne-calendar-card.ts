@@ -8,6 +8,7 @@ import { layoutEvents, isoDateKey } from '../shared/calendar-layout.js';
 import { computeVisibleDays } from '../shared/visible-window.js';
 import type { VisibleWindowConfig } from '../shared/visible-window.js';
 import { RollingWindowController } from '../shared/rolling-window.js';
+import { computeNowScrollTop } from '../shared/calendar-scroll.js';
 import type { HomeAssistant, CalendarConfig, CalendarEvent } from '../shared/types.js';
 import type { CalendarLayoutResult } from '../shared/calendar-layout.js';
 
@@ -38,6 +39,23 @@ export interface LucarneCalendarCardConfig {
   /** When true, forward card errors to a Home Assistant persistent_notification. */
   debug?: boolean;
 }
+
+/** How often (ms) to nudge the view so "now" stays in place as time advances. */
+const FOLLOW_INTERVAL_MS = 60_000;
+/**
+ * If the container's scrollTop drifts further than this from our last
+ * programmatic target, treat it as a manual scroll and stop auto-following.
+ * Between follow ticks the content doesn't move on its own (the now-line moving
+ * doesn't change scrollTop), so a tiny tolerance reliably distinguishes "user
+ * scrolled" from sub-pixel rounding.
+ */
+const FOLLOW_DIVERGENCE_TOLERANCE_PX = 4;
+/**
+ * Cap on rAF retries for the one-time initial scroll while the grid's shadow
+ * `.time-col` is still laying out (measures height 0 on the first frame). ~1s
+ * at 60fps; if exhausted, the 60s follow tick re-centers as a backstop.
+ */
+const MAX_INITIAL_SCROLL_FRAMES = 60;
 
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards =
   (window as Window & typeof globalThis & { customCards?: object[] }).customCards || [];
@@ -149,6 +167,15 @@ export class LucarneCalendarCard extends LucarneCardBase {
   private _resizeFrame?: number;
   private _lastVisibleCount = 3;
 
+  // --- Auto-scroll-to-now (issue #58) ---
+  private _followTimer?: ReturnType<typeof setInterval>;
+  private _didInitialScroll = false;
+  private _initialScrollScheduled = false;
+  private _initialScrollAttempts = 0;
+  private _initialScrollRaf?: number;
+  private _autoFollow = true;
+  private _lastAutoScrollTop: number | null = null;
+
   setConfig(config: LucarneCalendarCardConfig) {
     if (!config.calendars || !Array.isArray(config.calendars) || config.calendars.length === 0) {
       throw new Error('lucarne-calendar-card: "calendars" must be a non-empty array');
@@ -255,6 +282,8 @@ export class LucarneCalendarCard extends LucarneCardBase {
       if (!this.isConnected) return;
       this._previewOverride = installPreviewColumnOverride(this);
     });
+    // Follow "now" as time advances while the user is viewing today.
+    this._followTimer = setInterval(() => this._followNow(), FOLLOW_INTERVAL_MS);
   }
 
   disconnectedCallback() {
@@ -264,6 +293,20 @@ export class LucarneCalendarCard extends LucarneCardBase {
       cancelAnimationFrame(this._previewOverrideRaf);
       this._previewOverrideRaf = undefined;
     }
+    if (this._followTimer !== undefined) {
+      clearInterval(this._followTimer);
+      this._followTimer = undefined;
+    }
+    if (this._initialScrollRaf !== undefined) {
+      cancelAnimationFrame(this._initialScrollRaf);
+      this._initialScrollRaf = undefined;
+    }
+    // Re-scroll to now and resume following on the next attach.
+    this._didInitialScroll = false;
+    this._initialScrollScheduled = false;
+    this._initialScrollAttempts = 0;
+    this._autoFollow = true;
+    this._lastAutoScrollTop = null;
     this._resizeObserver?.disconnect();
     this._previewOverride?.uninstall();
     this._previewOverride = undefined;
@@ -280,9 +323,109 @@ export class LucarneCalendarCard extends LucarneCardBase {
 
   updated(changedProps: Map<string, unknown>) {
     super.updated(changedProps);
+    // Once the layout and real column width have landed, scroll to "now" once.
+    // Instant (not smooth) on first paint so the view simply opens in place.
+    if (!this._didInitialScroll && !this._initialScrollScheduled && this._layout && this._dayWidthPx > 0) {
+      this._initialScrollScheduled = true;
+      this._scheduleInitialScroll();
+    }
     if (!changedProps.has('hass') || !this._config) return;
     this._rolling.setHass(this.hass);
     this._updateCreatableCalendars();
+  }
+
+  /**
+   * Drive the one-time initial scroll on a rAF, retrying until the grid's shadow
+   * geometry is measurable. `_performAutoScroll` can bail on the first frame(s)
+   * (e.g. the grid's `.time-col` hasn't been laid out yet, measuring height 0);
+   * marking the scroll "done" only on success — and retrying otherwise — avoids
+   * leaving the view stuck at the top.
+   */
+  private _scheduleInitialScroll() {
+    this._initialScrollRaf = requestAnimationFrame(() => {
+      this._initialScrollRaf = undefined;
+      if (!this.isConnected || this._didInitialScroll) {
+        this._initialScrollScheduled = false;
+        return;
+      }
+      if (this._performAutoScroll('auto')) {
+        this._didInitialScroll = true;
+        this._initialScrollScheduled = false;
+        return;
+      }
+      if (++this._initialScrollAttempts < MAX_INITIAL_SCROLL_FRAMES) {
+        this._scheduleInitialScroll();
+      } else {
+        // Geometry never became measurable; let the follow tick recover.
+        this._initialScrollScheduled = false;
+      }
+    });
+  }
+
+  /**
+   * Scroll `.grid-area` so the current time sits near the top with one hour of
+   * padding above it. Measures the live time-grid geometry from the grid's
+   * shadow root and delegates the clamping math to {@link computeNowScrollTop}.
+   * Returns `true` once it actually scrolled, `false` if the geometry wasn't
+   * measurable yet (so callers can retry).
+   */
+  private _performAutoScroll(behavior: ScrollBehavior): boolean {
+    const area = this._gridAreaEl;
+    if (!area || !this._config) return false;
+    const gridEl = this.renderRoot.querySelector('lucarne-calendar-grid');
+    const timeCol = gridEl?.shadowRoot?.querySelector('.time-col') as HTMLElement | null;
+    if (!timeCol) return false;
+
+    const areaRect = area.getBoundingClientRect();
+    const colRect = timeCol.getBoundingClientRect();
+    if (colRect.height <= 0) return false;
+
+    const [bandStartH] = (this._config.visible_hours?.start ?? '07:00').split(':').map(Number);
+    const [bandEndH] = (this._config.visible_hours?.end ?? '21:00').split(':').map(Number);
+    const bandHours = bandEndH - bandStartH;
+    if (bandHours <= 0) return false;
+
+    const top = computeNowScrollTop({
+      now: new Date(),
+      bandStartH,
+      bandEndH,
+      // Offset of the time grid within the scroll content (independent of current scroll).
+      timeGridTopPx: colRect.top - areaRect.top + area.scrollTop,
+      timeGridHeightPx: colRect.height,
+      paddingPx: colRect.height / bandHours, // one hour of breathing room
+      maxScrollTop: area.scrollHeight - area.clientHeight,
+    });
+
+    area.scrollTo({ top, behavior });
+    this._lastAutoScrollTop = top;
+    return true;
+  }
+
+  /** Follow "now" on the periodic tick, unless the user has scrolled away. */
+  private _followNow() {
+    if (!this._autoFollow || !this._rolling?.isAtToday) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const area = this._gridAreaEl;
+    if (!area) return;
+    // Detect a manual scroll: the content doesn't move on its own between ticks,
+    // so any meaningful drift from our last target means the user took over.
+    if (
+      this._lastAutoScrollTop !== null &&
+      Math.abs(area.scrollTop - this._lastAutoScrollTop) > FOLLOW_DIVERGENCE_TOLERANCE_PX
+    ) {
+      this._autoFollow = false;
+      return;
+    }
+    this._performAutoScroll('smooth');
+  }
+
+  /** "Today" button: re-anchor, resume following, and re-center on now. */
+  private _onTodayClick() {
+    this._rolling.goToToday();
+    this._autoFollow = true;
+    this.updateComplete.then(() =>
+      requestAnimationFrame(() => this._performAutoScroll('smooth')),
+    );
   }
 
   private _effectiveConfig(): VisibleWindowConfig {
@@ -473,7 +616,7 @@ export class LucarneCalendarCard extends LucarneCardBase {
               aria-label="Previous ${this._lastVisibleCount} days"
             >←</button>
             ${!this._rolling.isAtToday
-              ? html`<button class="nav-btn" @click=${() => this._rolling.goToToday()} aria-label="Today">Today</button>`
+              ? html`<button class="nav-btn" @click=${() => this._onTodayClick()} aria-label="Today">Today</button>`
               : ''}
             <span class="week-label">${this._rangeLabel()}</span>
             <button
