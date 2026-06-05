@@ -5,6 +5,7 @@ import {
   errorSignature,
   isLucarneError,
   reportLucarneError,
+  installGlobalErrorReporter,
   __resetErrorReporterForTests,
 } from '../../src/shared/error-reporter.js';
 import type { HomeAssistant } from '../../src/shared/types.js';
@@ -110,5 +111,39 @@ describe('reportLucarneError', () => {
 
   it('does nothing harmful when no hass is configured', () => {
     assert.doesNotThrow(() => reportLucarneError(new Error('boom'), 'ctx'));
+  });
+});
+
+describe('installGlobalErrorReporter', () => {
+  // ErrorEvent isn't overridden to a happy-dom instance in the test setup, so
+  // construct a happy-dom Event and attach the `error` field the handler reads.
+  function dispatchLucarneError(message: string): void {
+    const err = new Error(message);
+    err.stack = `Error: ${message}\n    at f (http://host/ha-lucarne.js:1:1)`;
+    const ev = new Event('error');
+    (ev as Event & { error?: unknown }).error = err;
+    window.dispatchEvent(ev);
+  }
+
+  it('reports a Lucarne-origin window error once', () => {
+    const hass = makeFakeHass();
+    configureErrorReporter(hass as unknown as HomeAssistant, true);
+    installGlobalErrorReporter();
+    dispatchLucarneError('global boom');
+    assert.equal(notifications(hass).length, 1);
+  });
+
+  it('does not duplicate listeners across reset + reinstall', () => {
+    const hass = makeFakeHass();
+    configureErrorReporter(hass as unknown as HomeAssistant, true);
+    installGlobalErrorReporter();
+    // A reset that left the old listener attached would make the next install
+    // double up, so the event below would notify twice for one error.
+    __resetErrorReporterForTests();
+    configureErrorReporter(hass as unknown as HomeAssistant, true);
+    installGlobalErrorReporter();
+
+    dispatchLucarneError('global boom');
+    assert.equal(notifications(hass).length, 1);
   });
 });
