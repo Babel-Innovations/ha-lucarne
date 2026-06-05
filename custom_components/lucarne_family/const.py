@@ -15,6 +15,11 @@ THEME_NAME = "Lucarne"
 DEFAULT_RESET_TIME = "04:00"
 DEFAULT_STREAK_CHECK_TIME = "21:00"
 
+# Shared household list (the synthetic "household" member). Single source of
+# truth for both task_service.py and reset_logic.py.
+HOUSEHOLD_SLUG = "household"
+HOUSEHOLD_ENTITY_ID = "todo.lucarne_household"
+
 # Config entry keys
 CONF_FAMILY_NAME = "family_name"
 CONF_MEMBERS = "members"

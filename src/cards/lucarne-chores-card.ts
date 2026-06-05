@@ -131,6 +131,13 @@ export class LucarneChoresCard extends LucarneCardBase {
   @state() private _familyState: FamilyState | null = null;
   @state() private _addTaskMember: MemberSummary | null = null;
   @state() private _editTask: RenderableTask | null = null;
+  /**
+   * Optimistic toggle overrides keyed by task uid. A tap flips the row here
+   * immediately (the server round-trip + refetch is too slow to feel live on
+   * some clients), then `_onFamilyState` drops each entry once the real state
+   * catches up. Reverted if the service call fails.
+   */
+  @state() private _optimistic: Map<string, RenderableTask['status']> = new Map();
 
   private _unsubFamily?: () => void;
 
@@ -169,20 +176,38 @@ export class LucarneChoresCard extends LucarneCardBase {
   connectedCallback() {
     super.connectedCallback();
     if (this.hass && !this._unsubFamily) {
-      this._unsubFamily = subscribeFamilyState(this.hass, (state) => {
-        this._familyState = state;
-      });
+      this._unsubFamily = subscribeFamilyState(this.hass, this._onFamilyState);
     }
   }
 
   updated(changedProps: PropertyValues) {
     super.updated(changedProps);
     if (changedProps.has('hass') && this.hass && !this._unsubFamily) {
-      this._unsubFamily = subscribeFamilyState(this.hass, (state) => {
-        this._familyState = state;
-      });
+      this._unsubFamily = subscribeFamilyState(this.hass, this._onFamilyState);
     }
   }
+
+  /** Apply a freshly-pushed family state, reconciling optimistic overrides. */
+  private _onFamilyState = (state: FamilyState) => {
+    if (this._optimistic.size > 0) {
+      const next = new Map(this._optimistic);
+      const presentUids = new Set<string>();
+      for (const tasks of state.tasksByMember.values()) {
+        for (const t of tasks) {
+          presentUids.add(t.uid);
+          // Server caught up to the optimistic value — stop overriding.
+          if (next.get(t.uid) === t.status) next.delete(t.uid);
+        }
+      }
+      // Drop overrides for tasks that no longer exist (e.g. a completed
+      // one-off chore deleted by the daily reset) so the map can't grow stale.
+      for (const uid of next.keys()) {
+        if (!presentUids.has(uid)) next.delete(uid);
+      }
+      this._optimistic = next;
+    }
+    this._familyState = state;
+  };
 
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -213,17 +238,23 @@ export class LucarneChoresCard extends LucarneCardBase {
       if (!member) continue;
 
       const allTasks = this._familyState.tasksByMember.get(slug) ?? [];
-      const tasks = allTasks.filter((t) => {
-        if (t.metadata.type === 'routine') return showRoutines;
-        if (t.metadata.type === 'chore') {
-          if (!showTasks) return false;
-          if (t.due === null) return true;
-          // Date-only strings (no 'T') must be parsed as local midnight to avoid UTC off-by-one in non-UTC timezones
-          const dueDate = t.due.includes('T') ? new Date(t.due) : new Date(t.due + 'T00:00:00');
-          return dueDate <= endOfToday;
-        }
-        return false;
-      });
+      const tasks = allTasks
+        .filter((t) => {
+          if (t.metadata.type === 'routine') return showRoutines;
+          if (t.metadata.type === 'chore') {
+            if (!showTasks) return false;
+            if (t.due === null) return true;
+            // Date-only strings (no 'T') must be parsed as local midnight to avoid UTC off-by-one in non-UTC timezones
+            const dueDate = t.due.includes('T') ? new Date(t.due) : new Date(t.due + 'T00:00:00');
+            return dueDate <= endOfToday;
+          }
+          return false;
+        })
+        // Apply pending optimistic toggles so a tapped row flips instantly.
+        .map((t) => {
+          const optimistic = this._optimistic.get(t.uid);
+          return optimistic && optimistic !== t.status ? { ...t, status: optimistic } : t;
+        });
 
       const streak = this._familyState.streakByMember.get(slug) ?? 0;
       result.push({ member, tasks, streak });
@@ -242,7 +273,18 @@ export class LucarneChoresCard extends LucarneCardBase {
         : (this._familyState.members.find((m) => m.slug === task.metadata.member_slug)?.todo_entity_id ?? '');
 
     if (!ownerEntityId) return;
-    await this.hass.callService('todo', 'update_item', { item: task.uid, status: newStatus }, { entity_id: ownerEntityId });
+
+    // Flip the row immediately; the subscription reconciles once the server
+    // confirms. Revert if the service call fails so the UI stays truthful.
+    this._optimistic = new Map(this._optimistic).set(task.uid, newStatus);
+    try {
+      await this.hass.callService('todo', 'update_item', { item: task.uid, status: newStatus }, { entity_id: ownerEntityId });
+    } catch (err) {
+      const reverted = new Map(this._optimistic);
+      reverted.delete(task.uid);
+      this._optimistic = reverted;
+      throw err;
+    }
   }
 
   private _handleAddTask(e: Event) {

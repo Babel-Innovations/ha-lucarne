@@ -12,13 +12,14 @@ from homeassistant.components.todo.const import DATA_COMPONENT, TodoItemStatus
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-from .const import DOMAIN
+from .const import DOMAIN, HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
 from .recurrence import is_valid_rrule
 from .store import LucarneFamilyStore
 
 _LOGGER = logging.getLogger(__name__)
-_HOUSEHOLD_SLUG = "household"
-_HOUSEHOLD_ENTITY_ID = "todo.lucarne_household"
+# Aliases to the shared constants in const.py (single source of truth).
+_HOUSEHOLD_SLUG = HOUSEHOLD_SLUG
+_HOUSEHOLD_ENTITY_ID = HOUSEHOLD_ENTITY_ID
 _TASK_TYPES = ("routine", "chore")
 _TIME_OF_DAY_VALUES = ("anytime", "morning", "afternoon", "night")
 
