@@ -1,6 +1,7 @@
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
+import { LucarneCardBase } from '../shared/card-base.js';
 import { installPreviewColumnOverride, type PreviewOverrideHandle } from '../shared/grid-preview-override.js';
 import { resolveCalendars, resolveCalendarLabel } from '../shared/calendar-helpers.js';
 import { layoutEvents, isoDateKey } from '../shared/calendar-layout.js';
@@ -34,6 +35,8 @@ export interface LucarneCalendarCardConfig {
    * visibleCount (matches the event-data cache range).
    */
   render_buffer_days?: number;
+  /** When true, forward card errors to a Home Assistant persistent_notification. */
+  debug?: boolean;
 }
 
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards =
@@ -46,7 +49,7 @@ export interface LucarneCalendarCardConfig {
 });
 
 @customElement('lucarne-calendar-card')
-export class LucarneCalendarCard extends LitElement {
+export class LucarneCalendarCard extends LucarneCardBase {
   static styles = [
     lucarneStyles,
     css`
@@ -451,7 +454,7 @@ export class LucarneCalendarCard extends LitElement {
     return `${mdy(start, { month: 'short', day: 'numeric', year: 'numeric' })} – ${mdy(end, { month: 'short', day: 'numeric', year: 'numeric' })}`;
   }
 
-  render() {
+  protected renderContent() {
     if (!this._config) return html``;
     const bandStart = this._config.visible_hours?.start ?? '07:00';
     const bandEnd = this._config.visible_hours?.end ?? '21:00';
