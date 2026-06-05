@@ -104,10 +104,10 @@ async def _complete_item(hass: HomeAssistant, entity_id: str, uid: str, summary:
     )
 
 
-async def test_reset_flips_only_routine_items(
+async def test_reset_flips_routines_and_deletes_completed_chores(
     hass: HomeAssistant, tmp_path: Path
 ) -> None:
-    """Daily reset flips completed routines back to needs_action; chores are untouched."""
+    """Reset flips completed routines back to needs_action and deletes completed chores."""
     await _setup_member_todo(hass, "anna")
     entry = _make_entry(hass, "anna")
     store = await _make_store(hass, entry.entry_id, tmp_path)
@@ -123,6 +123,7 @@ async def test_reset_flips_only_routine_items(
     reset_count = await async_perform_daily_reset(hass, store)
     await hass.async_block_till_done()
 
+    # Return value counts routines flipped, not chores deleted.
     assert reset_count == 1
 
     todo_component = hass.data[DATA_COMPONENT]
@@ -130,7 +131,71 @@ async def test_reset_flips_only_routine_items(
     assert entity is not None
     items = {i.uid: i for i in (entity.todo_items or []) if i.uid}
     assert items["r-001"].status == TodoItemStatus.NEEDS_ACTION
-    assert items["c-001"].status == TodoItemStatus.COMPLETED
+    # The completed one-off chore is removed entirely, item and metadata.
+    assert "c-001" not in items
+    assert await store.async_get_task_metadata("c-001") is None
+
+
+async def test_reset_keeps_incomplete_chores(hass: HomeAssistant, tmp_path: Path) -> None:
+    """An incomplete one-off chore survives the reset (only completed ones go away)."""
+    await _setup_member_todo(hass, "anna")
+    entry = _make_entry(hass, "anna")
+    store = await _make_store(hass, entry.entry_id, tmp_path)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store}
+
+    await _add_item_and_metadata(hass, store, "todo.anna", "c-keep", "Take out trash", "chore")
+    await hass.async_block_till_done()
+
+    reset_count = await async_perform_daily_reset(hass, store)
+    await hass.async_block_till_done()
+
+    assert reset_count == 0
+    todo_component = hass.data[DATA_COMPONENT]
+    entity = todo_component.get_entity("todo.anna")
+    assert entity is not None
+    items = {i.uid: i for i in (entity.todo_items or []) if i.uid}
+    assert "c-keep" in items, "incomplete one-off chore is kept"
+    assert items["c-keep"].status == TodoItemStatus.NEEDS_ACTION
+    assert await store.async_get_task_metadata("c-keep") is not None
+
+
+async def test_reset_deletes_completed_household_chore(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """Completed one-off chores on the shared household list are deleted too."""
+    await _setup_member_todo(hass, "anna")
+    await _setup_member_todo(hass, "lucarne_household")
+    entry = _make_entry(hass, "anna")
+    store = await _make_store(hass, entry.entry_id, tmp_path)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store}
+
+    await _add_item_and_metadata(
+        hass,
+        store,
+        "todo.lucarne_household",
+        "h-001",
+        "Clean up",
+        "chore",
+        member_slug="household",
+    )
+    await _complete_item(hass, "todo.lucarne_household", "h-001", "Clean up")
+    await hass.async_block_till_done()
+
+    deleted_events: list[dict] = []
+    hass.bus.async_listen(
+        "lucarne_family_task_deleted", lambda e: deleted_events.append(dict(e.data))
+    )
+
+    await async_perform_daily_reset(hass, store)
+    await hass.async_block_till_done()
+
+    todo_component = hass.data[DATA_COMPONENT]
+    entity = todo_component.get_entity("todo.lucarne_household")
+    assert entity is not None
+    items = {i.uid: i for i in (entity.todo_items or []) if i.uid}
+    assert "h-001" not in items, "completed household chore is deleted"
+    assert await store.async_get_task_metadata("h-001") is None
+    assert any(ev.get("uid") == "h-001" for ev in deleted_events), "delete event fired"
 
 
 async def test_reset_is_idempotent(hass: HomeAssistant, tmp_path: Path) -> None:

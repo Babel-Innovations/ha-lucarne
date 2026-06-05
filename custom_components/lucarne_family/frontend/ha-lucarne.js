@@ -7258,7 +7258,15 @@ J([W({ attribute: !1 })], $.prototype, "hass", void 0), J([W({ attribute: !1 })]
 });
 var Or = class extends tt {
 	constructor(...e) {
-		super(...e), this._familyState = null, this._addTaskMember = null, this._editTask = null;
+		super(...e), this._familyState = null, this._addTaskMember = null, this._editTask = null, this._optimistic = /* @__PURE__ */ new Map(), this._onFamilyState = (e) => {
+			if (this._optimistic.size > 0) {
+				let t = new Map(this._optimistic), n = /* @__PURE__ */ new Set();
+				for (let r of e.tasksByMember.values()) for (let e of r) n.add(e.uid), t.get(e.uid) === e.status && t.delete(e.uid);
+				for (let e of t.keys()) n.has(e) || t.delete(e);
+				this._optimistic = t;
+			}
+			this._familyState = e;
+		};
 	}
 	static {
 		this.styles = [K, k`
@@ -7378,14 +7386,10 @@ var Or = class extends tt {
 		};
 	}
 	connectedCallback() {
-		super.connectedCallback(), this.hass && !this._unsubFamily && (this._unsubFamily = gt(this.hass, (e) => {
-			this._familyState = e;
-		}));
+		super.connectedCallback(), this.hass && !this._unsubFamily && (this._unsubFamily = gt(this.hass, this._onFamilyState));
 	}
 	updated(e) {
-		super.updated(e), e.has("hass") && this.hass && !this._unsubFamily && (this._unsubFamily = gt(this.hass, (e) => {
-			this._familyState = e;
-		}));
+		super.updated(e), e.has("hass") && this.hass && !this._unsubFamily && (this._unsubFamily = gt(this.hass, this._onFamilyState));
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), this._unsubFamily?.(), this._unsubFamily = void 0;
@@ -7397,7 +7401,13 @@ var Or = class extends tt {
 			if (t.has(i)) continue;
 			let e = i === "household" ? pt : this._familyState.members.find((e) => e.slug === i) ?? null;
 			if (!e) continue;
-			let s = (this._familyState.tasksByMember.get(i) ?? []).filter((e) => e.metadata.type === "routine" ? n : e.metadata.type === "chore" && r ? e.due === null ? !0 : (e.due.includes("T") ? new Date(e.due) : /* @__PURE__ */ new Date(e.due + "T00:00:00")) <= a : !1), c = this._familyState.streakByMember.get(i) ?? 0;
+			let s = (this._familyState.tasksByMember.get(i) ?? []).filter((e) => e.metadata.type === "routine" ? n : e.metadata.type === "chore" && r ? e.due === null ? !0 : (e.due.includes("T") ? new Date(e.due) : /* @__PURE__ */ new Date(e.due + "T00:00:00")) <= a : !1).map((e) => {
+				let t = this._optimistic.get(e.uid);
+				return t && t !== e.status ? {
+					...e,
+					status: t
+				} : e;
+			}), c = this._familyState.streakByMember.get(i) ?? 0;
 			o.push({
 				member: e,
 				tasks: s,
@@ -7410,10 +7420,18 @@ var Or = class extends tt {
 		let { task: t } = e.detail;
 		if (!this.hass || !this._familyState) return;
 		let n = t.status === "completed" ? "needs_action" : "completed", r = t.metadata.member_slug === "household" ? "todo.lucarne_household" : this._familyState.members.find((e) => e.slug === t.metadata.member_slug)?.todo_entity_id ?? "";
-		r && await this.hass.callService("todo", "update_item", {
-			item: t.uid,
-			status: n
-		}, { entity_id: r });
+		if (r) {
+			this._optimistic = new Map(this._optimistic).set(t.uid, n);
+			try {
+				await this.hass.callService("todo", "update_item", {
+					item: t.uid,
+					status: n
+				}, { entity_id: r });
+			} catch (e) {
+				let n = new Map(this._optimistic);
+				throw n.delete(t.uid), this._optimistic = n, e;
+			}
+		}
 	}
 	_handleAddTask(e) {
 		let { memberSlug: t } = e.detail;
@@ -7497,7 +7515,7 @@ var Or = class extends tt {
     `;
 	}
 };
-J([W({ attribute: !1 })], Or.prototype, "hass", void 0), J([G()], Or.prototype, "_config", void 0), J([G()], Or.prototype, "_familyState", void 0), J([G()], Or.prototype, "_addTaskMember", void 0), J([G()], Or.prototype, "_editTask", void 0), Or = J([V("lucarne-chores-card")], Or);
+J([W({ attribute: !1 })], Or.prototype, "hass", void 0), J([G()], Or.prototype, "_config", void 0), J([G()], Or.prototype, "_familyState", void 0), J([G()], Or.prototype, "_addTaskMember", void 0), J([G()], Or.prototype, "_editTask", void 0), J([G()], Or.prototype, "_optimistic", void 0), Or = J([V("lucarne-chores-card")], Or);
 //#endregion
 //#region src/shared/cropper-styles.ts
 var kr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {

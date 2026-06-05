@@ -1,7 +1,7 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LucarneChoresCard } from '../../src/cards/lucarne-chores-card.js';
-import type { HomeAssistant } from '../../src/shared/types.js';
+import type { HomeAssistant, RenderableTask } from '../../src/shared/types.js';
 import type { FamilyState } from '../../src/shared/family-subscription.js';
 import { makeFakeHass } from '../setup/ha-mock.mjs';
 
@@ -228,6 +228,7 @@ describe('lucarne-chores-card', () => {
       ],
       tasksByMember: new Map([['anna', []], ['bob', []]]),
       streakByMember: new Map([['anna', 3], ['bob', 1]]),
+      taskMetadataByUid: new Map(),
       resetTime: '03:00',
       streakCheckTime: '02:00',
       integrationError: null,
@@ -239,5 +240,127 @@ describe('lucarne-chores-card', () => {
 
     const after = el.shadowRoot!.querySelectorAll('.member-cell').length;
     assert.equal(after, 2, 'card re-renders with updated family state');
+  });
+
+  function makeChore(status: RenderableTask['status'] = 'needs_action'): RenderableTask {
+    return {
+      uid: 'c-1',
+      summary: 'Clean up',
+      status,
+      due: null,
+      description: '',
+      metadata: {
+        item_uid: 'c-1',
+        member_slug: 'anna',
+        assignee_slug: '',
+        type: 'chore',
+        recurrence: '',
+        icon: '',
+        source: 'manual',
+        time_of_day: 'anytime',
+      },
+    };
+  }
+
+  function seedAnnaTask(el: LucarneChoresCard, task: RenderableTask) {
+    const state: FamilyState = {
+      members: [
+        { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+      ],
+      tasksByMember: new Map([['anna', [task]]]),
+      streakByMember: new Map([['anna', 0]]),
+      taskMetadataByUid: new Map(),
+      resetTime: '03:00',
+      streakCheckTime: '02:00',
+      integrationError: null,
+    };
+    (el as unknown as { _familyState: FamilyState })._familyState = state;
+  }
+
+  function annaTaskRow(el: LucarneChoresCard): (HTMLElement & { task: RenderableTask }) | null {
+    const col = el.shadowRoot!.querySelector('lucarne-member-column');
+    return (col?.shadowRoot?.querySelector('lucarne-task-row') ?? null) as
+      | (HTMLElement & { task: RenderableTask })
+      | null;
+  }
+
+  it('optimistically flips a toggled task before the server confirms', async () => {
+    const el = await makeCard(['anna']);
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+
+    const row = annaTaskRow(el);
+    assert.ok(row, 'task row rendered');
+    assert.equal(row!.task.status, 'needs_action', 'row starts incomplete');
+
+    // Dispatch the toggle the way lucarne-task-row does; no family-state push follows.
+    row!.dispatchEvent(
+      new CustomEvent('task-toggle', { detail: { task: row!.task }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    const after = annaTaskRow(el);
+    assert.equal(after!.task.status, 'completed', 'row flips immediately without a server refetch');
+
+    const hass = el.hass as unknown as { calls: { callService: { domain: string; service: string }[] } };
+    assert.ok(
+      hass.calls.callService.some((c) => c.domain === 'todo' && c.service === 'update_item'),
+      'todo.update_item was called',
+    );
+  });
+
+  it('reverts the optimistic toggle when the service call fails', async () => {
+    const base = makeFakeHassWithMembers();
+    const hass = {
+      ...base,
+      async callService(): Promise<undefined> {
+        throw new Error('service failed');
+      },
+    } as unknown as ReturnType<typeof makeFakeHassWithMembers>;
+    const el = await makeCard(['anna'], hass);
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+
+    const task = annaTaskRow(el)!.task;
+    // Call the handler directly so the rejected promise is awaited and swallowed.
+    await (el as unknown as { _handleTaskToggle(e: Event): Promise<void> })
+      ._handleTaskToggle(new CustomEvent('task-toggle', { detail: { task } }))
+      .catch(() => {});
+    await el.updateComplete;
+
+    assert.equal(annaTaskRow(el)!.task.status, 'needs_action', 'row reverts after failure');
+  });
+
+  it('drops the optimistic override when the task disappears (e.g. deleted at reset)', async () => {
+    const el = await makeCard(['anna']);
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+
+    const task = annaTaskRow(el)!.task;
+    annaTaskRow(el)!.dispatchEvent(
+      new CustomEvent('task-toggle', { detail: { task }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    const internals = el as unknown as {
+      _optimistic: Map<string, RenderableTask['status']>;
+      _onFamilyState: (s: FamilyState) => void;
+    };
+    assert.equal(internals._optimistic.size, 1, 'override recorded after toggle');
+
+    // Simulate a push where the chore was deleted (no longer present).
+    internals._onFamilyState({
+      members: [
+        { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+      ],
+      tasksByMember: new Map([['anna', []]]),
+      streakByMember: new Map([['anna', 0]]),
+      taskMetadataByUid: new Map(),
+      resetTime: '03:00',
+      streakCheckTime: '02:00',
+      integrationError: null,
+    });
+
+    assert.equal(internals._optimistic.size, 0, 'override pruned for the vanished task');
   });
 });
