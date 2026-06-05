@@ -1,0 +1,10 @@
+name: "Lucarne CodeQL config"
+
+# The committed frontend bundle (custom_components/lucarne_family/frontend/ha-lucarne.js)
+# is Vite's minified output: our card sources concatenated with bundled third-party
+# libraries (Lit, etc.). CodeQL findings there are unactionable — they sit in vendored
+# library code we don't author, and the minified line numbers shift on every rebuild,
+# so each `npm run build` re-reports the same issues as "new" alerts. The real,
+# hand-written sources under src/ are still analyzed. Exclude only the generated artifact.
+paths-ignore:
+  - custom_components/lucarne_family/frontend/ha-lucarne.js
