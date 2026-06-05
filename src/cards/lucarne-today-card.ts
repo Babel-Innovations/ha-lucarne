@@ -1,6 +1,7 @@
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
+import { LucarneCardBase } from '../shared/card-base.js';
 import { fetchCalendarEvents, subscribeTodoItems } from '../shared/ha-subscriptions.js';
 import { installPreviewColumnOverride, type PreviewOverrideHandle } from '../shared/grid-preview-override.js';
 import { subscribeFamilyState } from '../shared/family-subscription.js';
@@ -56,6 +57,8 @@ export interface LucarneTodayCardConfig {
   refill_tasks_on_complete?: boolean;
   /** Order of vertical sections (default: calendar → weather → tasks) */
   section_order?: TodaySectionId[];
+  /** When true, forward card errors to a Home Assistant persistent_notification. */
+  debug?: boolean;
 }
 
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards =
@@ -68,7 +71,7 @@ export interface LucarneTodayCardConfig {
 });
 
 @customElement('lucarne-today-card')
-export class LucarneTodayCard extends LitElement {
+export class LucarneTodayCard extends LucarneCardBase {
   static styles = [
     lucarneStyles,
     css`
@@ -486,7 +489,7 @@ export class LucarneTodayCard extends LitElement {
     `;
   }
 
-  render() {
+  protected renderContent() {
     if (!this._config) return html``;
 
     const presenceEntries = (this._config.presence ?? []).map((p) => ({

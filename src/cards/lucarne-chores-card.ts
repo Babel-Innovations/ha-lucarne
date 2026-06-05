@@ -1,6 +1,7 @@
-import { LitElement, html, css, PropertyValues } from 'lit';
+import { html, css, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
+import { LucarneCardBase } from '../shared/card-base.js';
 import type { HomeAssistant, MemberSummary, RenderableTask } from '../shared/types.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
@@ -19,6 +20,8 @@ export interface LucarneChoresCardConfig {
   show_tasks?: boolean;
   show_streak?: boolean;
   hide_names?: boolean;
+  /** When true, forward card errors to a Home Assistant persistent_notification. */
+  debug?: boolean;
 }
 
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards =
@@ -31,7 +34,7 @@ export interface LucarneChoresCardConfig {
 });
 
 @customElement('lucarne-chores-card')
-export class LucarneChoresCard extends LitElement {
+export class LucarneChoresCard extends LucarneCardBase {
   static styles = [
     lucarneStyles,
     css`
@@ -257,7 +260,7 @@ export class LucarneChoresCard extends LitElement {
     this._editTask = task;
   }
 
-  render() {
+  protected renderContent() {
     if (!this._config) return html``;
 
     // Old config detection (kids key)
