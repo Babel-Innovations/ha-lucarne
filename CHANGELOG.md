@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.0 — 2026-06-06
+
+**Features:**
+-  auto-scroll to current time + follow as time advances (fixes #58)
+
+**Fixes:**
+-  instant toggle feedback + clear completed one-off chores at reset
+-  correct throttle fallback + listener cleanup
+-  add error boundary + remote crash reporter for iPad
+
+
 ## v1.1.1 — 2026-05-30
 
 **Fixes:**
