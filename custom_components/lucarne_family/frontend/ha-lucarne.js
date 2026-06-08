@@ -1471,9 +1471,11 @@ var zt = 500, Bt = class extends V {
       color: var(--primary-text-color, #212121);
       font-family: var(--primary-font-family, sans-serif);
       transition: text-decoration 0.15s, color 0.15s;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      /* Wrap long task text instead of overflowing the column. The label is an
+         inline span, so overflow/text-overflow never clipped it — nowrap just
+         pushed the column wide and forced a horizontal scrollbar (issue #69).
+         overflow-wrap: anywhere breaks single overlong words too. */
+      overflow-wrap: anywhere;
     }
     .label.done {
       text-decoration: line-through;
