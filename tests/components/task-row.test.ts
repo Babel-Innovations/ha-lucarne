@@ -195,4 +195,25 @@ describe('lucarne-task-row', () => {
     const styles = window.getComputedStyle(row);
     assert.equal(styles.minHeight, '44px', 'compact mode keeps the 44px hit area');
   });
+
+  it('wraps long task text instead of truncating it (issue #69)', async () => {
+    // Regression: the label used `white-space: nowrap` which (on an inline
+    // <span> where overflow/text-overflow have no effect) overflowed the
+    // column and forced a horizontal scrollbar instead of wrapping.
+    const el = makeEl(
+      makeTask({ summary: 'Take out the recycling and the compost before school' }),
+    );
+    await el.updateComplete;
+
+    const label = shadow(el, '.label') as HTMLElement;
+    const styles = window.getComputedStyle(label);
+    assert.notEqual(styles.whiteSpace, 'nowrap', 'label must allow wrapping');
+    // overflow-wrap must also break a single overlong word so it can't overflow.
+    assert.ok(
+      styles.overflowWrap === 'anywhere' ||
+        styles.overflowWrap === 'break-word' ||
+        styles.wordBreak === 'break-word',
+      `label must break long words (overflow-wrap: ${styles.overflowWrap}, word-break: ${styles.wordBreak})`,
+    );
+  });
 });
