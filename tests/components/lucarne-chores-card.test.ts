@@ -1,4 +1,4 @@
-import { describe, it, afterEach } from 'node:test';
+import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LucarneChoresCard } from '../../src/cards/lucarne-chores-card.js';
 import type { HomeAssistant, RenderableTask } from '../../src/shared/types.js';
@@ -362,5 +362,49 @@ describe('lucarne-chores-card', () => {
     });
 
     assert.equal(internals._optimistic.size, 0, 'override pruned for the vanished task');
+  });
+
+  // Regression for #68 (part 1): a card left open overnight kept showing the
+  // previous day's "due today" window because nothing re-rendered at midnight.
+  it('refreshes the due-today window when the local day rolls over', async () => {
+    const el = await makeCard(['anna']);
+    // connectedCallback armed a real midnight timer; cancel it with the real
+    // clearTimeout *before* faking timers, otherwise the fake clearTimeout can't
+    // cancel a real handle and the timer leaks (keeping the process alive).
+    const internals = el as unknown as {
+      _midnightTimer?: ReturnType<typeof setTimeout>;
+      _scheduleMidnightRefresh(): void;
+    };
+    clearTimeout(internals._midnightTimer);
+    internals._midnightTimer = undefined;
+    try {
+      // Freeze the clock at 23:30 and arm the midnight timer under the fake clock.
+      mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+      mock.timers.setTime(new Date(2026, 5, 8, 23, 30, 0, 0).getTime());
+
+      // A chore due tomorrow (2026-06-09) — outside today's window at 23:30.
+      const tomorrowChore: RenderableTask = {
+        ...makeChore('needs_action'),
+        uid: 'c-rollover',
+        summary: 'Tomorrow chore',
+        due: '2026-06-09',
+        metadata: { ...makeChore().metadata, item_uid: 'c-rollover' },
+      };
+      seedAnnaTask(el, tomorrowChore);
+      internals._scheduleMidnightRefresh();
+      await el.updateComplete;
+
+      assert.equal(annaTaskRow(el), null, 'next-day chore hidden before midnight');
+
+      // Cross midnight: the timer fires, requestUpdate re-renders with a fresh now.
+      mock.timers.tick(31 * 60 * 1000);
+      await el.updateComplete;
+
+      const row = annaTaskRow(el);
+      assert.ok(row, 'next-day chore appears after the day rolls over');
+      assert.equal(row!.task.uid, 'c-rollover');
+    } finally {
+      mock.timers.reset();
+    }
   });
 });

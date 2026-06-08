@@ -3198,18 +3198,21 @@ function Dn(e, t, n, r) {
 function On(e) {
 	return e.length === 10 && !e.includes("T") ? /* @__PURE__ */ new Date(`${e}T00:00:00`) : new Date(e);
 }
+function kn(e) {
+	return new Date(e.getFullYear(), e.getMonth(), e.getDate() + 1, 0, 0, 0, 0).getTime() - e.getTime();
+}
 //#endregion
 //#region src/shared/calendar-layout.ts
-function kn(e) {
+function An(e) {
 	return e.start.length === 10 && !e.start.includes("T");
 }
 function Y(e) {
 	return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
 }
-function An(e) {
+function jn(e) {
 	return e.uid ?? `${e.start}|${e.end}|${e.summary ?? ""}`;
 }
-function jn(e) {
+function Mn(e) {
 	if (e.length === 0) return [];
 	let t = e.map((e, t) => ({
 		...e,
@@ -3232,11 +3235,11 @@ function jn(e) {
 		laneCount: a[i[t]] + 1
 	}));
 }
-function Mn(e, t) {
+function Nn(e, t) {
 	let [n, r] = t.split(":").map(Number), i = new Date(e);
 	return i.setHours(n, r, 0, 0), i.getTime();
 }
-function Nn(e, t, n, r) {
+function Pn(e, t, n, r) {
 	let i = /* @__PURE__ */ new Map();
 	for (let e of t) i.set(Y(e), {
 		allDay: [],
@@ -3246,7 +3249,7 @@ function Nn(e, t, n, r) {
 	});
 	let a = t.length > 0 ? t[0] : null, o = t.length > 0 ? t[t.length - 1] : null;
 	for (let s of e) {
-		if (kn(s)) {
+		if (An(s)) {
 			let e = /* @__PURE__ */ new Date(s.start + "T00:00:00"), n = /* @__PURE__ */ new Date(s.end + "T00:00:00"), r = a !== null && e < a, c = o ? new Date(o) : null;
 			c && c.setDate(c.getDate() + 1);
 			let l = c !== null && n > c;
@@ -3255,7 +3258,7 @@ function Nn(e, t, n, r) {
 				if (c >= e && c < n && (u.allDay.push(s), r || l)) {
 					u.allDayClipped ||= /* @__PURE__ */ new Map();
 					let e = a !== null && Y(c) === Y(a), t = o !== null && Y(c) === Y(o);
-					u.allDayClipped.set(An(s), {
+					u.allDayClipped.set(jn(s), {
 						left: r && e,
 						right: l && t
 					});
@@ -3269,7 +3272,7 @@ function Nn(e, t, n, r) {
 			l.setHours(0, 0, 0, 0);
 			let u = new Date(a);
 			if (u.setHours(23, 59, 59, 999), c <= l || e > u) continue;
-			let d = Mn(a, n), f = Mn(a, r);
+			let d = Nn(a, n), f = Nn(a, r);
 			if (c.getTime() <= d) o.earlier.push(s);
 			else if (e.getTime() >= f) o.later.push(s);
 			else {
@@ -3290,7 +3293,7 @@ function Nn(e, t, n, r) {
 	for (let e of t) {
 		let t = Y(e), a = i.get(t);
 		if (a.inBand.length === 0) continue;
-		let o = Mn(e, n), s = Mn(e, r) - o, c = jn(a.inBand.map((e) => {
+		let o = Nn(e, n), s = Nn(e, r) - o, c = Mn(a.inBand.map((e) => {
 			let t = o + e.topPercent / 100 * s, n = t + e.heightPercent / 100 * s;
 			return {
 				event: e.event,
@@ -3312,7 +3315,7 @@ function Nn(e, t, n, r) {
 }
 //#endregion
 //#region src/shared/visible-window.ts
-function Pn(e, t) {
+function Fn(e, t) {
 	let n = Math.min(t.minColWidth, t.maxColWidth), r = Math.max(t.minColWidth, t.maxColWidth), i = Math.min(t.minDays, t.maxDays), a = Math.max(t.minDays, t.maxDays), o = Math.max(0, e - t.timeColWidth);
 	if (o <= 0) return {
 		visibleCount: i,
@@ -3326,25 +3329,25 @@ function Pn(e, t) {
 }
 //#endregion
 //#region src/shared/rolling-window.ts
-function Fn(e) {
+function In(e) {
 	return `syn:${e.start}|${e.end}|${e.summary ?? ""}`;
 }
-function In(e) {
+function Ln(e) {
 	if (e !== void 0 && !(typeof e != "number" || !Number.isFinite(e))) return Math.max(0, Math.floor(e));
 }
-function Ln(e, t) {
+function Rn(e, t) {
 	let n = new Date(e);
 	return n.setDate(n.getDate() + t), n;
 }
-function Rn(e) {
+function zn(e) {
 	let t = new Date(e);
 	return t.setHours(0, 0, 0, 0), t;
 }
-var zn = class {
+var Bn = class {
 	constructor(e, t) {
-		this._isConnected = !1, this._hasHass = !1, this._dayOffset = 0, this._fetchSeq = 0, this._cachedEvents = /* @__PURE__ */ new Map(), this._cachedDayKeys = /* @__PURE__ */ new Set(), this._host = e, this._opts = t, this._fetcher = t.fetcher ?? at, this._pollIntervalMs = t.pollIntervalMs ?? 5 * 6e4, this._tickIntervalMs = t.tickIntervalMs ?? 6e4, this._panBound = t.panBoundDays ?? 90, this._visibleCount = t.visibleCount, this._bufferDaysExplicit = In(t.bufferDays);
+		this._isConnected = !1, this._hasHass = !1, this._dayOffset = 0, this._fetchSeq = 0, this._cachedEvents = /* @__PURE__ */ new Map(), this._cachedDayKeys = /* @__PURE__ */ new Set(), this._host = e, this._opts = t, this._fetcher = t.fetcher ?? at, this._pollIntervalMs = t.pollIntervalMs ?? 5 * 6e4, this._tickIntervalMs = t.tickIntervalMs ?? 6e4, this._panBound = t.panBoundDays ?? 90, this._visibleCount = t.visibleCount, this._bufferDaysExplicit = Ln(t.bufferDays);
 		let n = (t.now ?? (() => /* @__PURE__ */ new Date()))();
-		this._anchorToday = Rn(n), e.addController(this);
+		this._anchorToday = zn(n), e.addController(this);
 	}
 	hostConnected() {
 		this._isConnected = !0, this._tickIntervalMs > 0 && (this._tickTimer = setInterval(() => this.tick(), this._tickIntervalMs)), this._pollIntervalMs > 0 && (this._pollTimer = setInterval(() => this._poll(), this._pollIntervalMs)), this._hass && this._fetchRange(...this._computeRange());
@@ -3368,7 +3371,7 @@ var zn = class {
 		}
 	}
 	setBufferDays(e) {
-		let t = In(e);
+		let t = Ln(e);
 		t !== this._bufferDaysExplicit && (this._bufferDaysExplicit = t, this._opts.onChange?.(), this._host.requestUpdate());
 	}
 	pan(e) {
@@ -3384,7 +3387,7 @@ var zn = class {
 		this._rangeIsCovered(t, n) || this._fetchRange(t, n);
 	}
 	tick() {
-		let e = Rn((this._opts.now ?? (() => /* @__PURE__ */ new Date()))());
+		let e = zn((this._opts.now ?? (() => /* @__PURE__ */ new Date()))());
 		e.getTime() !== this._anchorToday.getTime() && (this._anchorToday = e, this._dayOffset === 0 && (this._opts.onChange?.(), this._host.requestUpdate(), this._hass && this._fetchRange(...this._computeRange())));
 	}
 	async _poll() {
@@ -3392,7 +3395,7 @@ var zn = class {
 	}
 	get days() {
 		return Array.from({ length: this._visibleCount }, (e, t) => {
-			let n = Ln(this._anchorToday, this._dayOffset + t);
+			let n = Rn(this._anchorToday, this._dayOffset + t);
 			return n.setHours(0, 0, 0, 0), n;
 		});
 	}
@@ -3402,7 +3405,7 @@ var zn = class {
 	get renderDays() {
 		let e = this.bufferDays, t = e * 2 + this._visibleCount;
 		return Array.from({ length: t }, (t, n) => {
-			let r = Ln(this._anchorToday, this._dayOffset - e + n);
+			let r = Rn(this._anchorToday, this._dayOffset - e + n);
 			return r.setHours(0, 0, 0, 0), r;
 		});
 	}
@@ -3431,9 +3434,9 @@ var zn = class {
 		return this._cachedDayKeys.has(Y(e));
 	}
 	_computeRange() {
-		let e = this._visibleCount, t = Ln(this._anchorToday, this._dayOffset - e);
+		let e = this._visibleCount, t = Rn(this._anchorToday, this._dayOffset - e);
 		t.setHours(0, 0, 0, 0);
-		let n = Ln(this._anchorToday, this._dayOffset + 2 * e);
+		let n = Rn(this._anchorToday, this._dayOffset + 2 * e);
 		return n.setHours(0, 0, 0, 0), [t, n];
 	}
 	_rangeIsCovered(e, t) {
@@ -3449,7 +3452,7 @@ var zn = class {
 			if (n !== this._fetchSeq) return;
 			let a = /* @__PURE__ */ new Map();
 			for (let [e, t] of r.entries()) a.set(e, t.map((t) => {
-				let n = t.uid && t.uid.length > 0 ? t.uid : Fn(t);
+				let n = t.uid && t.uid.length > 0 ? t.uid : In(t);
 				return {
 					...t,
 					uid: `${e}::${n}`
@@ -3465,7 +3468,7 @@ var zn = class {
 };
 //#endregion
 //#region src/shared/calendar-scroll.ts
-function Bn(e) {
+function Vn(e) {
 	let { now: t, bandStartH: n, bandEndH: r, timeGridTopPx: i, timeGridHeightPx: a, paddingPx: o, maxScrollTop: s } = e, c = r - n;
 	if (c <= 0) return 0;
 	let l = t.getHours() + t.getMinutes() / 60 + t.getSeconds() / 3600;
@@ -3476,7 +3479,7 @@ function Bn(e) {
 }
 //#endregion
 //#region src/components/visibility-pills.ts
-var Vn = class extends V {
+var Hn = class extends V {
 	constructor(...e) {
 		super(...e), this.calendars = [], this.visibleIds = /* @__PURE__ */ new Set();
 	}
@@ -3549,20 +3552,20 @@ var Vn = class extends V {
     `;
 	}
 };
-J([W({ type: Array })], Vn.prototype, "calendars", void 0), J([W({ type: Object })], Vn.prototype, "visibleIds", void 0), Vn = J([H("lucarne-visibility-pills")], Vn);
+J([W({ type: Array })], Hn.prototype, "calendars", void 0), J([W({ type: Object })], Hn.prototype, "visibleIds", void 0), Hn = J([H("lucarne-visibility-pills")], Hn);
 //#endregion
 //#region node_modules/lit-html/directive.js
-var Hn = {
+var Un = {
 	ATTRIBUTE: 1,
 	CHILD: 2,
 	PROPERTY: 3,
 	BOOLEAN_ATTRIBUTE: 4,
 	EVENT: 5,
 	ELEMENT: 6
-}, Un = (e) => (...t) => ({
+}, Wn = (e) => (...t) => ({
 	_$litDirective$: e,
 	values: t
-}), Wn = class {
+}), Gn = class {
 	constructor(e) {}
 	get _$AU() {
 		return this._$AM._$AU;
@@ -3576,9 +3579,9 @@ var Hn = {
 	update(e, t) {
 		return this.render(...t);
 	}
-}, Gn = "important", Kn = " !important", qn = Un(class extends Wn {
+}, Kn = "important", qn = " !important", Jn = Wn(class extends Gn {
 	constructor(e) {
-		if (super(e), e.type !== Hn.ATTRIBUTE || e.name !== "style" || e.strings?.length > 2) throw Error("The `styleMap` directive must be used in the `style` attribute and must be the only part in the attribute.");
+		if (super(e), e.type !== Un.ATTRIBUTE || e.name !== "style" || e.strings?.length > 2) throw Error("The `styleMap` directive must be used in the `style` attribute and must be the only part in the attribute.");
 	}
 	render(e) {
 		return Object.keys(e).reduce((t, n) => {
@@ -3594,8 +3597,8 @@ var Hn = {
 			let r = t[e];
 			if (r != null) {
 				this.ft.add(e);
-				let t = typeof r == "string" && r.endsWith(Kn);
-				e.includes("-") || t ? n.setProperty(e, t ? r.slice(0, -11) : r, t ? Gn : "") : n[e] = r;
+				let t = typeof r == "string" && r.endsWith(qn);
+				e.includes("-") || t ? n.setProperty(e, t ? r.slice(0, -11) : r, t ? Kn : "") : n[e] = r;
 			}
 		}
 		return I;
@@ -3603,14 +3606,14 @@ var Hn = {
 });
 //#endregion
 //#region src/components/calendar-event-block.ts
-function Jn(e) {
+function Yn(e) {
 	return e.toLocaleTimeString("en-US", {
 		hour: "numeric",
 		minute: "2-digit",
 		hour12: !0
 	});
 }
-var Yn = class extends V {
+var Xn = class extends V {
 	constructor(...e) {
 		super(...e), this.color = "#a8d8b9", this.lane = 0, this.laneCount = 1, this.topPercent = 0, this.heightPercent = 10;
 	}
@@ -3666,7 +3669,7 @@ var Yn = class extends V {
 		}));
 	}
 	render() {
-		let e = new Date(this.event.start), t = new Date(this.event.end), n = `${Jn(e)}–${Jn(t)}`, r = this.event.pending ? "0.5" : "1";
+		let e = new Date(this.event.start), t = new Date(this.event.end), n = `${Yn(e)}–${Yn(t)}`, r = this.event.pending ? "0.5" : "1";
 		return P`
       <div @click=${this._handleClick} style="height:100%;width:100%;overflow:hidden;opacity:${r}">
         <div class="event-summary">${this.event.summary}</div>
@@ -3675,10 +3678,10 @@ var Yn = class extends V {
     `;
 	}
 };
-J([W({ type: Object })], Yn.prototype, "event", void 0), J([W({ type: String })], Yn.prototype, "color", void 0), J([W({ type: Number })], Yn.prototype, "lane", void 0), J([W({ type: Number })], Yn.prototype, "laneCount", void 0), J([W({ type: Number })], Yn.prototype, "topPercent", void 0), J([W({ type: Number })], Yn.prototype, "heightPercent", void 0), Yn = J([H("lucarne-calendar-event-block")], Yn);
+J([W({ type: Object })], Xn.prototype, "event", void 0), J([W({ type: String })], Xn.prototype, "color", void 0), J([W({ type: Number })], Xn.prototype, "lane", void 0), J([W({ type: Number })], Xn.prototype, "laneCount", void 0), J([W({ type: Number })], Xn.prototype, "topPercent", void 0), J([W({ type: Number })], Xn.prototype, "heightPercent", void 0), Xn = J([H("lucarne-calendar-event-block")], Xn);
 //#endregion
 //#region src/components/out-of-band-stub.ts
-var Xn = class extends V {
+var Zn = class extends V {
 	constructor(...e) {
 		super(...e), this.events = [], this.label = "earlier", this.eventColors = /* @__PURE__ */ new Map(), this._open = !1;
 	}
@@ -3809,16 +3812,16 @@ var Xn = class extends V {
     `;
 	}
 };
-J([W({ type: Array })], Xn.prototype, "events", void 0), J([W({ type: String })], Xn.prototype, "label", void 0), J([W({ type: Object })], Xn.prototype, "eventColors", void 0), J([G()], Xn.prototype, "_open", void 0), Xn = J([H("lucarne-out-of-band-stub")], Xn);
+J([W({ type: Array })], Zn.prototype, "events", void 0), J([W({ type: String })], Zn.prototype, "label", void 0), J([W({ type: Object })], Zn.prototype, "eventColors", void 0), J([G()], Zn.prototype, "_open", void 0), Zn = J([H("lucarne-out-of-band-stub")], Zn);
 //#endregion
 //#region src/components/skeleton-day-column.ts
-function Zn(e) {
+function Qn(e) {
 	return 20 + (e * 37 + 11) % 30;
 }
-function Qn(e) {
+function $n(e) {
 	return 10 + (e * 53 + 7) % 60;
 }
-var $n = class extends V {
+var er = class extends V {
 	constructor(...e) {
 		super(...e), this.bandStart = "07:00", this.bandEnd = "21:00", this.hourHeightPx = 60;
 	}
@@ -3881,7 +3884,7 @@ var $n = class extends V {
         ${[0, 1].map((e) => P`
             <div
               class="fake-event"
-              style="top: ${Qn(e) / 100 * n}px; height: ${Zn(e)}px;"
+              style="top: ${$n(e) / 100 * n}px; height: ${Qn(e)}px;"
             >
               <div class="shimmer-sweep"></div>
             </div>
@@ -3890,13 +3893,13 @@ var $n = class extends V {
     `;
 	}
 };
-J([W({ type: String })], $n.prototype, "bandStart", void 0), J([W({ type: String })], $n.prototype, "bandEnd", void 0), J([W({ type: Number })], $n.prototype, "hourHeightPx", void 0), $n = J([H("lucarne-skeleton-day-column")], $n);
+J([W({ type: String })], er.prototype, "bandStart", void 0), J([W({ type: String })], er.prototype, "bandEnd", void 0), J([W({ type: Number })], er.prototype, "hourHeightPx", void 0), er = J([H("lucarne-skeleton-day-column")], er);
 //#endregion
 //#region src/components/calendar-grid.ts
-function er(e, t) {
+function tr(e, t) {
 	return e.getFullYear() === t.getFullYear() && e.getMonth() === t.getMonth() && e.getDate() === t.getDate();
 }
-var tr = class extends V {
+var nr = class extends V {
 	constructor(...e) {
 		super(...e), this.layout = null, this.bandStart = "07:00", this.bandEnd = "21:00", this.calendars = [], this.hourHeightPx = 60, this.showCreateButton = !1, this.dayWidthPx = 0, this.bufferDays = 0, this.cachedDayKeys = /* @__PURE__ */ new Set();
 	}
@@ -4205,7 +4208,7 @@ var tr = class extends V {
 		if (!this.layout) return P``;
 		let n = Y(e), r = this.layout.perDay.get(n);
 		if (!r) return P``;
-		let i = Tn(this.bandStart, this.bandEnd), a = (i.length - 1) * this.hourHeightPx, o = er(e, t), [s] = this.bandStart.split(":").map(Number), [c] = this.bandEnd.split(":").map(Number), l = (c - s) * 36e5, u = null;
+		let i = Tn(this.bandStart, this.bandEnd), a = (i.length - 1) * this.hourHeightPx, o = tr(e, t), [s] = this.bandStart.split(":").map(Number), [c] = this.bandEnd.split(":").map(Number), l = (c - s) * 36e5, u = null;
 		if (o) {
 			let n = new Date(e);
 			n.setHours(s, 0, 0, 0);
@@ -4284,7 +4287,7 @@ var tr = class extends V {
 		if (!this.layout) return P`<div>Loading…</div>`;
 		let e = /* @__PURE__ */ new Date(), t = Tn(this.bandStart, this.bandEnd), n = (t.length - 1) * this.hourHeightPx, r = new Intl.DateTimeFormat("en-US", { weekday: "short" }), i = { "--lucarne-day-render-count": String(this.layout.days.length) };
 		return this.dayWidthPx > 0 && (i["--lucarne-day-width-px"] = `${this.dayWidthPx}px`, i["--lucarne-day-baseline-px"] = `${-this.bufferDays * this.dayWidthPx}px`), P`
-      <div class="grid-wrapper" style=${qn(i)}>
+      <div class="grid-wrapper" style=${Jn(i)}>
         <!-- Time-column gutter cells (col 1): stay fixed during pan -->
         <div class="header-spacer" style="grid-row:1; grid-column:1"></div>
         <div class="allday-spacer" style="grid-row:2; grid-column:1">all-day</div>
@@ -4303,7 +4306,7 @@ var tr = class extends V {
         <div class="day-cols-track" style="grid-row:1">
           ${this.layout.days.map((t, n) => P`
               <div
-                class="day-header ${er(t, e) ? "today" : ""}"
+                class="day-header ${tr(t, e) ? "today" : ""}"
                 style="grid-column: ${n + 1}"
               >
                 <div class="day-pill">
@@ -4322,7 +4325,7 @@ var tr = class extends V {
 			return P`
                 <div class="allday-cell" style="grid-column: ${t + 1}">
                   ${r ? (i?.allDay ?? []).map((e) => {
-				let t = i?.allDayClipped?.get(An(e));
+				let t = i?.allDayClipped?.get(jn(e));
 				return P`
                           <div
                             class="allday-event"
@@ -4367,21 +4370,21 @@ var tr = class extends V {
     `;
 	}
 };
-J([W({ type: Object })], tr.prototype, "layout", void 0), J([W({ type: String })], tr.prototype, "bandStart", void 0), J([W({ type: String })], tr.prototype, "bandEnd", void 0), J([W({ type: Array })], tr.prototype, "calendars", void 0), J([W({ type: Number })], tr.prototype, "hourHeightPx", void 0), J([W({ type: Boolean })], tr.prototype, "showCreateButton", void 0), J([W({ type: Number })], tr.prototype, "dayWidthPx", void 0), J([W({ type: Number })], tr.prototype, "bufferDays", void 0), J([W({ attribute: !1 })], tr.prototype, "cachedDayKeys", void 0), tr = J([H("lucarne-calendar-grid")], tr);
+J([W({ type: Object })], nr.prototype, "layout", void 0), J([W({ type: String })], nr.prototype, "bandStart", void 0), J([W({ type: String })], nr.prototype, "bandEnd", void 0), J([W({ type: Array })], nr.prototype, "calendars", void 0), J([W({ type: Number })], nr.prototype, "hourHeightPx", void 0), J([W({ type: Boolean })], nr.prototype, "showCreateButton", void 0), J([W({ type: Number })], nr.prototype, "dayWidthPx", void 0), J([W({ type: Number })], nr.prototype, "bufferDays", void 0), J([W({ attribute: !1 })], nr.prototype, "cachedDayKeys", void 0), nr = J([H("lucarne-calendar-grid")], nr);
 //#endregion
 //#region src/shared/pan-math.ts
-var nr = 500;
-function rr(e, t, n) {
-	return t <= 0 ? 0 : Math.abs(n) >= nr ? n > 0 ? Math.ceil(e / t) : Math.floor(e / t) : Math.round(e / t);
+var rr = 500;
+function ir(e, t, n) {
+	return t <= 0 ? 0 : Math.abs(n) >= rr ? n > 0 ? Math.ceil(e / t) : Math.floor(e / t) : Math.round(e / t);
 }
-function ir(e, t) {
+function ar(e, t) {
 	if (Math.abs(e) <= t) return e;
 	let n = Math.abs(e) - t;
 	return Math.sign(e) * (t + n * .33);
 }
 //#endregion
 //#region src/components/calendar-day-pan.ts
-var ar = class extends V {
+var or = class extends V {
 	constructor(...e) {
 		super(...e), this.dayWidthPx = 0, this.bufferDays = 0, this.canPanBack = !0, this.canPanForward = !0, this._startX = 0, this._startY = 0, this._startTime = 0, this._isDragging = !1, this._cachedTargets = [];
 	}
@@ -4412,7 +4415,7 @@ var ar = class extends V {
 		this._cachedTargets = this._panTargets;
 	}
 	_applyRubberBand(e) {
-		return e > 0 && !this.canPanBack || e < 0 && !this.canPanForward ? ir(e, 0) : e;
+		return e > 0 && !this.canPanBack || e < 0 && !this.canPanForward ? ar(e, 0) : e;
 	}
 	_baselinePx() {
 		return -this.bufferDays * this.dayWidthPx;
@@ -4489,7 +4492,7 @@ var ar = class extends V {
 				e.currentTarget.releasePointerCapture(e.pointerId);
 			} catch {}
 			if (this._isDragging) {
-				let t = e.clientX - this._startX, n = performance.now() - this._startTime, r = n > 0 ? t / n * 1e3 : 0, i = rr(this._applyRubberBand(t), this.dayWidthPx, r);
+				let t = e.clientX - this._startX, n = performance.now() - this._startTime, r = n > 0 ? t / n * 1e3 : 0, i = ir(this._applyRubberBand(t), this.dayWidthPx, r);
 				(i > 0 && !this.canPanBack || i < 0 && !this.canPanForward) && (i = 0), this._snapAndCommit(i);
 			}
 			this._pointerId = void 0, this._isDragging = !1, this._cachedTargets = [];
@@ -4509,10 +4512,10 @@ var ar = class extends V {
     `;
 	}
 };
-J([W({ type: Number })], ar.prototype, "dayWidthPx", void 0), J([W({ type: Number })], ar.prototype, "bufferDays", void 0), J([W({ type: Boolean })], ar.prototype, "canPanBack", void 0), J([W({ type: Boolean })], ar.prototype, "canPanForward", void 0), J([et("slot")], ar.prototype, "_slot", void 0), ar = J([H("lucarne-calendar-day-pan")], ar);
+J([W({ type: Number })], or.prototype, "dayWidthPx", void 0), J([W({ type: Number })], or.prototype, "bufferDays", void 0), J([W({ type: Boolean })], or.prototype, "canPanBack", void 0), J([W({ type: Boolean })], or.prototype, "canPanForward", void 0), J([et("slot")], or.prototype, "_slot", void 0), or = J([H("lucarne-calendar-day-pan")], or);
 //#endregion
 //#region src/components/calendar-event-popover.ts
-function or(e) {
+function sr(e) {
 	return new Date(e).toLocaleString("en-US", {
 		weekday: "short",
 		month: "short",
@@ -4522,7 +4525,7 @@ function or(e) {
 		hour12: !0
 	});
 }
-var sr = class extends V {
+var cr = class extends V {
 	constructor(...e) {
 		super(...e), this.event = null, this.color = "#a8d8b9", this.calendarLabel = "", this.entityId = "", this._confirmingDelete = !1, this._deleting = !1, this._deleteError = "";
 	}
@@ -4700,7 +4703,7 @@ var sr = class extends V {
 	}
 	render() {
 		if (!this.event) return P``;
-		let e = this.event, t = e.start.length === 10 && !e.start.includes("T") ? "All day" : `${or(e.start)} – ${new Date(e.end).toLocaleTimeString("en-US", {
+		let e = this.event, t = e.start.length === 10 && !e.start.includes("T") ? "All day" : `${sr(e.start)} – ${new Date(e.end).toLocaleTimeString("en-US", {
 			hour: "numeric",
 			minute: "2-digit",
 			hour12: !0
@@ -4770,17 +4773,17 @@ var sr = class extends V {
     `;
 	}
 };
-J([W({ attribute: !1 })], sr.prototype, "hass", void 0), J([W({ type: Object })], sr.prototype, "event", void 0), J([W({ type: String })], sr.prototype, "color", void 0), J([W({ type: String })], sr.prototype, "calendarLabel", void 0), J([W({ type: String })], sr.prototype, "entityId", void 0), J([G()], sr.prototype, "_confirmingDelete", void 0), J([G()], sr.prototype, "_deleting", void 0), J([G()], sr.prototype, "_deleteError", void 0), sr = J([H("lucarne-calendar-event-popover")], sr);
+J([W({ attribute: !1 })], cr.prototype, "hass", void 0), J([W({ type: Object })], cr.prototype, "event", void 0), J([W({ type: String })], cr.prototype, "color", void 0), J([W({ type: String })], cr.prototype, "calendarLabel", void 0), J([W({ type: String })], cr.prototype, "entityId", void 0), J([G()], cr.prototype, "_confirmingDelete", void 0), J([G()], cr.prototype, "_deleting", void 0), J([G()], cr.prototype, "_deleteError", void 0), cr = J([H("lucarne-calendar-event-popover")], cr);
 //#endregion
 //#region src/components/create-event-popover.ts
-function cr(e, t) {
+function lr(e, t) {
 	let n = -(/* @__PURE__ */ new Date(`${e}T${t}:00`)).getTimezoneOffset();
 	return `${e}T${t}:00${n >= 0 ? "+" : "-"}${Math.floor(Math.abs(n) / 60).toString().padStart(2, "0")}:${(Math.abs(n) % 60).toString().padStart(2, "0")}`;
 }
-function lr(e) {
+function ur(e) {
 	return `${Math.floor(e).toString().padStart(2, "0")}:${e % 1 == .5 ? "30" : "00"}`;
 }
-function ur(e) {
+function dr(e) {
 	return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
 }
 var X = class extends V {
@@ -4974,9 +4977,9 @@ var X = class extends V {
 	}
 	_initDefaults() {
 		let e = this.day ?? /* @__PURE__ */ new Date();
-		this._date = ur(e), this._startTime = lr(Math.max(0, Math.min(23, this.startHour)));
+		this._date = dr(e), this._startTime = ur(Math.max(0, Math.min(23, this.startHour)));
 		let t = Math.min(24, this.startHour + 1);
-		this._endTime = lr(t < 24 ? t : 23.5), this._calendarEntityId = this.calendars[0]?.entity ?? "", this._title = "", this._allDay = !1, this._description = "", this._location = "", this._error = "", this._saving = !1;
+		this._endTime = ur(t < 24 ? t : 23.5), this._calendarEntityId = this.calendars[0]?.entity ?? "", this._title = "", this._allDay = !1, this._description = "", this._location = "", this._error = "", this._saving = !1;
 	}
 	_close() {
 		this.dispatchEvent(new CustomEvent("popover-close", {
@@ -5002,10 +5005,10 @@ var X = class extends V {
 			e.start_date = this._date;
 			let r = /* @__PURE__ */ new Date(`${this._date}T00:00:00`);
 			r.setDate(r.getDate() + 1);
-			let i = ur(r);
+			let i = dr(r);
 			e.end_date = i, t = this._date, n = i;
 		} else {
-			let r = cr(this._date, this._startTime), i = cr(this._date, this._endTime);
+			let r = lr(this._date, this._startTime), i = lr(this._date, this._endTime);
 			e.start_date_time = r, e.end_date_time = i, t = r, n = i;
 		}
 		try {
@@ -5142,7 +5145,7 @@ var X = class extends V {
 J([W({ attribute: !1 })], X.prototype, "hass", void 0), J([W({ type: Object })], X.prototype, "day", void 0), J([W({ type: Number })], X.prototype, "startHour", void 0), J([W({ type: Array })], X.prototype, "calendars", void 0), J([G()], X.prototype, "_title", void 0), J([G()], X.prototype, "_calendarEntityId", void 0), J([G()], X.prototype, "_date", void 0), J([G()], X.prototype, "_startTime", void 0), J([G()], X.prototype, "_endTime", void 0), J([G()], X.prototype, "_allDay", void 0), J([G()], X.prototype, "_description", void 0), J([G()], X.prototype, "_location", void 0), J([G()], X.prototype, "_error", void 0), J([G()], X.prototype, "_saving", void 0), X = J([H("lucarne-create-event-popover")], X);
 //#endregion
 //#region src/cards/lucarne-calendar-card.ts
-var dr = 6e4, fr = 4, pr = 60;
+var fr = 6e4, pr = 4, mr = 60;
 window.customCards = window.customCards || [], window.customCards.push({
 	type: "lucarne-calendar-card",
 	name: "Lucarne Calendar",
@@ -5246,7 +5249,7 @@ var Z = class extends tt {
 		if (this._config = t, this._visibleIds = new Set(e.calendars.map((e) => e.entity)), this.hass && this._updateCreatableCalendars(), this._rolling) this._rolling.updateCalendars(t.calendars), n?.render_buffer_days !== t.render_buffer_days && this._rolling.setBufferDays(t.render_buffer_days), (n?.min_days !== e.min_days || n?.max_days !== e.max_days || n?.min_col_width !== e.min_col_width || n?.max_col_width !== e.max_col_width) && this._onResize();
 		else {
 			let e = this._effectiveConfig();
-			this._lastVisibleCount = e.minDays, this._rolling = new zn(this, {
+			this._lastVisibleCount = e.minDays, this._rolling = new Bn(this, {
 				calendars: t.calendars,
 				visibleCount: e.minDays,
 				bufferDays: t.render_buffer_days,
@@ -5299,7 +5302,7 @@ var Z = class extends tt {
 	connectedCallback() {
 		super.connectedCallback(), this._previewOverrideRaf = requestAnimationFrame(() => {
 			this._previewOverrideRaf = void 0, this.isConnected && (this._previewOverride = ft(this));
-		}), this._followTimer = setInterval(() => this._followNow(), dr);
+		}), this._followTimer = setInterval(() => this._followNow(), fr);
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), this._previewOverrideRaf !== void 0 && (cancelAnimationFrame(this._previewOverrideRaf), this._previewOverrideRaf = void 0), this._followTimer !== void 0 && (clearInterval(this._followTimer), this._followTimer = void 0), this._initialScrollRaf !== void 0 && (cancelAnimationFrame(this._initialScrollRaf), this._initialScrollRaf = void 0), this._didInitialScroll = !1, this._initialScrollScheduled = !1, this._initialScrollAttempts = 0, this._autoFollow = !0, this._lastAutoScrollTop = null, this._resizeObserver?.disconnect(), this._previewOverride?.uninstall(), this._previewOverride = void 0;
@@ -5320,7 +5323,7 @@ var Z = class extends tt {
 				this._didInitialScroll = !0, this._initialScrollScheduled = !1;
 				return;
 			}
-			++this._initialScrollAttempts < pr ? this._scheduleInitialScroll() : this._initialScrollScheduled = !1;
+			++this._initialScrollAttempts < mr ? this._scheduleInitialScroll() : this._initialScrollScheduled = !1;
 		});
 	}
 	_performAutoScroll(e) {
@@ -5332,7 +5335,7 @@ var Z = class extends tt {
 		if (i.height <= 0) return !1;
 		let [a] = (this._config.visible_hours?.start ?? "07:00").split(":").map(Number), [o] = (this._config.visible_hours?.end ?? "21:00").split(":").map(Number), s = o - a;
 		if (s <= 0) return !1;
-		let c = Bn({
+		let c = Vn({
 			now: /* @__PURE__ */ new Date(),
 			bandStartH: a,
 			bandEndH: o,
@@ -5350,7 +5353,7 @@ var Z = class extends tt {
 		if (!this._autoFollow || !this._rolling?.isAtToday || typeof document < "u" && document.visibilityState === "hidden") return;
 		let e = this._gridAreaEl;
 		if (e) {
-			if (this._lastAutoScrollTop !== null && Math.abs(e.scrollTop - this._lastAutoScrollTop) > fr) {
+			if (this._lastAutoScrollTop !== null && Math.abs(e.scrollTop - this._lastAutoScrollTop) > pr) {
 				this._autoFollow = !1;
 				return;
 			}
@@ -5373,7 +5376,7 @@ var Z = class extends tt {
 	_onResize() {
 		this._resizeFrame === void 0 && (this._resizeFrame = requestAnimationFrame(() => {
 			this._resizeFrame = void 0;
-			let { visibleCount: e, dayWidthPx: t } = Pn(this._gridAreaEl?.getBoundingClientRect().width ?? 0, this._effectiveConfig());
+			let { visibleCount: e, dayWidthPx: t } = Fn(this._gridAreaEl?.getBoundingClientRect().width ?? 0, this._effectiveConfig());
 			e !== this._lastVisibleCount && (this._lastVisibleCount = e, this._rolling.setVisibleCount(e), this.style.setProperty("--lucarne-day-count", String(e))), this._dayWidthPx = t;
 		}));
 	}
@@ -5386,7 +5389,7 @@ var Z = class extends tt {
 			return t ? this._visibleIds.has(t) : !0;
 		}));
 		let t = this._deletedUids.size > 0 ? e.filter((e) => !e.uid || !this._deletedUids.has(e.uid)) : e, n = this._config.visible_hours?.start ?? "07:00", r = this._config.visible_hours?.end ?? "21:00", i = this._rolling.renderDays;
-		this._layout = Nn(t, i, n, r);
+		this._layout = Pn(t, i, n, r);
 	}
 	_supportsCreate(e) {
 		let t = this.hass?.states[e]?.attributes?.supported_features;
@@ -5549,7 +5552,7 @@ var Z = class extends tt {
 J([W({ attribute: !1 })], Z.prototype, "hass", void 0), J([et(".grid-area")], Z.prototype, "_gridAreaEl", void 0), J([G()], Z.prototype, "_config", void 0), J([G()], Z.prototype, "_layout", void 0), J([G()], Z.prototype, "_visibleIds", void 0), J([G()], Z.prototype, "_openEvent", void 0), J([G()], Z.prototype, "_openEventColor", void 0), J([G()], Z.prototype, "_openEventCalLabel", void 0), J([G()], Z.prototype, "_openEventEntityId", void 0), J([G()], Z.prototype, "_createDay", void 0), J([G()], Z.prototype, "_createStartHour", void 0), J([G()], Z.prototype, "_creatableCalendars", void 0), J([G()], Z.prototype, "_dayWidthPx", void 0), J([G()], Z.prototype, "_deletedUids", void 0), Z = J([H("lucarne-calendar-card")], Z);
 //#endregion
 //#region src/editors/lucarne-calendar-card-editor.ts
-var mr = class extends V {
+var hr = class extends V {
 	constructor(...e) {
 		super(...e), this._haReady = !1, this._invalid = {};
 	}
@@ -5786,21 +5789,21 @@ var mr = class extends V {
     `;
 	}
 };
-J([W({ attribute: !1 })], mr.prototype, "hass", void 0), J([G()], mr.prototype, "_config", void 0), J([G()], mr.prototype, "_haReady", void 0), J([G()], mr.prototype, "_invalid", void 0), mr = J([H("lucarne-calendar-card-editor")], mr);
+J([W({ attribute: !1 })], hr.prototype, "hass", void 0), J([G()], hr.prototype, "_config", void 0), J([G()], hr.prototype, "_haReady", void 0), J([G()], hr.prototype, "_invalid", void 0), hr = J([H("lucarne-calendar-card-editor")], hr);
 //#endregion
 //#region src/shared/types.ts
-var hr = [
+var gr = [
 	"anytime",
 	"morning",
 	"afternoon",
 	"night"
 ];
-function gr(e) {
-	return typeof e == "string" && hr.includes(e) ? e : "anytime";
+function _r(e) {
+	return typeof e == "string" && gr.includes(e) ? e : "anytime";
 }
 //#endregion
 //#region src/components/streak-display.ts
-var _r = class extends V {
+var vr = class extends V {
 	constructor(...e) {
 		super(...e), this.streak = 0;
 	}
@@ -5854,10 +5857,10 @@ var _r = class extends V {
     `;
 	}
 };
-J([W({ type: Number })], _r.prototype, "streak", void 0), _r = J([H("lucarne-streak-display")], _r);
+J([W({ type: Number })], vr.prototype, "streak", void 0), vr = J([H("lucarne-streak-display")], vr);
 //#endregion
 //#region src/components/celebration-overlay.ts
-var vr = class extends V {
+var yr = class extends V {
 	constructor(...e) {
 		super(...e), this.kidSlug = "", this.active = !1, this._dots = [];
 	}
@@ -5915,48 +5918,48 @@ var vr = class extends V {
     ` : P``;
 	}
 };
-J([W({ attribute: "kid-slug" })], vr.prototype, "kidSlug", void 0), J([W({ type: Boolean })], vr.prototype, "active", void 0), vr = J([H("lucarne-celebration-overlay")], vr);
+J([W({ attribute: "kid-slug" })], yr.prototype, "kidSlug", void 0), J([W({ type: Boolean })], yr.prototype, "active", void 0), yr = J([H("lucarne-celebration-overlay")], yr);
 //#endregion
 //#region src/components/member-column.ts
-var yr = [
+var br = [
 	"morning",
 	"afternoon",
 	"night",
 	"anytime"
-], br = {
+], xr = {
 	morning: "Morning",
 	afternoon: "Afternoon",
 	night: "Night",
 	anytime: "Anytime"
-}, xr = {
+}, Sr = {
 	morning: Ot,
 	afternoon: kt,
 	night: At
 };
-function Sr(e, t) {
+function Cr(e, t) {
 	return e.due && t.due ? e.due.localeCompare(t.due) : e.due ? -1 : t.due ? 1 : e.summary.localeCompare(t.summary);
 }
-function Cr(e) {
-	let t = e.filter((e) => e.metadata.type === "routine").sort((e, t) => e.summary.localeCompare(t.summary)), n = e.filter((e) => e.metadata.type === "chore").sort(Sr);
+function wr(e) {
+	let t = e.filter((e) => e.metadata.type === "routine").sort((e, t) => e.summary.localeCompare(t.summary)), n = e.filter((e) => e.metadata.type === "chore").sort(Cr);
 	return [...t, ...n];
 }
-function wr(e) {
+function Tr(e) {
 	let t = /* @__PURE__ */ new Map();
 	for (let n of e) {
-		let e = gr(n.metadata.time_of_day), r = t.get(e) ?? [];
+		let e = _r(n.metadata.time_of_day), r = t.get(e) ?? [];
 		r.push(n), t.set(e, r);
 	}
 	let n = [];
-	for (let e of yr) {
+	for (let e of br) {
 		let r = t.get(e);
 		!r || r.length === 0 || n.push({
 			bucket: e,
-			tasks: Cr(r)
+			tasks: wr(r)
 		});
 	}
 	return n;
 }
-var Tr = class extends V {
+var Er = class extends V {
 	constructor(...e) {
 		super(...e), this.tasks = [], this.streak = 0, this.showRoutines = !0, this.showTasks = !0, this.showStreak = !0, this.hideName = !1, this._celebrating = !1, this._celebrationTimer = null, this._lastAllRoutinesDone = null;
 	}
@@ -6078,7 +6081,7 @@ var Tr = class extends V {
 	}
 	render() {
 		if (!this.member) return P``;
-		let e = wr(this.tasks.filter((e) => e.metadata.type === "routine" ? this.showRoutines : e.metadata.type === "chore" ? this.showTasks : !1));
+		let e = Tr(this.tasks.filter((e) => e.metadata.type === "routine" ? this.showRoutines : e.metadata.type === "chore" ? this.showTasks : !1));
 		return P`
       <div class="column" style="--member-color:${this.member.color}">
         <lucarne-celebration-overlay
@@ -6105,8 +6108,8 @@ var Tr = class extends V {
           ${e.map(({ bucket: e, tasks: t }) => P`
             <div class="section">
               <div class="section-header">
-                ${xr[e] ? P`<span class="section-icon">${xr[e]}</span>` : ""}
-                ${br[e]}
+                ${Sr[e] ? P`<span class="section-icon">${Sr[e]}</span>` : ""}
+                ${xr[e]}
               </div>
               ${t.map((e) => P`
                 <lucarne-task-row
@@ -6134,22 +6137,22 @@ var Tr = class extends V {
 		}));
 	}
 };
-J([W({ attribute: !1 })], Tr.prototype, "member", void 0), J([W({ attribute: !1 })], Tr.prototype, "tasks", void 0), J([W({ type: Number })], Tr.prototype, "streak", void 0), J([W({
+J([W({ attribute: !1 })], Er.prototype, "member", void 0), J([W({ attribute: !1 })], Er.prototype, "tasks", void 0), J([W({ type: Number })], Er.prototype, "streak", void 0), J([W({
 	type: Boolean,
 	attribute: "show-routines"
-})], Tr.prototype, "showRoutines", void 0), J([W({
+})], Er.prototype, "showRoutines", void 0), J([W({
 	type: Boolean,
 	attribute: "show-tasks"
-})], Tr.prototype, "showTasks", void 0), J([W({
+})], Er.prototype, "showTasks", void 0), J([W({
 	type: Boolean,
 	attribute: "show-streak"
-})], Tr.prototype, "showStreak", void 0), J([W({
+})], Er.prototype, "showStreak", void 0), J([W({
 	type: Boolean,
 	attribute: "hide-name"
-})], Tr.prototype, "hideName", void 0), J([G()], Tr.prototype, "_celebrating", void 0), Tr = J([H("lucarne-member-column")], Tr);
+})], Er.prototype, "hideName", void 0), J([G()], Er.prototype, "_celebrating", void 0), Er = J([H("lucarne-member-column")], Er);
 //#endregion
 //#region src/shared/integration-services.ts
-async function Er(e, t) {
+async function Dr(e, t) {
 	let n = {
 		member: t.member,
 		summary: t.summary,
@@ -6157,14 +6160,14 @@ async function Er(e, t) {
 	};
 	t.recurrence !== void 0 && (n.recurrence = t.recurrence), t.icon !== void 0 && (n.icon = t.icon), t.due !== void 0 && (n.due = t.due), t.source !== void 0 && (n.source = t.source), t.assignee !== void 0 && (n.assignee = t.assignee), t.time_of_day !== void 0 && (n.time_of_day = t.time_of_day), await e.callService("lucarne_family", "add_task", n);
 }
-async function Dr(e, t, n) {
+async function Or(e, t, n) {
 	let r = { uid: t };
 	n.type !== void 0 && (r.type = n.type), n.recurrence !== void 0 && (r.recurrence = n.recurrence), n.icon !== void 0 && (r.icon = n.icon), n.assignee !== void 0 && (r.assignee = n.assignee), n.time_of_day !== void 0 && (r.time_of_day = n.time_of_day), await e.callService("lucarne_family", "update_task_metadata", r);
 }
-async function Or(e, t) {
+async function kr(e, t) {
 	await e.callService("lucarne_family", "delete_task", { uid: t });
 }
-async function kr(e, t, n) {
+async function Ar(e, t, n) {
 	let r = await n.arrayBuffer(), i = new Uint8Array(r), a = "";
 	for (let e of i) a += String.fromCharCode(e);
 	let o = btoa(a);
@@ -6174,7 +6177,7 @@ async function kr(e, t, n) {
 		mime_type: n.type
 	});
 }
-async function Ar(e, t, n) {
+async function jr(e, t, n) {
 	await e.callService("lucarne_family", "set_member_avatar", {
 		member: t,
 		avatar: n
@@ -6182,7 +6185,7 @@ async function Ar(e, t, n) {
 }
 //#endregion
 //#region src/components/add-task-popover.ts
-var jr = [
+var Mr = [
 	"🪥",
 	"🛏️",
 	"🎒",
@@ -6423,7 +6426,7 @@ var jr = [
 			this._saving = !0, this._error = "";
 			try {
 				let e = this._type === "routine" ? this._buildRRule() : "", t = this._type === "chore" ? this._due : "";
-				await Er(this.hass, {
+				await Dr(this.hass, {
 					member: this._selectedMemberSlug,
 					summary: this._summary.trim(),
 					type: this._type,
@@ -6512,7 +6515,7 @@ var jr = [
         <div class="field">
           <label>Icon</label>
           <div class="emoji-picker">
-            ${jr.map((e) => P`
+            ${Mr.map((e) => P`
               <button
                 class="emoji-btn ${this._icon === e ? "selected" : ""}"
                 @click=${() => this._icon = this._icon === e ? "" : e}
@@ -6948,7 +6951,7 @@ var $ = class extends V {
 	}
 	_prefill() {
 		let e = this.task;
-		this._summary = e.summary, this._type = e.metadata.type, this._icon = e.metadata.icon, this._due = e.due ?? "", this._assignee = e.metadata.assignee_slug, this._timeOfDay = gr(e.metadata.time_of_day), this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._rawRecurrence = "", this._isCustomRecurrence = !1;
+		this._summary = e.summary, this._type = e.metadata.type, this._icon = e.metadata.icon, this._due = e.due ?? "", this._assignee = e.metadata.assignee_slug, this._timeOfDay = _r(e.metadata.time_of_day), this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._rawRecurrence = "", this._isCustomRecurrence = !1;
 		let t = Jt(e.metadata.recurrence);
 		t.mode === "unknown" ? (this._isCustomRecurrence = !0, this._rawRecurrence = t.raw, this._recurrenceMode = "unknown") : (this._isCustomRecurrence = !1, this._recurrenceMode = t.mode, t.mode === "daily" ? this._recurrenceInterval = t.interval ?? 1 : t.mode === "weekly" ? (this._recurrenceDays = [...t.days], this._recurrenceInterval = t.interval ?? 1) : t.mode === "monthly-date" ? (this._recurrenceMonthDay = t.dayOfMonth, this._recurrenceInterval = t.interval ?? 1) : t.mode === "monthly-nth" ? (this._recurrenceNth = t.nth, this._recurrenceNthDay = t.day, this._recurrenceInterval = t.interval ?? 1) : t.mode === "yearly" && (this._recurrenceMonth = t.month, this._recurrenceMonthDay = t.dayOfMonth, this._recurrenceInterval = t.interval ?? 1));
 	}
@@ -7013,7 +7016,7 @@ var $ = class extends V {
 				}
 				if (r) {
 					let e = this.task.metadata.member_slug === "household";
-					await Dr(this.hass, this.task.uid, {
+					await Or(this.hass, this.task.uid, {
 						...this._type === this.task.metadata.type ? {} : { type: this._type },
 						...this._icon === this.task.metadata.icon ? {} : { icon: this._icon },
 						...this._buildRRule() === this.task.metadata.recurrence ? {} : { recurrence: this._buildRRule() },
@@ -7031,7 +7034,7 @@ var $ = class extends V {
 		if (!this._saving) {
 			this._saving = !0, this._error = "";
 			try {
-				await Or(this.hass, this.task.uid), this._close();
+				await kr(this.hass, this.task.uid), this._close();
 			} catch (e) {
 				this._error = e instanceof Error ? e.message : "Failed to delete", this._saving = !1, this._confirmingDelete = !1;
 			}
@@ -7326,7 +7329,7 @@ J([W({ attribute: !1 })], $.prototype, "hass", void 0), J([W({ attribute: !1 })]
 	description: "Family chore grid with streaks and celebration",
 	preview: !0
 });
-var Mr = class extends tt {
+var Nr = class extends tt {
 	constructor(...e) {
 		super(...e), this._familyState = null, this._addTaskMember = null, this._editTask = null, this._optimistic = /* @__PURE__ */ new Map(), this._onFamilyState = (e) => {
 			if (this._optimistic.size > 0) {
@@ -7456,13 +7459,18 @@ var Mr = class extends tt {
 		};
 	}
 	connectedCallback() {
-		super.connectedCallback(), this.hass && !this._unsubFamily && (this._unsubFamily = gt(this.hass, this._onFamilyState));
+		super.connectedCallback(), this.hass && !this._unsubFamily && (this._unsubFamily = gt(this.hass, this._onFamilyState)), this._scheduleMidnightRefresh();
+	}
+	_scheduleMidnightRefresh() {
+		this._midnightTimer && clearTimeout(this._midnightTimer), this._midnightTimer = setTimeout(() => {
+			this._midnightTimer = void 0, this.requestUpdate(), this._scheduleMidnightRefresh();
+		}, kn(/* @__PURE__ */ new Date()));
 	}
 	updated(e) {
 		super.updated(e), e.has("hass") && this.hass && !this._unsubFamily && (this._unsubFamily = gt(this.hass, this._onFamilyState));
 	}
 	disconnectedCallback() {
-		super.disconnectedCallback(), this._unsubFamily?.(), this._unsubFamily = void 0;
+		super.disconnectedCallback(), this._unsubFamily?.(), this._unsubFamily = void 0, this._midnightTimer &&= (clearTimeout(this._midnightTimer), void 0);
 	}
 	_resolveMembers() {
 		if (!this._config || !this._familyState) return [];
@@ -7585,10 +7593,10 @@ var Mr = class extends tt {
     `;
 	}
 };
-J([W({ attribute: !1 })], Mr.prototype, "hass", void 0), J([G()], Mr.prototype, "_config", void 0), J([G()], Mr.prototype, "_familyState", void 0), J([G()], Mr.prototype, "_addTaskMember", void 0), J([G()], Mr.prototype, "_editTask", void 0), J([G()], Mr.prototype, "_optimistic", void 0), Mr = J([H("lucarne-chores-card")], Mr);
+J([W({ attribute: !1 })], Nr.prototype, "hass", void 0), J([G()], Nr.prototype, "_config", void 0), J([G()], Nr.prototype, "_familyState", void 0), J([G()], Nr.prototype, "_addTaskMember", void 0), J([G()], Nr.prototype, "_editTask", void 0), J([G()], Nr.prototype, "_optimistic", void 0), Nr = J([H("lucarne-chores-card")], Nr);
 //#endregion
 //#region src/shared/cropper-styles.ts
-var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
+var Pr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	(function(n, r) {
 		typeof e == "object" && t !== void 0 ? t.exports = r() : typeof define == "function" && define.amd ? define(r) : (n = typeof globalThis < "u" ? globalThis : n || self, n.Cropper = r());
 	})(e, (function() {
@@ -8758,18 +8766,18 @@ var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		}();
 		return z(xt.prototype, gt, q, J, _t, vt, yt), xt;
 	}));
-})))(), 1), Pr = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", Fr = 2 * 1024 * 1024, Ir = new Set([
+})))(), 1), Fr = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", Ir = 2 * 1024 * 1024, Lr = new Set([
 	"image/png",
 	"image/jpeg",
 	"image/webp"
-]), Lr = 512, Rr = /* @__PURE__ */ "👶.🧒.👧.🧑.👦.👩.👨.🧓.👴.👵.🐶.🐱.🐻.🐼.🐨.🦊.🦁.🐯.🐸.🦄.🌟.⭐.🌈.🌸.🌺.🌻.🍀.🎈.🎨.🎯.🏃.⚽.🎸.🎤.📚.🎮.🏆.❤️.💙.💚".split("."), zr = class extends V {
+]), Rr = 512, zr = /* @__PURE__ */ "👶.🧒.👧.🧑.👦.👩.👨.🧓.👴.👵.🐶.🐱.🐻.🐼.🐨.🦊.🦁.🐯.🐸.🦄.🌟.⭐.🌈.🌸.🌺.🌻.🍀.🎈.🎨.🎯.🏃.⚽.🎸.🎤.📚.🎮.🏆.❤️.💙.💚".split("."), Br = class extends V {
 	constructor(...e) {
 		super(...e), this._mode = "emoji", this._selectedEmoji = null, this._sourceUrl = null, this._error = null, this._submitting = !1, this._cropper = null;
 	}
 	static {
 		this.styles = [
 			K,
-			O(Pr),
+			O(Fr),
 			k`
       :host {
         display: block;
@@ -8965,11 +8973,11 @@ var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	_onFileChange(e) {
 		let t = e.target, n = t.files?.[0];
 		if (t.value = "", n) {
-			if (!Ir.has(n.type)) {
+			if (!Lr.has(n.type)) {
 				this._error = "Only PNG, JPEG, and WebP images are accepted.";
 				return;
 			}
-			if (n.size > Fr) {
+			if (n.size > Ir) {
 				this._error = "Image must be 2 MB or smaller.";
 				return;
 			}
@@ -8981,7 +8989,7 @@ var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	}
 	_onCropImageLoad() {
 		let e = this._cropImage;
-		e && (this._cropper && this._cropper.destroy(), this._cropper = new Nr.default(e, {
+		e && (this._cropper && this._cropper.destroy(), this._cropper = new Pr.default(e, {
 			aspectRatio: 1,
 			viewMode: 1,
 			dragMode: "move",
@@ -9006,7 +9014,7 @@ var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				}
 				this._submitting = !0;
 				try {
-					await Ar(this.hass, this.memberSlug, this._selectedEmoji), this.dispatchEvent(new CustomEvent("avatar-changed", { detail: { avatar: this._selectedEmoji } })), this._close();
+					await jr(this.hass, this.memberSlug, this._selectedEmoji), this.dispatchEvent(new CustomEvent("avatar-changed", { detail: { avatar: this._selectedEmoji } })), this._close();
 				} catch (e) {
 					this._error = e instanceof Error ? e.message : String(e);
 				} finally {
@@ -9021,7 +9029,7 @@ var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			this._submitting = !0;
 			try {
 				let e = await this._getCroppedFile();
-				await kr(this.hass, this.memberSlug, e), this.dispatchEvent(new CustomEvent("avatar-changed")), this._close();
+				await Ar(this.hass, this.memberSlug, e), this.dispatchEvent(new CustomEvent("avatar-changed")), this._close();
 			} catch (e) {
 				this._error = e instanceof Error ? e.message : String(e);
 			} finally {
@@ -9036,8 +9044,8 @@ var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				return;
 			}
 			let n = this._cropper.getCroppedCanvas({
-				width: Lr,
-				height: Lr,
+				width: Rr,
+				height: Rr,
 				imageSmoothingQuality: "high"
 			});
 			if (!n) {
@@ -9101,7 +9109,7 @@ var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	_renderEmojiMode() {
 		return P`
       <div class="emoji-grid">
-        ${Rr.map((e) => P`
+        ${zr.map((e) => P`
             <button
               class="emoji-btn ${this._selectedEmoji === e ? "selected" : ""}"
               @click=${() => this._selectEmoji(e)}
@@ -9147,10 +9155,10 @@ var Nr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		this.renderRoot.querySelector("#avatar-file-input")?.click();
 	}
 };
-J([W({ attribute: !1 })], zr.prototype, "hass", void 0), J([W()], zr.prototype, "memberSlug", void 0), J([W()], zr.prototype, "memberName", void 0), J([G()], zr.prototype, "_mode", void 0), J([G()], zr.prototype, "_selectedEmoji", void 0), J([G()], zr.prototype, "_sourceUrl", void 0), J([G()], zr.prototype, "_error", void 0), J([G()], zr.prototype, "_submitting", void 0), J([et("#crop-image")], zr.prototype, "_cropImage", void 0), zr = J([H("lucarne-avatar-upload-modal")], zr);
+J([W({ attribute: !1 })], Br.prototype, "hass", void 0), J([W()], Br.prototype, "memberSlug", void 0), J([W()], Br.prototype, "memberName", void 0), J([G()], Br.prototype, "_mode", void 0), J([G()], Br.prototype, "_selectedEmoji", void 0), J([G()], Br.prototype, "_sourceUrl", void 0), J([G()], Br.prototype, "_error", void 0), J([G()], Br.prototype, "_submitting", void 0), J([et("#crop-image")], Br.prototype, "_cropImage", void 0), Br = J([H("lucarne-avatar-upload-modal")], Br);
 //#endregion
 //#region src/editors/lucarne-chores-card-editor.ts
-var Br = class extends V {
+var Vr = class extends V {
 	constructor(...e) {
 		super(...e), this._familyState = null, this._avatarModalMember = null;
 	}
@@ -9456,5 +9464,5 @@ var Br = class extends V {
 };
 //#endregion
 //#region src/index.ts
-J([W({ attribute: !1 })], Br.prototype, "hass", void 0), J([G()], Br.prototype, "_config", void 0), J([G()], Br.prototype, "_familyState", void 0), J([G()], Br.prototype, "_avatarModalMember", void 0), Br = J([H("lucarne-chores-card-editor")], Br), S();
+J([W({ attribute: !1 })], Vr.prototype, "hass", void 0), J([G()], Vr.prototype, "_config", void 0), J([G()], Vr.prototype, "_familyState", void 0), J([G()], Vr.prototype, "_avatarModalMember", void 0), Vr = J([H("lucarne-chores-card-editor")], Vr), S();
 //#endregion

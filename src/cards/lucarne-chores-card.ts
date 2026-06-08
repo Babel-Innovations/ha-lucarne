@@ -5,6 +5,7 @@ import { LucarneCardBase } from '../shared/card-base.js';
 import type { HomeAssistant, MemberSummary, RenderableTask } from '../shared/types.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
+import { msUntilNextLocalMidnight } from '../shared/date-helpers.js';
 
 import '../components/member-column.js';
 import '../components/add-task-popover.js';
@@ -140,6 +141,14 @@ export class LucarneChoresCard extends LucarneCardBase {
   @state() private _optimistic: Map<string, RenderableTask['status']> = new Map();
 
   private _unsubFamily?: () => void;
+  /**
+   * Self-rescheduling timer that fires at the next local midnight. `_resolveMembers`
+   * computes the "due today" window from `new Date()` at render time, but the card
+   * only re-renders on reactive state changes — so a card left open overnight kept
+   * showing the previous day's window (issue #68). The midnight `requestUpdate`
+   * forces a fresh render and recomputes the window at the day boundary.
+   */
+  private _midnightTimer?: ReturnType<typeof setTimeout>;
 
   setConfig(config: LucarneChoresCardConfig) {
     // Legacy shape — pass through so render() can show the upgrade banner
@@ -178,6 +187,18 @@ export class LucarneChoresCard extends LucarneCardBase {
     if (this.hass && !this._unsubFamily) {
       this._unsubFamily = subscribeFamilyState(this.hass, this._onFamilyState);
     }
+    this._scheduleMidnightRefresh();
+  }
+
+  /** Arm (or re-arm) a one-shot timer for the next local midnight that forces a
+   *  re-render so the "due today" window recomputes, then reschedules itself. */
+  private _scheduleMidnightRefresh() {
+    if (this._midnightTimer) clearTimeout(this._midnightTimer);
+    this._midnightTimer = setTimeout(() => {
+      this._midnightTimer = undefined;
+      this.requestUpdate();
+      this._scheduleMidnightRefresh();
+    }, msUntilNextLocalMidnight(new Date()));
   }
 
   updated(changedProps: PropertyValues) {
@@ -213,6 +234,10 @@ export class LucarneChoresCard extends LucarneCardBase {
     super.disconnectedCallback();
     this._unsubFamily?.();
     this._unsubFamily = undefined;
+    if (this._midnightTimer) {
+      clearTimeout(this._midnightTimer);
+      this._midnightTimer = undefined;
+    }
   }
 
   private _resolveMembers(): Array<{ member: MemberSummary; tasks: RenderableTask[]; streak: number }> {
