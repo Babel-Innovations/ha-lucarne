@@ -5,7 +5,11 @@ import { LucarneCardBase } from '../shared/card-base.js';
 import type { HomeAssistant, MemberSummary, RenderableTask } from '../shared/types.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
-import { msUntilNextLocalMidnight } from '../shared/date-helpers.js';
+import {
+  msUntilNextLocalMidnight,
+  currentScrollBucket,
+  msUntilNextDailyBoundary,
+} from '../shared/date-helpers.js';
 
 import '../components/member-column.js';
 import '../components/add-task-popover.js';
@@ -21,9 +25,19 @@ export interface LucarneChoresCardConfig {
   show_tasks?: boolean;
   show_streak?: boolean;
   hide_names?: boolean;
+  /** Auto-scroll each column to the current time-of-day section. Default true. */
+  auto_scroll?: boolean;
+  /** Local HH:MM at/after which columns scroll to the Afternoon section. Default '12:00'. */
+  afternoon_start?: string;
+  /** Local HH:MM at/after which columns scroll to the Night section. Default '19:00'. */
+  night_start?: string;
   /** When true, forward card errors to a Home Assistant persistent_notification. */
   debug?: boolean;
 }
+
+/** Defaults for the auto-scroll thresholds, shared by the card and its editor. */
+export const DEFAULT_AFTERNOON_START = '12:00';
+export const DEFAULT_NIGHT_START = '19:00';
 
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards =
   (window as Window & typeof globalThis & { customCards?: object[] }).customCards || [];
@@ -149,6 +163,16 @@ export class LucarneChoresCard extends LucarneCardBase {
    * forces a fresh render and recomputes the window at the day boundary.
    */
   private _midnightTimer?: ReturnType<typeof setTimeout>;
+  /**
+   * Self-rescheduling timer that fires at the next afternoon/night threshold so a
+   * card left open all day re-renders — and re-scrolls each column to the new
+   * time-of-day section — when the clock crosses 12:00/19:00 (issue #68). Distinct
+   * from the midnight timer, which owns the day-boundary window recompute (and,
+   * via its re-render, recomputes the scroll bucket for the new day — typically
+   * back to Morning, though custom thresholds like night_start '00:00' can keep it
+   * unchanged).
+   */
+  private _scrollTimer?: ReturnType<typeof setTimeout>;
 
   setConfig(config: LucarneChoresCardConfig) {
     // Legacy shape — pass through so render() can show the upgrade banner
@@ -160,6 +184,10 @@ export class LucarneChoresCard extends LucarneCardBase {
       throw new Error('lucarne-chores-card: members must be an array');
     }
     this._config = config;
+    // Editing the auto-scroll thresholds on an already-connected card must re-arm
+    // the timer so the next wakeup uses the new times (connectedCallback won't
+    // fire again). Skipped on the initial pre-connect setConfig.
+    if (this.isConnected) this._scheduleScrollRefresh();
   }
 
   static getConfigElement() {
@@ -188,6 +216,7 @@ export class LucarneChoresCard extends LucarneCardBase {
       this._unsubFamily = subscribeFamilyState(this.hass, this._onFamilyState);
     }
     this._scheduleMidnightRefresh();
+    this._scheduleScrollRefresh();
   }
 
   /** Arm (or re-arm) a one-shot timer for the next local midnight that forces a
@@ -199,6 +228,26 @@ export class LucarneChoresCard extends LucarneCardBase {
       this.requestUpdate();
       this._scheduleMidnightRefresh();
     }, msUntilNextLocalMidnight(new Date()));
+  }
+
+  /** Arm (or re-arm) a one-shot timer for the next afternoon/night threshold that
+   *  forces a re-render so each column re-scrolls to the new section, then
+   *  reschedules itself. No-op when auto-scroll is disabled. */
+  private _scheduleScrollRefresh() {
+    if (this._scrollTimer) clearTimeout(this._scrollTimer);
+    this._scrollTimer = undefined;
+    if (!(this._config?.auto_scroll ?? true)) return;
+    const afternoon = this._config?.afternoon_start ?? DEFAULT_AFTERNOON_START;
+    const night = this._config?.night_start ?? DEFAULT_NIGHT_START;
+    const ms = msUntilNextDailyBoundary(new Date(), [afternoon, night]);
+    // Both thresholds malformed → no finite boundary; skip arming rather than
+    // feed setTimeout a non-finite delay.
+    if (!Number.isFinite(ms)) return;
+    this._scrollTimer = setTimeout(() => {
+      this._scrollTimer = undefined;
+      this.requestUpdate();
+      this._scheduleScrollRefresh();
+    }, ms);
   }
 
   updated(changedProps: PropertyValues) {
@@ -237,6 +286,10 @@ export class LucarneChoresCard extends LucarneCardBase {
     if (this._midnightTimer) {
       clearTimeout(this._midnightTimer);
       this._midnightTimer = undefined;
+    }
+    if (this._scrollTimer) {
+      clearTimeout(this._scrollTimer);
+      this._scrollTimer = undefined;
     }
   }
 
@@ -347,6 +400,14 @@ export class LucarneChoresCard extends LucarneCardBase {
     const showTasks = this._config.show_tasks ?? true;
     const showStreak = this._config.show_streak ?? true;
     const hideNames = this._config.hide_names ?? false;
+    const autoScroll = this._config.auto_scroll ?? true;
+    const scrollBucket = autoScroll
+      ? currentScrollBucket(
+          new Date(),
+          this._config.afternoon_start ?? DEFAULT_AFTERNOON_START,
+          this._config.night_start ?? DEFAULT_NIGHT_START,
+        )
+      : '';
 
     if (this._familyState === null) {
       return html`<ha-card><div class="loading">Loading…</div></ha-card>`;
@@ -387,6 +448,7 @@ export class LucarneChoresCard extends LucarneCardBase {
                 ?show-tasks=${showTasks}
                 ?show-streak=${showStreak}
                 ?hide-name=${hideNames}
+                scroll-to-bucket=${scrollBucket}
               ></lucarne-member-column>
             </div>
           `)}

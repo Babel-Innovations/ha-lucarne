@@ -171,6 +171,11 @@ export class LucarneMemberColumn extends LitElement {
   @property({ type: Boolean, attribute: 'show-tasks' }) showTasks = true;
   @property({ type: Boolean, attribute: 'show-streak' }) showStreak = true;
   @property({ type: Boolean, attribute: 'hide-name' }) hideName = false;
+  /** Time-of-day bucket to auto-scroll the list to ('morning' | 'afternoon' |
+   *  'night'); empty disables auto-scroll. The card recomputes this from the
+   *  clock + configured thresholds and only changes it when the bucket changes,
+   *  so a routine/task re-render never yanks a manually-scrolled column. */
+  @property({ attribute: 'scroll-to-bucket' }) scrollToBucket = '';
 
   @state() private _celebrating = false;
   private _celebrationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -178,6 +183,10 @@ export class LucarneMemberColumn extends LitElement {
 
   updated(changed: Map<string, unknown>) {
     super.updated(changed);
+    // Auto-scroll only when the target bucket actually changes (initial set or a
+    // time-boundary crossing) — never on a plain task/state re-render, so tapping
+    // a row doesn't jerk a manually-scrolled column back.
+    if (changed.has('scrollToBucket')) this._applyScroll();
     if (!changed.has('tasks')) return;
     const routines = this.tasks.filter((t) => t.metadata.type === 'routine');
     if (routines.length === 0) return;
@@ -207,6 +216,30 @@ export class LucarneMemberColumn extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._celebrationTimer) clearTimeout(this._celebrationTimer);
+  }
+
+  /** Scroll the `.lists` container so the section for `scrollToBucket` sits at the
+   *  top. If that bucket has no tasks (no section rendered) fall through to the
+   *  next non-empty section in display order. When no section at or after the
+   *  target exists, leave the scroll position untouched (a 'morning' target with a
+   *  morning section present naturally lands at the top). */
+  private _applyScroll() {
+    if (!this.scrollToBucket) return;
+    const lists = this.renderRoot.querySelector('.lists') as HTMLElement | null;
+    if (!lists) return;
+    const target = this._sectionForBucket(lists);
+    if (target) lists.scrollTop = target.offsetTop - lists.offsetTop;
+  }
+
+  /** First rendered `.section` at or after `scrollToBucket` in display order. */
+  private _sectionForBucket(lists: HTMLElement): HTMLElement | null {
+    const start = TIME_OF_DAY_ORDER.indexOf(this.scrollToBucket as TimeOfDay);
+    if (start < 0) return null;
+    for (const bucket of TIME_OF_DAY_ORDER.slice(start)) {
+      const el = lists.querySelector(`.section[data-bucket="${bucket}"]`) as HTMLElement | null;
+      if (el) return el;
+    }
+    return null;
   }
 
   render() {
@@ -248,7 +281,7 @@ export class LucarneMemberColumn extends LitElement {
 
         <div class="lists">
           ${buckets.map(({ bucket, tasks }) => html`
-            <div class="section">
+            <div class="section" data-bucket=${bucket}>
               <div class="section-header">
                 ${TIME_OF_DAY_ICONS[bucket]
                   ? html`<span class="section-icon">${TIME_OF_DAY_ICONS[bucket]}</span>`

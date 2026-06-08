@@ -83,7 +83,19 @@ members:                # slugs of members to show — must match integration me
 show_routines: true     # optional, default true
 show_tasks: true        # optional, default true
 show_streak: true       # optional, default true
+auto_scroll: true       # optional, default true — scroll each column to the
+                        # section matching the current time of day
+afternoon_start: '12:00' # optional, default 12:00 — local time the columns
+                        # switch to the Afternoon section
+night_start: '19:00'    # optional, default 19:00 — local time the columns
+                        # switch to the Night section
 ```
 
 Member slugs are derived from names entered in the integration (e.g. "Anna" → `anna`).
 The visual editor populates and reorders the member list from the integration automatically.
+
+When `auto_scroll` is on (the default), each member column starts scrolled to the
+time-of-day section for the current local time, and re-scrolls as the clock crosses
+`afternoon_start` and `night_start` — handy for a wall-mounted tablet left open all day.
+Manually scrolling a column is preserved until the next threshold (toggling a task
+does not jump it back). Set `auto_scroll: false` to keep every column at the top.

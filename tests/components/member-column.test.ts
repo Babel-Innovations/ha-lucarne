@@ -326,4 +326,80 @@ describe('lucarne-member-column', () => {
     const headerTexts = headers.map((h) => h.textContent?.trim());
     assert.ok(!headerTexts.includes('Tasks'), 'Tasks section header absent when no chores');
   });
+
+  // --- auto-scroll to time-of-day section (issue #68) -----------------------
+
+  function bucketTask(bucket: TimeOfDay, uid: string): RenderableTask {
+    return makeTask({ uid, metadata: { ...makeTask().metadata, type: 'routine', time_of_day: bucket } });
+  }
+
+  // happy-dom has no layout engine, so offsetTop is always 0 and we can't assert a
+  // pixel scrollTop. Instead we spy on assignments to `.lists` scrollTop: a write
+  // happens iff _applyScroll found a section to scroll to.
+  function spyScrollWrites(el: LucarneMemberColumn): () => number {
+    const lists = shadow(el, '.lists') as HTMLElement;
+    let writes = 0;
+    Object.defineProperty(lists, 'scrollTop', {
+      configurable: true,
+      get: () => 0,
+      set: () => { writes += 1; },
+    });
+    return () => writes;
+  }
+
+  it('tags each section with its time-of-day data-bucket', async () => {
+    const el = makeEl([bucketTask('morning', 'm1'), bucketTask('afternoon', 'a1'), bucketTask('anytime', 'x1')]);
+    await el.updateComplete;
+
+    const buckets = shadowAll(el, '.section').map((s) => s.getAttribute('data-bucket'));
+    assert.deepEqual(buckets, ['morning', 'afternoon', 'anytime']);
+  });
+
+  it('scrolls when scrollToBucket changes but not on a task-only re-render', async () => {
+    const el = makeEl([bucketTask('morning', 'm1'), bucketTask('afternoon', 'a1')]);
+    await el.updateComplete; // initial scrollToBucket is '' → no scroll
+    const writes = spyScrollWrites(el);
+
+    el.scrollToBucket = 'afternoon';
+    await el.updateComplete;
+    assert.equal(writes(), 1, 'a bucket change scrolls once');
+
+    // A task push with the SAME bucket must not yank a manually-scrolled column.
+    el.tasks = [bucketTask('morning', 'm1'), bucketTask('afternoon', 'a1'), bucketTask('morning', 'm2')];
+    await el.updateComplete;
+    assert.equal(writes(), 1, 'task-only re-render does not re-scroll');
+  });
+
+  it('falls through to the next non-empty section when the target bucket is empty', async () => {
+    // Target 'afternoon' but only morning + anytime exist → scroll to anytime.
+    const el = makeEl([bucketTask('morning', 'm1'), bucketTask('anytime', 'x1')]);
+    await el.updateComplete;
+    const writes = spyScrollWrites(el);
+
+    el.scrollToBucket = 'afternoon';
+    await el.updateComplete;
+    assert.equal(writes(), 1, 'falls through afternoon→night→anytime and scrolls');
+  });
+
+  it('does not scroll when the target bucket and all later buckets are empty', async () => {
+    // Target 'night' but only morning exists → nothing at/after night → no write.
+    const el = makeEl([bucketTask('morning', 'm1')]);
+    await el.updateComplete;
+    const writes = spyScrollWrites(el);
+
+    el.scrollToBucket = 'night';
+    await el.updateComplete;
+    assert.equal(writes(), 0, 'no section at or after the target → no scroll');
+  });
+
+  it('empty scrollToBucket never scrolls', async () => {
+    const el = makeEl([bucketTask('morning', 'm1'), bucketTask('afternoon', 'a1')]);
+    await el.updateComplete;
+    const writes = spyScrollWrites(el);
+
+    el.scrollToBucket = '';
+    el.tasks = [bucketTask('morning', 'm1')];
+    await el.updateComplete;
+    assert.equal(writes(), 0, 'auto-scroll disabled → no scroll write');
+  });
 });

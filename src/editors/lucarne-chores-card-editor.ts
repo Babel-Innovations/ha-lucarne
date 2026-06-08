@@ -3,6 +3,7 @@ import type { TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { HomeAssistant, MemberSummary } from '../shared/types.js';
 import type { LucarneChoresCardConfig } from '../cards/lucarne-chores-card.js';
+import { DEFAULT_AFTERNOON_START, DEFAULT_NIGHT_START } from '../cards/lucarne-chores-card.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
@@ -145,6 +146,35 @@ export class LucarneChoresCardEditor extends LitElement {
         font-size: var(--lucarne-fs-md);
         box-sizing: border-box;
       }
+      .time-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--lucarne-spacing-md);
+        padding: var(--lucarne-spacing-xs) 0;
+      }
+      .time-row label {
+        font-size: var(--lucarne-fs-md);
+        color: var(--lucarne-on-surface);
+        flex: 1;
+      }
+      /* Without an explicit color-scheme the native time control paints itself in
+         the OS scheme — a dark box on the (light) lucarne theme. Pin it to the
+         theme surface + tokens so the field, its digits, and the clock glyph match
+         the rest of the editor instead of following the OS. */
+      input[type='time'] {
+        padding: var(--lucarne-spacing-sm) var(--lucarne-spacing-md);
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        border-radius: var(--lucarne-radius-sm);
+        font-size: var(--lucarne-fs-md);
+        box-sizing: border-box;
+        color-scheme: light;
+        background: var(--lucarne-surface, var(--ha-card-background, #fff));
+        color: var(--lucarne-on-surface, #212121);
+      }
+      input[type='time']:disabled {
+        opacity: 0.5;
+      }
       .loading {
         color: var(--lucarne-on-surface-muted);
         font-size: var(--lucarne-fs-sm);
@@ -269,6 +299,16 @@ export class LucarneChoresCardEditor extends LitElement {
     this._fire({ ...this._config!, [field]: v });
   }
 
+  private _autoScrollChanged(e: Event) {
+    const v = (e.target as HTMLInputElement).checked;
+    this._fire({ ...this._config!, auto_scroll: v });
+  }
+
+  private _scrollTimeChanged(field: 'afternoon_start' | 'night_start', e: Event) {
+    const v = (e.target as HTMLInputElement).value;
+    this._fire({ ...this._config!, [field]: v || undefined });
+  }
+
   private _renderMemberContent(m: MemberSummary, isHidden: boolean): TemplateResult {
     return html`
       <div class="member-content ${isHidden ? 'hidden-member' : ''}" slot=${m.slug} data-slug=${m.slug}>
@@ -373,6 +413,37 @@ export class LucarneChoresCardEditor extends LitElement {
           </div>
         `,
       )}
+
+      <div class="section-label">Auto-scroll</div>
+      <div class="toggle-row">
+        <input
+          type="checkbox"
+          id="ed-auto_scroll"
+          .checked=${this._config.auto_scroll ?? true}
+          @change=${this._autoScrollChanged}
+        />
+        <label for="ed-auto_scroll">Scroll columns to the current time of day</label>
+      </div>
+      <div class="time-row">
+        <label for="ed-afternoon_start">Afternoon starts at</label>
+        <input
+          type="time"
+          id="ed-afternoon_start"
+          ?disabled=${!(this._config.auto_scroll ?? true)}
+          .value=${this._config.afternoon_start ?? DEFAULT_AFTERNOON_START}
+          @change=${(e: Event) => this._scrollTimeChanged('afternoon_start', e)}
+        />
+      </div>
+      <div class="time-row">
+        <label for="ed-night_start">Night starts at</label>
+        <input
+          type="time"
+          id="ed-night_start"
+          ?disabled=${!(this._config.auto_scroll ?? true)}
+          .value=${this._config.night_start ?? DEFAULT_NIGHT_START}
+          @change=${(e: Event) => this._scrollTimeChanged('night_start', e)}
+        />
+      </div>
     `;
   }
 }

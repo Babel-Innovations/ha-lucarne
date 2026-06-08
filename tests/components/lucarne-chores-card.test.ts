@@ -122,6 +122,43 @@ describe('lucarne-chores-card', () => {
     assert.equal(col.hideName, false, 'names shown by default');
   });
 
+  it('forwards a valid scroll-to-bucket to each column by default (auto-scroll on)', async () => {
+    const el = await makeCard(['anna']);
+    const col = el.shadowRoot!.querySelector('lucarne-member-column')!;
+    const bucket = col.getAttribute('scroll-to-bucket');
+    assert.ok(
+      ['morning', 'afternoon', 'night'].includes(bucket ?? ''),
+      `scroll-to-bucket is a valid time-of-day bucket (got ${bucket})`,
+    );
+  });
+
+  it('forces the bucket the configured thresholds select', async () => {
+    // night_start 00:00 → every local time is at/after night → always 'night'.
+    const el = document.createElement('lucarne-chores-card') as LucarneChoresCard;
+    el.setConfig({ type: 'custom:lucarne-chores-card', members: ['anna'], night_start: '00:00' });
+    el.hass = makeFakeHassWithMembers() as unknown as HomeAssistant;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 50));
+    await el.updateComplete;
+
+    const col = el.shadowRoot!.querySelector('lucarne-member-column')!;
+    assert.equal(col.getAttribute('scroll-to-bucket'), 'night');
+  });
+
+  it('passes an empty scroll-to-bucket when auto_scroll is disabled', async () => {
+    const el = document.createElement('lucarne-chores-card') as LucarneChoresCard;
+    el.setConfig({ type: 'custom:lucarne-chores-card', members: ['anna'], auto_scroll: false });
+    el.hass = makeFakeHassWithMembers() as unknown as HomeAssistant;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 50));
+    await el.updateComplete;
+
+    const col = el.shadowRoot!.querySelector('lucarne-member-column')!;
+    assert.equal(col.getAttribute('scroll-to-bucket'), '', 'auto-scroll off → empty bucket');
+  });
+
   it('skips hidden_members but keeps the others', async () => {
     const el = document.createElement('lucarne-chores-card') as LucarneChoresCard;
     el.setConfig({ type: 'custom:lucarne-chores-card', members: ['anna', 'bob'], hidden_members: ['bob'] });
