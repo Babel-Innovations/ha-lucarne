@@ -7,6 +7,8 @@ import {
   formatRelativeStart,
   parseEventBoundary,
   msUntilNextLocalMidnight,
+  currentScrollBucket,
+  msUntilNextDailyBoundary,
 } from '../../src/shared/date-helpers.js';
 import type { CalendarEvent } from '../../src/shared/types.js';
 
@@ -240,5 +242,130 @@ describe('msUntilNextLocalMidnight', () => {
   it('one second before midnight → 1000ms', () => {
     const now = new Date(2026, 5, 8, 23, 59, 59, 0);
     assert.equal(msUntilNextLocalMidnight(now), 1000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// currentScrollBucket
+// ---------------------------------------------------------------------------
+describe('currentScrollBucket', () => {
+  // Default thresholds: 12:00 → afternoon, 19:00 → night.
+  it('before afternoon start → morning', () => {
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 6, 0), '12:00', '19:00'), 'morning');
+  });
+
+  it('one minute before afternoon start → still morning', () => {
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 11, 59), '12:00', '19:00'), 'morning');
+  });
+
+  it('exactly at afternoon start → afternoon', () => {
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 12, 0), '12:00', '19:00'), 'afternoon');
+  });
+
+  it('one minute before night start → still afternoon', () => {
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 18, 59), '12:00', '19:00'), 'afternoon');
+  });
+
+  it('exactly at night start → night', () => {
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 19, 0), '12:00', '19:00'), 'night');
+  });
+
+  it('late evening → night', () => {
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 23, 30), '12:00', '19:00'), 'night');
+  });
+
+  it('treats a malformed threshold as never-triggering (falls back to morning)', () => {
+    // Infinity, not NaN: an unparseable threshold must read as "never", so even
+    // late in the day the bucket stays at the earlier, valid one.
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 22, 0), '12:00', 'nonsense'), 'afternoon');
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 22, 0), 'nope', 'nope'), 'morning');
+  });
+
+  it('treats out-of-range numeric thresholds as never-triggering', () => {
+    // '25:00'/'12:99' are numeric but not valid HH:MM — must not be coerced into
+    // a real time; they read as "never" just like non-numeric input.
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 22, 0), '12:00', '25:00'), 'afternoon');
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 22, 0), '12:99', '25:00'), 'morning');
+  });
+
+  it('rejects thresholds that are not exactly HH:MM', () => {
+    // Bare hour ('12') and extra segments ('12:00:45') are not valid HH:MM. At
+    // 13:00 a wrongly-accepted '12' would read as afternoon; rejection (→ Infinity)
+    // leaves it at morning.
+    // Both '12' and '12:00:45' are rejected, so at 13:00 neither makes it
+    // afternoon — it stays at morning (afternoon threshold never triggers).
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 13, 0), '12', '19:00'), 'morning');
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 13, 0), '12:00:45', '19:00'), 'morning');
+  });
+
+  it('honors custom thresholds (afternoon 13:30, night 20:15)', () => {
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 13, 0), '13:30', '20:15'), 'morning');
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 13, 30), '13:30', '20:15'), 'afternoon');
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 20, 14), '13:30', '20:15'), 'afternoon');
+    assert.equal(currentScrollBucket(new Date(2026, 5, 8, 20, 15), '13:30', '20:15'), 'night');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// msUntilNextDailyBoundary
+// ---------------------------------------------------------------------------
+describe('msUntilNextDailyBoundary', () => {
+  const MIN = 60 * 1000;
+  const HOUR = 60 * MIN;
+
+  it('picks the soonest upcoming boundary later today', () => {
+    const now = new Date(2026, 5, 8, 9, 0, 0, 0); // 09:00, both boundaries ahead
+    assert.equal(msUntilNextDailyBoundary(now, ['12:00', '19:00']), 3 * HOUR);
+  });
+
+  it('skips a boundary already passed and uses the next one today', () => {
+    const now = new Date(2026, 5, 8, 14, 0, 0, 0); // past 12:00, before 19:00
+    assert.equal(msUntilNextDailyBoundary(now, ['12:00', '19:00']), 5 * HOUR);
+  });
+
+  it('rolls to tomorrow when every boundary has passed', () => {
+    const now = new Date(2026, 5, 8, 21, 0, 0, 0); // both past
+    // Next is 12:00 tomorrow → 15h away.
+    assert.equal(msUntilNextDailyBoundary(now, ['12:00', '19:00']), 15 * HOUR);
+  });
+
+  it('at an exact boundary it rolls forward, never returns 0', () => {
+    const now = new Date(2026, 5, 8, 12, 0, 0, 0); // exactly 12:00
+    const result = msUntilNextDailyBoundary(now, ['12:00', '19:00']);
+    assert.ok(result > 0, 'never returns 0 at an exact boundary');
+    assert.equal(result, 7 * HOUR, 'next boundary is 19:00 the same day');
+  });
+
+  it('empty list → Infinity (caller guards)', () => {
+    const now = new Date(2026, 5, 8, 9, 0, 0, 0);
+    assert.equal(msUntilNextDailyBoundary(now, []), Infinity);
+  });
+
+  it('skips malformed entries (no NaN delay), still uses valid ones', () => {
+    const now = new Date(2026, 5, 8, 9, 0, 0, 0);
+    assert.equal(msUntilNextDailyBoundary(now, ['nonsense', '12:00']), 3 * HOUR);
+  });
+
+  it('all entries malformed → Infinity (caller skips arming)', () => {
+    const now = new Date(2026, 5, 8, 9, 0, 0, 0);
+    assert.equal(msUntilNextDailyBoundary(now, ['nope', '']), Infinity);
+  });
+
+  it('skips out-of-range numeric entries instead of letting Date normalize them', () => {
+    const now = new Date(2026, 5, 8, 9, 0, 0, 0);
+    // '25:00' would normalize to 01:00 next day (~16h) — skipping it leaves the
+    // valid '12:00' boundary (3h) as the answer.
+    assert.equal(msUntilNextDailyBoundary(now, ['25:00', '12:00']), 3 * HOUR);
+    // All out of range → Infinity.
+    assert.equal(msUntilNextDailyBoundary(now, ['25:00', '12:60']), Infinity);
+  });
+
+  it('rejects strings that are not exactly HH:MM (extra segments)', () => {
+    const now = new Date(2026, 5, 8, 9, 0, 0, 0);
+    // '12:00:45' has a trailing seconds segment — not a valid HH:MM, so it's
+    // skipped and the valid '19:00' boundary (10h) is used.
+    assert.equal(msUntilNextDailyBoundary(now, ['12:00:45', '19:00']), 10 * HOUR);
+    // A bare hour with no minutes is also skipped.
+    assert.equal(msUntilNextDailyBoundary(now, ['12', '19:00']), 10 * HOUR);
   });
 });

@@ -318,12 +318,83 @@ describe('lucarne-chores-card-editor', () => {
     assert.equal(events[0].detail.config.hide_names, true);
   });
 
+  // --- Auto-scroll section (issue #68) ---
+
+  it('renders an Auto-scroll section with time pickers defaulting to 12:00 / 19:00', async () => {
+    const el = await makeEl();
+    const labels = Array.from(el.shadowRoot!.querySelectorAll('.section-label')).map(
+      (l) => l.textContent?.trim().toLowerCase(),
+    );
+    assert.ok(labels.some((l) => l?.includes('auto-scroll')), 'Auto-scroll section');
+
+    const toggle = shadow(el, '#ed-auto_scroll') as HTMLInputElement;
+    assert.equal(toggle.checked, true, 'auto_scroll on by default');
+    const afternoon = shadow(el, '#ed-afternoon_start') as HTMLInputElement;
+    const night = shadow(el, '#ed-night_start') as HTMLInputElement;
+    assert.equal(afternoon.value, '12:00', 'afternoon default 12:00');
+    assert.equal(night.value, '19:00', 'night default 19:00');
+  });
+
+  it('fires config-changed when auto_scroll toggled off', async () => {
+    const el = await makeEl();
+    const events: CustomEvent[] = [];
+    el.addEventListener('config-changed', (e) => events.push(e as CustomEvent));
+
+    const toggle = shadow(el, '#ed-auto_scroll') as HTMLInputElement;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+    assert.equal(events[0].detail.config.auto_scroll, false);
+  });
+
+  it('fires config-changed when afternoon_start changes', async () => {
+    const el = await makeEl();
+    const events: CustomEvent[] = [];
+    el.addEventListener('config-changed', (e) => events.push(e as CustomEvent));
+
+    const afternoon = shadow(el, '#ed-afternoon_start') as HTMLInputElement;
+    afternoon.value = '13:30';
+    afternoon.dispatchEvent(new Event('change', { bubbles: true }));
+
+    assert.equal(events[0].detail.config.afternoon_start, '13:30');
+  });
+
+  it('fires config-changed when night_start changes', async () => {
+    const el = await makeEl();
+    const events: CustomEvent[] = [];
+    el.addEventListener('config-changed', (e) => events.push(e as CustomEvent));
+
+    const night = shadow(el, '#ed-night_start') as HTMLInputElement;
+    night.value = '20:15';
+    night.dispatchEvent(new Event('change', { bubbles: true }));
+
+    assert.equal(events[0].detail.config.night_start, '20:15');
+  });
+
+  it('disables the time pickers when auto_scroll is off', async () => {
+    const el = await makeEl({ auto_scroll: false });
+    const afternoon = shadow(el, '#ed-afternoon_start') as HTMLInputElement;
+    const night = shadow(el, '#ed-night_start') as HTMLInputElement;
+    assert.equal(afternoon.disabled, true, 'afternoon picker disabled');
+    assert.equal(night.disabled, true, 'night picker disabled');
+  });
+
   it('renders checkboxes that do not rely on the native (OS color-scheme) appearance', async () => {
     const el = await makeEl();
     const styleText = (el.constructor as unknown as { styles: { cssText: string }[] }).styles;
     const allCss = styleText.map((s) => s.cssText).join('\n');
     assert.match(allCss, /input\[type='checkbox'\][^}]*appearance:\s*none/, 'native appearance removed');
     assert.match(allCss, /:checked[^}]*var\(--primary-color/, 'checked state uses accent color');
+  });
+
+  it('pins the time picker to the theme instead of the OS color-scheme', async () => {
+    const el = await makeEl();
+    const styleText = (el.constructor as unknown as { styles: { cssText: string }[] }).styles;
+    const allCss = styleText.map((s) => s.cssText).join('\n');
+    const timeRule = allCss.match(/input\[type='time'\]\s*\{[^}]*\}/)?.[0] ?? '';
+    assert.match(timeRule, /color-scheme:\s*light/, 'forces light color-scheme (not OS dark)');
+    assert.match(timeRule, /background:[^;]*--lucarne-surface/, 'background from theme surface token');
+    assert.match(timeRule, /color:[^;]*--lucarne-on-surface/, 'text color from theme token');
   });
 
   // --- Error + legacy handling ---
