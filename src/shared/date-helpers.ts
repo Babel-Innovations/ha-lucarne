@@ -57,6 +57,17 @@ export function parseEventBoundary(value: string): Date {
   return value.length === 10 && !value.includes('T') ? new Date(`${value}T00:00:00`) : new Date(value);
 }
 
+/** Milliseconds from `now` until the next local midnight (00:00:00.000).
+ *  At exactly midnight it returns one full local day — the delta to the *next*
+ *  local midnight, never 0 — so a self-rescheduling timer can't spin in a
+ *  zero-delay loop. Building the target with the local `Date` constructor keeps
+ *  DST-transition days correct: that "full day" is 23h or 25h when the clocks
+ *  change, not a fixed 24h. */
+export function msUntilNextLocalMidnight(now: Date): number {
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+  return next.getTime() - now.getTime();
+}
+
 export function formatRelativeStart(event: CalendarEvent, now: Date): string {
   const start = parseEventBoundary(event.start);
   const end = parseEventBoundary(event.end);

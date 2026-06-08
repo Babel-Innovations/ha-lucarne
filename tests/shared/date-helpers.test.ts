@@ -6,6 +6,7 @@ import {
   eventBandPortion,
   formatRelativeStart,
   parseEventBoundary,
+  msUntilNextLocalMidnight,
 } from '../../src/shared/date-helpers.js';
 import type { CalendarEvent } from '../../src/shared/types.js';
 
@@ -191,5 +192,53 @@ describe('formatRelativeStart', () => {
     const now = new Date('2026-01-06T09:00:00');
     const e = { start: '2026-01-05', end: '2026-01-06', summary: 'AllDay' };
     assert.equal(formatRelativeStart(e, now), '');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// msUntilNextLocalMidnight
+// ---------------------------------------------------------------------------
+describe('msUntilNextLocalMidnight', () => {
+  const MIN = 60 * 1000;
+  const HOUR = 60 * MIN;
+
+  it('30 minutes before midnight → 30 minutes', () => {
+    const now = new Date(2026, 5, 8, 23, 30, 0, 0); // local 23:30
+    assert.equal(msUntilNextLocalMidnight(now), 30 * MIN);
+  });
+
+  it('exactly midnight → one full local day, never 0', () => {
+    const now = new Date(2026, 5, 8, 0, 0, 0, 0);
+    // Don't hard-code 24h: the contract is "delta to the next local midnight",
+    // which is 23h/25h on DST days (covered below). Compute it independently.
+    const expected = new Date(2026, 5, 9, 0, 0, 0, 0).getTime() - now.getTime();
+    const result = msUntilNextLocalMidnight(now);
+    assert.ok(result > 0, 'never returns 0 at exactly midnight');
+    assert.equal(result, expected, 'equals the delta to the next local midnight');
+  });
+
+  // TZ=America/Los_Angeles is set in the test scripts, so the US DST transitions
+  // apply: clocks spring forward on 2026-03-08 (23h day) and fall back on
+  // 2026-11-01 (25h day). These prove the helper tracks wall-clock midnight, not
+  // a fixed 24h offset.
+  it('spring-forward DST day → 23h from midnight (US DST begins 2026-03-08)', () => {
+    const now = new Date(2026, 2, 8, 0, 0, 0, 0);
+    assert.equal(msUntilNextLocalMidnight(now), 23 * HOUR);
+  });
+
+  it('fall-back DST day → 25h from midnight (US DST ends 2026-11-01)', () => {
+    const now = new Date(2026, 10, 1, 0, 0, 0, 0);
+    assert.equal(msUntilNextLocalMidnight(now), 25 * HOUR);
+  });
+
+  it('mid-day → remainder of the day', () => {
+    const now = new Date(2026, 5, 8, 14, 15, 30, 0); // local 14:15:30
+    // 9h 44m 30s until midnight
+    assert.equal(msUntilNextLocalMidnight(now), 9 * HOUR + 44 * MIN + 30 * 1000);
+  });
+
+  it('one second before midnight → 1000ms', () => {
+    const now = new Date(2026, 5, 8, 23, 59, 59, 0);
+    assert.equal(msUntilNextLocalMidnight(now), 1000);
   });
 });
