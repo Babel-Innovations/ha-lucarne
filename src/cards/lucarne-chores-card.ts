@@ -305,6 +305,14 @@ export class LucarneChoresCard extends LucarneCardBase {
     const now = new Date();
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
+    // Household bucket is the source for rotating tasks; pulled once and reused.
+    const householdTasks = this._familyState.tasksByMember.get('household') ?? [];
+
+    const applyOptimistic = (t: RenderableTask): RenderableTask => {
+      const optimistic = this._optimistic.get(t.uid);
+      return optimistic && optimistic !== t.status ? { ...t, status: optimistic } : t;
+    };
+
     const result: Array<{ member: MemberSummary; tasks: RenderableTask[]; streak: number }> = [];
     for (const slug of slugs) {
       if (hidden.has(slug)) continue;
@@ -316,7 +324,7 @@ export class LucarneChoresCard extends LucarneCardBase {
       if (!member) continue;
 
       const allTasks = this._familyState.tasksByMember.get(slug) ?? [];
-      const tasks = allTasks
+      const ownTasks = allTasks
         .filter((t) => {
           if (t.metadata.type === 'routine') return showRoutines;
           if (t.metadata.type === 'chore') {
@@ -326,13 +334,27 @@ export class LucarneChoresCard extends LucarneCardBase {
             const dueDate = t.due.includes('T') ? new Date(t.due) : new Date(t.due + 'T00:00:00');
             return dueDate <= endOfToday;
           }
+          // Rotating tasks live in the household bucket — always excluded from a member's own
+          // allTasks (their member_slug is 'household', so they only appear in household bucket).
+          // For the household column, we explicitly drop them so they don't double-render.
           return false;
         })
-        // Apply pending optimistic toggles so a tapped row flips instantly.
-        .map((t) => {
-          const optimistic = this._optimistic.get(t.uid);
-          return optimistic && optimistic !== t.status ? { ...t, status: optimistic } : t;
-        });
+        .map(applyOptimistic);
+
+      let tasks: RenderableTask[];
+      if (slug === 'household') {
+        // Household column: rotating tasks are shown in their owner's column only.
+        tasks = ownTasks;
+      } else {
+        // Non-household column: pull rotating tasks from the household bucket for this owner.
+        // Gate by showTasks (same toggle as chores) per spec.
+        const rotatingForMember = showTasks
+          ? householdTasks
+              .filter((t) => t.metadata.type === 'rotating' && t.metadata.current_owner === slug)
+              .map(applyOptimistic)
+          : [];
+        tasks = [...ownTasks, ...rotatingForMember];
+      }
 
       const streak = this._familyState.streakByMember.get(slug) ?? 0;
       result.push({ member, tasks, streak });
@@ -444,6 +466,7 @@ export class LucarneChoresCard extends LucarneCardBase {
                 .member=${member}
                 .tasks=${tasks}
                 .streak=${streak}
+                .members=${allMembers}
                 ?show-routines=${showRoutines}
                 ?show-tasks=${showTasks}
                 ?show-streak=${showStreak}

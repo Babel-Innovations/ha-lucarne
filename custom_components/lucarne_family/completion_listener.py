@@ -29,6 +29,12 @@ _LOGGER = logging.getLogger(__name__)
 
 # Domain-level key for the reset-pending UID set (shared across entries).
 _RESET_PENDING_KEY = "_lucarne_reset_pending"
+# Stash for the prev owner of a rotating task at reset time. reset_logic writes
+# {uid: prev_slug} before the flip; the listener pops it to attribute the reset
+# log row to the person who completed the task, not the newly-advanced owner.
+# This avoids a read-ordering race: the listener runs async (hass.async_create_task)
+# so by the time it reads metadata, current_owner has already been advanced in the DB.
+_RESET_ROTATING_PREV_KEY = "_lucarne_reset_rotating_prev"
 
 
 @callback
@@ -179,6 +185,19 @@ def async_start_completion_listener(
                     "No member found for entity %s uid %s; skipping log", entity_id, uid
                 )
                 continue
+
+            # For rotating tasks, attribute the log row to the completer, not "household".
+            # For reset rows, use the stash set by reset_logic before the flip (the DB
+            # has already been advanced by the time this async handler runs).
+            # For completed rows, current_owner in the DB is still correct.
+            if metadata and metadata.get("type") == "rotating":
+                rotating_prev: dict[str, str] = hass.data.get(
+                    _RESET_ROTATING_PREV_KEY, {}
+                )
+                if uid in rotating_prev:
+                    member_slug = rotating_prev.pop(uid)
+                else:
+                    member_slug = metadata.get("current_owner") or member_slug
 
             await store.async_append_completion(
                 member_slug=member_slug,

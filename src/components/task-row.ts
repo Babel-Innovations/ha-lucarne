@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import type { RenderableTask } from '../shared/types.js';
+import type { MemberSummary, RenderableTask } from '../shared/types.js';
+import { nextOwner } from '../shared/rotation.js';
 
 const LONG_PRESS_MS = 500;
 
@@ -96,12 +97,23 @@ export class LucarneTaskRow extends LitElement {
       color: var(--secondary-text-color, #727272);
       flex-shrink: 0;
     }
+    .rotation-badge {
+      font-size: 0.9rem;
+      opacity: 0.55;
+      flex-shrink: 0;
+    }
+    .rotation-next {
+      font-size: 0.7rem;
+      color: var(--secondary-text-color, #727272);
+      display: block;
+    }
   `;
 
   @property({ attribute: false }) task!: RenderableTask;
   @property() memberColor = '#a8d8b9';
   /** Tighter geometry (smaller circle, less padding) for summary contexts. */
   @property({ type: Boolean, reflect: true }) compact = false;
+  @property({ attribute: false }) members: MemberSummary[] = [];
 
   private _pressTimer: ReturnType<typeof setTimeout> | null = null;
   private _longPressed = false;
@@ -151,6 +163,21 @@ export class LucarneTaskRow extends LitElement {
     const done = this.task.status === 'completed';
     const icon = this.task.metadata.icon;
     const due = this.task.due;
+    const isRotating = this.task.metadata.type === 'rotating';
+
+    let nextName: string | null = null;
+    if (isRotating) {
+      const owners = this.task.metadata.rotation_owners ?? [];
+      const current = this.task.metadata.current_owner ?? '';
+      if (owners.length > 1) {
+        const knownSlugs = new Set(this.members.filter((m) => m.slug !== 'household').map((m) => m.slug));
+        const slug = nextOwner(owners, current, knownSlugs);
+        if (slug) {
+          const m = this.members.find((mb) => mb.slug === slug);
+          nextName = m?.name ?? slug;
+        }
+      }
+    }
 
     return html`
       <div
@@ -178,7 +205,9 @@ export class LucarneTaskRow extends LitElement {
         ${icon ? html`<span class="icon">${icon}</span>` : ''}
         <div class="middle">
           <span class="label ${done ? 'done' : ''}">${this.task.summary}</span>
+          ${nextName ? html`<span class="rotation-next">next: ${nextName}</span>` : ''}
         </div>
+        ${isRotating ? html`<span class="rotation-badge" aria-hidden="true">↻</span>` : ''}
         ${due ? html`<span class="due">${this._formatDue(due)}</span>` : ''}
       </div>
     `;

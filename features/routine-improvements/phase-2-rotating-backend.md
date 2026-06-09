@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 ---
 
 # Phase 2: Rotating tasks — backend & data model
@@ -53,10 +53,10 @@ tests/python/
 
 ### Baseline Test Verification (before starting implementation)
 
-- [ ] `pytest tests/python/` (use `.venv/bin/pytest` per `CLAUDE.md`) — all green, statement floor 86 met
-- [ ] `ruff check custom_components/lucarne_family/` and `mypy custom_components/lucarne_family/` — clean
-- [ ] `npm run test:coverage && npm run lint && npm run typecheck && npm run build` — green (proves clean tree)
-- [ ] If anything fails, fix and commit separately before proceeding
+- [x] `pytest tests/python/` (use `.venv/bin/pytest` per `CLAUDE.md`) — all green, statement floor 86 met
+- [x] `ruff check custom_components/lucarne_family/` and `mypy custom_components/lucarne_family/` — clean
+- [x] `npm run test:coverage && npm run lint && npm run typecheck && npm run build` — green (proves clean tree)
+- [x] If anything fails, fix and commit separately before proceeding
 
 ### Sub-Phase A: Schema, storage & service plumbing
 
@@ -64,42 +64,42 @@ Deliverable: the integration can persist a `rotating` task (type, ordered owners
 
 #### Schema & migration
 
-- [ ] `schema.sql`: change the type CHECK to `CHECK (type IN ('routine','chore','rotating'))`.
-- [ ] `schema.sql`: add two columns to `task_metadata`:
+- [x] `schema.sql`: change the type CHECK to `CHECK (type IN ('routine','chore','rotating'))`.
+- [x] `schema.sql`: add two columns to `task_metadata`:
   - `rotation_owners TEXT NOT NULL DEFAULT ''` — JSON array of member slugs in turn order, e.g. `'["alice","bob","cara"]'`. Empty string for non-rotating tasks.
   - `current_owner TEXT NOT NULL DEFAULT ''` — slug of whose turn it is now. Empty for non-rotating.
-- [ ] `store.py::_init_db`: add `ALTER TABLE task_metadata ADD COLUMN …` for `rotation_owners` and `current_owner` guarded by `if "<col>" not in existing_cols`, mirroring the `time_of_day` migration. Add a comment noting the type CHECK cannot be extended on existing DBs (runtime validator enforces `rotating`).
-- [ ] Keep `STORAGE_VERSION = 1` unless the project's migration convention requires a bump — the existing code uses column-existence checks, not versioned migrations, so follow that. (Confirm by reading `store.py` before changing `const.py`.)
+- [x] `store.py::_init_db`: add `ALTER TABLE task_metadata ADD COLUMN …` for `rotation_owners` and `current_owner` guarded by `if "<col>" not in existing_cols`, mirroring the `time_of_day` migration. Add a comment noting the type CHECK cannot be extended on existing DBs (runtime validator enforces `rotating`).
+- [x] Keep `STORAGE_VERSION = 1` unless the project's migration convention requires a bump — the existing code uses column-existence checks, not versioned migrations, so follow that. (Confirm by reading `store.py` before changing `const.py`.)
 
 #### Storage
 
-- [ ] `store.async_add_task_metadata`: add `rotation_owners: str = ""` and `current_owner: str = ""` params; include both in the INSERT column list and values tuple.
-- [ ] `store.async_update_task_metadata`: add `"rotation_owners"` and `"current_owner"` to the `allowed` set.
-- [ ] Add `store.async_get_rotating_tasks() -> list[dict]` (returns all `task_metadata` rows where `type = 'rotating'`) for the reset loop and member-removal sanitization. (Or reuse `async_get_all_task_metadata` and filter in the caller — pick one and be consistent.)
+- [x] `store.async_add_task_metadata`: add `rotation_owners: str = ""` and `current_owner: str = ""` params; include both in the INSERT column list and values tuple.
+- [x] `store.async_update_task_metadata`: add `"rotation_owners"` and `"current_owner"` to the `allowed` set.
+- [x] Add `store.async_get_rotating_tasks() -> list[dict]` (returns all `task_metadata` rows where `type = 'rotating'`) for the reset loop and member-removal sanitization. (Or reuse `async_get_all_task_metadata` and filter in the caller — pick one and be consistent.)
 
 #### `rotation.py` (pure helpers — no HA, no I/O)
 
-- [ ] `serialize_owners(owners: list[str]) -> str` and `parse_owners(raw: str) -> list[str]` — JSON encode/decode; `parse_owners("")` returns `[]`; tolerate malformed JSON by returning `[]`.
-- [ ] `sanitize_owners(owners: list[str], known_slugs: set[str]) -> list[str]` — drop slugs not in `known_slugs`, drop duplicates, **preserve order**.
-- [ ] `next_owner(owners: list[str], current: str, known_slugs: set[str]) -> str | None` — sanitize first; if empty return `None`; if `current` not in the sanitized list (it was removed), return the **first** sanitized owner; otherwise return the next owner cyclically (wrap to index 0 after the last).
+- [x] `serialize_owners(owners: list[str]) -> str` and `parse_owners(raw: str) -> list[str]` — JSON encode/decode; `parse_owners("")` returns `[]`; tolerate malformed JSON by returning `[]`.
+- [x] `sanitize_owners(owners: list[str], known_slugs: set[str]) -> list[str]` — drop slugs not in `known_slugs`, drop duplicates, **preserve order**.
+- [x] `next_owner(owners: list[str], current: str, known_slugs: set[str]) -> str | None` — sanitize first; if empty return `None`; if `current` not in the sanitized list (it was removed), return the **first** sanitized owner; otherwise return the next owner cyclically (wrap to index 0 after the last).
 
 #### Service validation
 
-- [ ] `task_service.py`: add `"rotating"` to `_TASK_TYPES`.
-- [ ] `ADD_TASK_SCHEMA`: add `vol.Optional("rotation_owners", default=list)` as a list of slug strings (`[cv.string]`) and `vol.Optional("current_owner", default="")`.
-- [ ] `handle_add_task`: when `type == "rotating"`:
+- [x] `task_service.py`: add `"rotating"` to `_TASK_TYPES`.
+- [x] `ADD_TASK_SCHEMA`: add `vol.Optional("rotation_owners", default=list)` as a list of slug strings (`[cv.string]`) and `vol.Optional("current_owner", default="")`.
+- [x] `handle_add_task`: when `type == "rotating"`:
   - Require `member == HOUSEHOLD_SLUG` (rotating tasks live in the household list). Raise `ServiceValidationError` otherwise.
   - Require `len(rotation_owners) >= 2`; every owner must be a known member slug; de-duplicate preserving order. Raise `ServiceValidationError` on violation.
   - Default `current_owner` to `rotation_owners[0]` when not provided; if provided it must be one of `rotation_owners`.
   - Reject a non-empty `recurrence` for rotating (rotating tasks have no schedule).
   - Persist via `async_add_task_metadata` with `rotation_owners=serialize_owners(...)` and `current_owner=...`. The todo item is created in `todo.lucarne_household` (same path as other household tasks).
-- [ ] `UPDATE_METADATA_SCHEMA`: add optional `rotation_owners` (list of slugs) and `current_owner`. In `handle_update_task_metadata`, when the task is `rotating`, validate owners (known slugs, ≥1 to keep the task alive, current_owner ∈ owners) and serialize before storing. (Editing owners/order comes from the UI in Phase 3.)
+- [x] `UPDATE_METADATA_SCHEMA`: add optional `rotation_owners` (list of slugs) and `current_owner`. In `handle_update_task_metadata`, when the task is `rotating`, validate owners (known slugs, ≥1 to keep the task alive, current_owner ∈ owners) and serialize before storing. (Editing owners/order comes from the UI in Phase 3.)
 
 #### Tests (Sub-Phase A)
 
-- [ ] `test_rotation.py`: `next_owner` cycles A→B→C→A; skips a removed middle owner; when `current` was removed returns the first remaining; single-owner list always returns that owner; empty/sanitized-empty returns `None`. `sanitize_owners` drops unknown + dupes and preserves order. `parse_owners("")==[]` and malformed → `[]`.
-- [ ] `test_store_rotation.py`: fresh DB has the new columns; an existing-DB simulation (table without the columns) is migrated by `_init_db`; add + read-back round-trips `rotation_owners`/`current_owner`; update changes them.
-- [ ] `test_task_service_rotating.py`: `add_task` rejects rotating with `<2` owners, unknown owner, non-household member, or non-empty recurrence; accepts a valid rotating task and defaults `current_owner` to the first owner; `update_task_metadata` validates owners.
+- [x] `test_rotation.py`: `next_owner` cycles A→B→C→A; skips a removed middle owner; when `current` was removed returns the first remaining; single-owner list always returns that owner; empty/sanitized-empty returns `None`. `sanitize_owners` drops unknown + dupes and preserves order. `parse_owners("")==[]` and malformed → `[]`.
+- [x] `test_store_rotation.py`: fresh DB has the new columns; an existing-DB simulation (table without the columns) is migrated by `_init_db`; add + read-back round-trips `rotation_owners`/`current_owner`; update changes them.
+- [x] `test_task_service_rotating.py`: `add_task` rejects rotating with `<2` owners, unknown owner, non-household member, or non-empty recurrence; accepts a valid rotating task and defaults `current_owner` to the first owner; `update_task_metadata` validates owners.
 
 ### Sub-Phase B: Rotation behavior — reset advance, attribution, event, owner removal
 
@@ -107,66 +107,66 @@ Deliverable: completing a rotating task advances the owner at the next daily res
 
 #### Events
 
-- [ ] `const.py`: add `EVENT_ROTATION_ADVANCED = "lucarne_family_rotation_advanced"`.
+- [x] `const.py`: add `EVENT_ROTATION_ADVANCED = "lucarne_family_rotation_advanced"`.
 
 #### Daily reset (`reset_logic.py`)
 
-- [ ] In the per-list loop, add an `elif item_type == "rotating":` branch (the household list path; note rotating items only ever live there).
-- [ ] If the rotating item is **COMPLETED** today:
+- [x] In the per-list loop, add an `elif item_type == "rotating":` branch (the household list path; note rotating items only ever live there).
+- [x] If the rotating item is **COMPLETED** today:
   - Build `known_slugs` from `store.get_members()`. Compute `owners = sanitize_owners(parse_owners(metadata["rotation_owners"]), known_slugs)`.
   - If `owners` is empty → delete the todo item + metadata, fire `lucarne_family_task_deleted`, continue.
   - Capture `prev = metadata["current_owner"]` first. Compute `nxt = next_owner(owners, prev, known_slugs)`.
   - **Order matters — flip the item BEFORE advancing the pointer.** Add the uid to `_RESET_PENDING_KEY`, then flip the item to `NEEDS_ACTION` (same try/except cleanup pattern as the routine branch) **while `current_owner` is still `prev`**. The completion_listener overrides the reset-log row's `member_slug` to `metadata["current_owner"]` (Sub-Phase B); if you advance `current_owner` first, the `action="reset"` row would be mis-attributed to the next owner instead of the person who actually completed it. Only after the flip, persist `current_owner = nxt` (and the sanitized `rotation_owners` if it changed) via `store.async_update_task_metadata`.
   - Fire `EVENT_ROTATION_ADVANCED` with `{"uid": uid, "summary": item.summary, "from": prev, "to": nxt}`.
-- [ ] If the rotating item is **NEEDS_ACTION** (not completed): leave it untouched — the turn does not pass. (The outer loop already `continue`s on non-COMPLETED items, so simply ensure rotating items are not deleted as chores. Verify the branch ordering so a rotating item never falls into the `chore` delete branch.)
-- [ ] Rotating items must **not** be counted in the function's `total_reset` return (that value is "routines flipped"); count them separately or not at all, and keep the return value's meaning stable.
+- [x] If the rotating item is **NEEDS_ACTION** (not completed): leave it untouched — the turn does not pass. (The outer loop already `continue`s on non-COMPLETED items, so simply ensure rotating items are not deleted as chores. Verify the branch ordering so a rotating item never falls into the `chore` delete branch.)
+- [x] Rotating items must **not** be counted in the function's `total_reset` return (that value is "routines flipped"); count them separately or not at all, and keep the return value's meaning stable.
 
 #### Completion attribution (`completion_listener.py`)
 
-- [ ] When logging a completion/undo/reset, if `metadata.get("type") == "rotating"`, set `member_slug = metadata.get("current_owner") or member_slug` so the row (and the `lucarne_family_task_completed` event) is attributed to the **current owner**, not `"household"`.
-- [ ] Confirm `todo.lucarne_household` is in the listener's `managed_todo_entity_ids` set (it must be, for household completions to log at all). If it is not, that is a pre-existing gap — note it and ensure rotating completions are observed (the listener only logs entities it tracks).
-- [ ] Rotating completions must **not** trigger the all-routines-done logic — `_maybe_fire_all_routines_done` already filters to `type == "routine"`, so verify a rotating completion does not flip that event. Add a regression test.
+- [x] When logging a completion/undo/reset, if `metadata.get("type") == "rotating"`, set `member_slug = metadata.get("current_owner") or member_slug` so the row (and the `lucarne_family_task_completed` event) is attributed to the **current owner**, not `"household"`.
+- [x] Confirm `todo.lucarne_household` is in the listener's `managed_todo_entity_ids` set (it must be, for household completions to log at all). If it is not, that is a pre-existing gap — note it and ensure rotating completions are observed (the listener only logs entities it tracks).
+- [x] Rotating completions must **not** trigger the all-routines-done logic — `_maybe_fire_all_routines_done` already filters to `type == "routine"`, so verify a rotating completion does not flip that event. Add a regression test.
 
 #### Owner removal (`config_flow.py::async_step_remove_member`)
 
-- [ ] After a member is removed (immediately after `await self._save_members(remaining)` at line ~1052, before `return await self.async_step_manage_members()`), sanitize every rotating task against the **remaining** member slugs.
+- [x] After a member is removed (immediately after `await self._save_members(remaining)` at line ~1052, before `return await self.async_step_manage_members()`), sanitize every rotating task against the **remaining** member slugs.
   - **Getting the store**: use the same accessor `_save_members` uses — `store: LucarneFamilyStore = self.hass.data[DOMAIN][self._entry.entry_id]["store"]` (see `config_flow.py` line ~183). The `remaining` list is already in scope; `remaining_slugs = {m.slug for m in remaining}`; `removed_slug = self._selected_member_slug`.
   - **Getting the household todo entity** (for item deletion): resolve it through the todo component the same way `reset_logic.py` does — `todo_component = self.hass.data.get(DATA_COMPONENT)` (`from homeassistant.components.todo.const import DATA_COMPONENT`), then `entity = todo_component.get_entity(HOUSEHOLD_ENTITY_ID)`; call `await entity.async_delete_todo_items([uid])`. Guard for `todo_component is None` / `entity is None` (mirror reset_logic's warnings) so removal still completes if the todo platform is mid-reload.
   - Enumerate rotating tasks via `await store.async_get_rotating_tasks()` (added in Sub-Phase A). For each rotating task: `owners' = sanitize_owners(parse_owners(row["rotation_owners"]), remaining_slugs)`.
   - If `owners'` is empty → `await entity.async_delete_todo_items([uid])`, `await store.async_delete_task_metadata(uid)`, then `self.hass.bus.async_fire("lucarne_family_task_deleted", {"uid": uid})`.
   - Else if `row["current_owner"]` was the removed member → `current_owner = next_owner(owners', removed_slug, remaining_slugs)` (returns the first remaining owner since `removed_slug` is gone). Persist via `await store.async_update_task_metadata(uid, rotation_owners=serialize_owners(owners'), current_owner=current_owner)`. If `current_owner` was **not** the removed member but `owners'` changed, still persist the sanitized `rotation_owners`.
-- [ ] The store methods above are already executor-wrapped (`async_add_executor_job` inside `store.py`), and `entity.async_delete_todo_items` is an HA coroutine — so awaiting them here is non-blocking. Do **not** add a bare `sqlite3.connect`/file write in the config flow; never block the event loop (`CLAUDE.md`).
+- [x] The store methods above are already executor-wrapped (`async_add_executor_job` inside `store.py`), and `entity.async_delete_todo_items` is an HA coroutine — so awaiting them here is non-blocking. Do **not** add a bare `sqlite3.connect`/file write in the config flow; never block the event loop (`CLAUDE.md`).
 
 #### Tests (Sub-Phase B)
 
-- [ ] `test_reset_rotating.py`: a COMPLETED rotating task advances `current_owner` to the next owner and flips to NEEDS_ACTION; an uncompleted rotating task is unchanged after reset; a rotating task with one owner stays with that owner; with zero valid owners the task is deleted; `EVENT_ROTATION_ADVANCED` fires with correct `from`/`to`; rotating items are not double-counted in `total_reset`; a completed one-off chore is still deleted (no regression).
-- [ ] `test_completion_rotating.py`: completing a rotating task logs a `completion_log` row under `current_owner` (not `household`) and fires `lucarne_family_task_completed` with `member == current_owner`; a rotating completion does **not** fire `lucarne_family_all_routines_done`; reset of a rotating task logs `action="reset"`.
-- [ ] `test_store_rotation.py` / streak regression: a rotating task does **not** contribute to a member's streak (no `type == "routine"` row → not in the recurrence evaluator's expected set).
-- [ ] `test_config_flow_remove_member.py`: removing a middle owner keeps the task and continues the rotation; removing the current owner advances `current_owner` to a remaining owner; removing the last owner deletes the task.
+- [x] `test_reset_rotating.py`: a COMPLETED rotating task advances `current_owner` to the next owner and flips to NEEDS_ACTION; an uncompleted rotating task is unchanged after reset; a rotating task with one owner stays with that owner; with zero valid owners the task is deleted; `EVENT_ROTATION_ADVANCED` fires with correct `from`/`to`; rotating items are not double-counted in `total_reset`; a completed one-off chore is still deleted (no regression).
+- [x] `test_completion_rotating.py`: completing a rotating task logs a `completion_log` row under `current_owner` (not `household`) and fires `lucarne_family_task_completed` with `member == current_owner`; a rotating completion does **not** fire `lucarne_family_all_routines_done`; reset of a rotating task logs `action="reset"`.
+- [x] `test_store_rotation.py` / streak regression: a rotating task does **not** contribute to a member's streak (no `type == "routine"` row → not in the recurrence evaluator's expected set).
+- [x] `test_config_flow_remove_member.py`: removing a middle owner keeps the task and continues the rotation; removing the current owner advances `current_owner` to a remaining owner; removing the last owner deletes the task.
 
 #### Documentation (End of Sub-Phase)
 
-- [ ] `docs/services.md` — document the new `rotation_owners` / `current_owner` params on `add_task` and `update_task_metadata`, the `rotating` type, and the household-only + min-2-owners + no-recurrence rules.
-- [ ] `docs/events.md` — document `lucarne_family_rotation_advanced` (`uid`, `summary`, `from`, `to`) and note that rotating completions fire `lucarne_family_task_completed` attributed to the current owner.
-- [ ] `docs/architecture.md` — describe rotating-task storage (household list + `rotation_owners`/`current_owner`), the rotation-advances-at-reset flow, and the streak-exclusion rationale.
-- [ ] `CLAUDE.md` — add a "rotating task" bullet to Common pitfalls: lives in the household list, advances at daily reset (not on completion instant), excluded from streaks, owners math in `rotation.py` (never hand-roll), completions attributed to `current_owner`.
+- [x] `docs/services.md` — document the new `rotation_owners` / `current_owner` params on `add_task` and `update_task_metadata`, the `rotating` type, and the household-only + min-2-owners + no-recurrence rules.
+- [x] `docs/events.md` — document `lucarne_family_rotation_advanced` (`uid`, `summary`, `from`, `to`) and note that rotating completions fire `lucarne_family_task_completed` attributed to the current owner.
+- [x] `docs/architecture.md` — describe rotating-task storage (household list + `rotation_owners`/`current_owner`), the rotation-advances-at-reset flow, and the streak-exclusion rationale.
+- [x] `CLAUDE.md` — add a "rotating task" bullet to Common pitfalls: lives in the household list, advances at daily reset (not on completion instant), excluded from streaks, owners math in `rotation.py` (never hand-roll), completions attributed to `current_owner`.
 
 ### Build Verification (required before marking phase complete)
 
-- [ ] `ruff check custom_components/lucarne_family/` — clean
-- [ ] `mypy custom_components/lucarne_family/` — clean
-- [ ] `pytest tests/python/` — all pass; statement floor 86 met or exceeded
-- [ ] `npm run test:coverage && npm run lint && npm run typecheck && npm run build` — green (frontend untouched but must still build; **stage the bundle if `build` changes it**)
-- [ ] Scan pytest + ruff/mypy output for non-fatal warnings/deprecations — a zero exit code does not mean clean output
-- [ ] If `package-lock.json` or other lock files changed, stage them
-- [ ] Mark phase `status: done` only after all steps pass
+- [x] `ruff check custom_components/lucarne_family/` — clean
+- [x] `mypy custom_components/lucarne_family/` — clean
+- [x] `pytest tests/python/` — all pass; statement floor 86 met or exceeded
+- [x] `npm run test:coverage && npm run lint && npm run typecheck && npm run build` — green (frontend untouched but must still build; **stage the bundle if `build` changes it**)
+- [x] Scan pytest + ruff/mypy output for non-fatal warnings/deprecations — a zero exit code does not mean clean output
+- [x] If `package-lock.json` or other lock files changed, stage them
+- [x] Mark phase `status: done` only after all steps pass
 
 > **This is a hard gate.** Do not mark complete until every step passes.
 
 ### Manual Verification with MCP Tools (optional, after automated tests pass)
 
-- [ ] Deploy (**ask first**), then via Developer Tools / `mcp__home-assistant__ha_call_service` create a rotating task on `household` with owners `[a, b]`, complete it, fire `lucarne_family.perform_daily_reset`, and confirm `current_owner` advanced (inspect with `ha_get_state` / the WS `get_family` data).
-- [ ] Use `mcp__home-assistant__ha_get_logs` to confirm no exceptions during reset/completion.
+- [x] Deploy (**ask first**), then via Developer Tools / `mcp__home-assistant__ha_call_service` create a rotating task on `household` with owners `[a, b]`, complete it, fire `lucarne_family.perform_daily_reset`, and confirm `current_owner` advanced (inspect with `ha_get_state` / the WS `get_family` data).
+- [x] Use `mcp__home-assistant__ha_get_logs` to confirm no exceptions during reset/completion.
 
 ## Technical Details
 

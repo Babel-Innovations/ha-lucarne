@@ -10,6 +10,8 @@ export interface AddTaskParams {
   source?: TaskSource;
   assignee?: string;
   time_of_day?: TimeOfDay;
+  rotation_owners?: string[];
+  current_owner?: string;
 }
 
 export async function addTask(hass: HomeAssistant, params: AddTaskParams): Promise<void> {
@@ -24,6 +26,8 @@ export async function addTask(hass: HomeAssistant, params: AddTaskParams): Promi
   if (params.source !== undefined) serviceData.source = params.source;
   if (params.assignee !== undefined) serviceData.assignee = params.assignee;
   if (params.time_of_day !== undefined) serviceData.time_of_day = params.time_of_day;
+  if (params.rotation_owners !== undefined) serviceData.rotation_owners = params.rotation_owners;
+  if (params.current_owner !== undefined) serviceData.current_owner = params.current_owner;
 
   await hass.callService('lucarne_family', 'add_task', serviceData);
 }
@@ -34,6 +38,8 @@ export interface UpdateTaskMetadataFields {
   icon?: string;
   assignee?: string;
   time_of_day?: TimeOfDay;
+  rotation_owners?: string[];
+  current_owner?: string;
 }
 
 export async function updateTaskMetadata(
@@ -47,6 +53,8 @@ export async function updateTaskMetadata(
   if (fields.icon !== undefined) serviceData.icon = fields.icon;
   if (fields.assignee !== undefined) serviceData.assignee = fields.assignee;
   if (fields.time_of_day !== undefined) serviceData.time_of_day = fields.time_of_day;
+  if (fields.rotation_owners !== undefined) serviceData.rotation_owners = fields.rotation_owners;
+  if (fields.current_owner !== undefined) serviceData.current_owner = fields.current_owner;
 
   await hass.callService('lucarne_family', 'update_task_metadata', serviceData);
 }

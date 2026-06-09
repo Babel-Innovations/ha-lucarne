@@ -182,14 +182,14 @@ describe('lucarne-add-task-popover', () => {
     assert.ok(!('assignee' in call.payload), 'assignee not sent for non-household member');
   });
 
-  it('renders Type as a <select> with Routine and Chore options', async () => {
+  it('renders Type as a <select> with Routine, Chore, and Rotating options', async () => {
     const el = makeEl();
     await el.updateComplete;
 
     const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
     assert.ok(typeSelect, 'Type select exists');
     const values = Array.from(typeSelect.options).map((o) => o.value).sort();
-    assert.deepEqual(values, ['chore', 'routine']);
+    assert.deepEqual(values, ['chore', 'rotating', 'routine']);
     assert.equal(shadow(el, '.type-btn'), null, 'old type buttons removed');
   });
 
@@ -340,6 +340,333 @@ describe('lucarne-add-task-popover', () => {
 
     const call = fakeHass.calls.callService[0] as any;
     assert.equal(call.payload.time_of_day, 'anytime');
+  });
+
+  // ---------- multi-member "Also add to" checklist ----------
+
+  it('does not render "Also add to" checklist when type is chore (default)', async () => {
+    const el = makeEl();
+    await el.updateComplete;
+
+    // Chore is default — checklist must be absent.
+    const labels = Array.from(el.shadowRoot!.querySelectorAll('label')).map((l) => l.textContent?.trim() ?? '');
+    assert.ok(
+      !labels.some((t) => t.toLowerCase().startsWith('also add')),
+      `"Also add to" label must not appear for chore (found: ${labels.join(', ')})`,
+    );
+    assert.equal(el.shadowRoot!.querySelector('.also-add-list'), null, 'no .also-add-list for chore');
+  });
+
+  it('renders "Also add to" checklist when type is routine, excluding current member and household', async () => {
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    await el.updateComplete;
+
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'routine';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    const list = el.shadowRoot!.querySelector('.also-add-list');
+    assert.ok(list, '.also-add-list rendered for routine');
+
+    // Only Bob should appear (Anna is the current member; Household excluded).
+    const items = Array.from(list!.querySelectorAll('.also-add-item'));
+    assert.equal(items.length, 1, 'exactly one other non-household member offered');
+    assert.ok(items[0].textContent?.includes('Bob'), 'Bob appears as option');
+    assert.ok(!items[0].textContent?.includes('Anna'), 'Anna does not appear');
+    assert.ok(!items[0].textContent?.includes('Household'), 'Household does not appear');
+  });
+
+  it('submitting with 2 extra members ticked issues 3 add_task calls', async () => {
+    const MEMBER_CARA: MemberSummary = {
+      slug: 'cara',
+      name: 'Cara',
+      color: '#aabbcc',
+      avatar: null,
+      todo_entity_id: 'todo.cara',
+      streak_counter_id: 'counter.cara_streak',
+    };
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, MEMBER_CARA, HOUSEHOLD]);
+    await el.updateComplete;
+    const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+
+    // Switch to routine.
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'routine';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    // Tick Bob and Cara.
+    const checkboxes = Array.from(
+      el.shadowRoot!.querySelectorAll<HTMLInputElement>('.also-add-item input[type="checkbox"]'),
+    );
+    assert.equal(checkboxes.length, 2, 'two extra members offered');
+    for (const cb of checkboxes) {
+      cb.checked = true;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    await el.updateComplete;
+
+    const summaryInput = shadow(el, '#at-summary') as HTMLInputElement;
+    summaryInput.value = 'Brush teeth';
+    summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await el.updateComplete;
+
+    (shadow(el, '.btn-submit') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 100));
+
+    assert.equal(fakeHass.calls.callService.length, 3, 'exactly 3 add_task calls issued');
+    const slugs = (fakeHass.calls.callService as any[]).map((c) => c.payload.member);
+    assert.ok(slugs.includes('anna'), 'anna call issued');
+    assert.ok(slugs.includes('bob'), 'bob call issued');
+    assert.ok(slugs.includes('cara'), 'cara call issued');
+
+    // All calls use type: routine with identical summary.
+    for (const call of fakeHass.calls.callService as any[]) {
+      assert.equal(call.domain, 'lucarne_family');
+      assert.equal(call.service, 'add_task');
+      assert.equal(call.payload.type, 'routine');
+      assert.equal(call.payload.summary, 'Brush teeth');
+    }
+  });
+
+  it('submitting with no extra members ticked issues exactly 1 add_task call', async () => {
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    await el.updateComplete;
+    const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'routine';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    const summaryInput = shadow(el, '#at-summary') as HTMLInputElement;
+    summaryInput.value = 'Make bed';
+    summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await el.updateComplete;
+
+    (shadow(el, '.btn-submit') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(fakeHass.calls.callService.length, 1, 'only 1 add_task call when no extras ticked');
+    const call = fakeHass.calls.callService[0] as any;
+    assert.equal(call.payload.member, 'anna');
+  });
+
+  it('switching type from routine to chore clears ticked "also add to" selection', async () => {
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    await el.updateComplete;
+    const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+
+    // Switch to routine and tick Bob.
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'routine';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    const cb = el.shadowRoot!.querySelector<HTMLInputElement>('.also-add-item input[type="checkbox"]')!;
+    assert.ok(cb, 'checkbox found');
+    cb.checked = true;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    // Switch back to chore — selection must be cleared and checklist hidden.
+    typeSelect.value = 'chore';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    assert.equal(el.shadowRoot!.querySelector('.also-add-list'), null, 'checklist hidden for chore');
+
+    // Now switch back to routine — checklist re-renders with nothing ticked.
+    typeSelect.value = 'routine';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    const cbAfter = el.shadowRoot!.querySelector<HTMLInputElement>('.also-add-item input[type="checkbox"]')!;
+    assert.ok(cbAfter, 'checkbox re-renders');
+    assert.equal(cbAfter.checked, false, 'checkbox is unchecked after type round-trip');
+
+    // Submit without ticking anything — should be 1 call, not 2.
+    const summaryInput = shadow(el, '#at-summary') as HTMLInputElement;
+    summaryInput.value = 'Test task';
+    summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await el.updateComplete;
+
+    (shadow(el, '.btn-submit') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(fakeHass.calls.callService.length, 1, 'only 1 add_task call after stale tick cleared');
+  });
+
+  it('keeps popover open and shows error when add_task call rejects', async () => {
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    await el.updateComplete;
+
+    // Make callService reject.
+    (el.hass as any).callService = async () => {
+      throw new Error('HA service failed');
+    };
+
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'routine';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    const summaryInput = shadow(el, '#at-summary') as HTMLInputElement;
+    summaryInput.value = 'Brush teeth';
+    summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await el.updateComplete;
+
+    const closedEvents: Event[] = [];
+    el.addEventListener('popover-close', (e) => closedEvents.push(e));
+
+    (shadow(el, '.btn-submit') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 100));
+
+    assert.equal(closedEvents.length, 0, 'popover must NOT close on error');
+    const errorMsg = shadow(el, '.error-msg');
+    assert.ok(errorMsg, 'error message shown');
+    assert.ok(errorMsg!.textContent!.includes('HA service failed'), 'error text displayed');
+    assert.equal((shadow(el, '.btn-submit') as HTMLButtonElement).disabled, false, 'submit re-enabled after error');
+  });
+
+  // ---------- rotating type ----------
+
+  it('selecting rotating hides recurrence and due, shows owners picker', async () => {
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    await el.updateComplete;
+
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'rotating';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    assert.equal(shadow(el, '#at-recurrence'), null, 'recurrence hidden for rotating');
+    assert.equal(shadow(el, '#at-due'), null, 'due hidden for rotating');
+    assert.ok(el.shadowRoot!.querySelector('.owners-list'), 'owners-list shown for rotating');
+  });
+
+  it('submit is disabled with <2 owners for rotating', async () => {
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    await el.updateComplete;
+
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'rotating';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    const summaryInput = shadow(el, '#at-summary') as HTMLInputElement;
+    summaryInput.value = 'Clean bathroom';
+    summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await el.updateComplete;
+
+    // No owners selected yet
+    const submitBtn = shadow(el, '.btn-submit') as HTMLButtonElement;
+    assert.equal(submitBtn.disabled, true, 'submit disabled with 0 owners');
+
+    // Select only one owner
+    const checkboxes = Array.from(el.shadowRoot!.querySelectorAll<HTMLInputElement>('.owner-item input[type="checkbox"]'));
+    assert.ok(checkboxes.length >= 1, 'owner checkboxes rendered');
+    checkboxes[0].checked = true;
+    checkboxes[0].dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    assert.equal((shadow(el, '.btn-submit') as HTMLButtonElement).disabled, true, 'submit still disabled with 1 owner');
+  });
+
+  it('submitting rotating task with 2 owners issues 1 add_task call with correct payload', async () => {
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    await el.updateComplete;
+    const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'rotating';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    const summaryInput = shadow(el, '#at-summary') as HTMLInputElement;
+    summaryInput.value = 'Clean bathroom';
+    summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await el.updateComplete;
+
+    // Check both members (Anna and Bob)
+    const checkboxes = Array.from(el.shadowRoot!.querySelectorAll<HTMLInputElement>('.owner-item input[type="checkbox"]'));
+    assert.equal(checkboxes.length, 2, 'two non-household members shown');
+    for (const cb of checkboxes) {
+      cb.checked = true;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    await el.updateComplete;
+
+    const submitBtn = shadow(el, '.btn-submit') as HTMLButtonElement;
+    assert.equal(submitBtn.disabled, false, 'submit enabled with 2 owners');
+
+    submitBtn.click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(fakeHass.calls.callService.length, 1, 'exactly 1 add_task call');
+    const call = fakeHass.calls.callService[0] as any;
+    assert.equal(call.domain, 'lucarne_family');
+    assert.equal(call.service, 'add_task');
+    assert.equal(call.payload.member, 'household');
+    assert.equal(call.payload.type, 'rotating');
+    assert.ok(Array.isArray(call.payload.rotation_owners), 'rotation_owners sent');
+    assert.equal(call.payload.rotation_owners.length, 2);
+    assert.ok(!('recurrence' in call.payload), 'no recurrence for rotating');
+  });
+
+  it('reorder changes the emitted rotation_owners order', async () => {
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    await el.updateComplete;
+    const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'rotating';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    // Check Anna then Bob
+    const checkboxes = Array.from(el.shadowRoot!.querySelectorAll<HTMLInputElement>('.owner-item input[type="checkbox"]'));
+    for (const cb of checkboxes) {
+      cb.checked = true;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    await el.updateComplete;
+
+    // Move Bob up (Bob was added second, so is at index 1; click his "up" button)
+    const upBtns = Array.from(el.shadowRoot!.querySelectorAll<HTMLButtonElement>('.reorder-btn'));
+    // The up buttons that are not disabled are for items at index > 0
+    const enabledUp = upBtns.filter((b) => !b.disabled && b.getAttribute('aria-label')?.includes('earlier'));
+    assert.ok(enabledUp.length >= 1, 'at least one enabled up button');
+    enabledUp[0].click();
+    await el.updateComplete;
+
+    const summaryInput = shadow(el, '#at-summary') as HTMLInputElement;
+    summaryInput.value = 'Clean bathroom';
+    summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await el.updateComplete;
+
+    (shadow(el, '.btn-submit') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    const call = fakeHass.calls.callService[0] as any;
+    // After moving Bob up, Bob should be first
+    assert.equal(call.payload.rotation_owners[0], 'bob', 'Bob moved to first after up click');
+    assert.equal(call.payload.rotation_owners[1], 'anna', 'Anna is second after Bob moved up');
+  });
+
+  it('"Also add to" checklist is not shown for rotating type', async () => {
+    const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    await el.updateComplete;
+
+    const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+    typeSelect.value = 'rotating';
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+
+    assert.equal(el.shadowRoot!.querySelector('.also-add-list'), null, 'no also-add-list for rotating');
+    const labels = Array.from(el.shadowRoot!.querySelectorAll('label')).map((l) => l.textContent?.trim() ?? '');
+    assert.ok(!labels.some((t) => t.toLowerCase().startsWith('also add')), 'no "Also add to" label for rotating');
   });
 
   it('omits recurrence from payload for chore even if RRULE state lingers', async () => {

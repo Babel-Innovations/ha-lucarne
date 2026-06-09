@@ -1048,8 +1048,12 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                         errors["base"] = "entity_delete_failed"
 
                 if not errors:
-                    remaining = [m for m in members if m.slug != self._selected_member_slug]
+                    removed_slug = self._selected_member_slug
+                    remaining = [m for m in members if m.slug != removed_slug]
                     await self._save_members(remaining)
+                    await self._sanitize_rotating_tasks_after_removal(
+                        removed_slug, remaining
+                    )
                     self._selected_member_slug = None
                     return await self.async_step_manage_members()
 
@@ -1064,6 +1068,78 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="remove_member", data_schema=schema, errors=errors
         )
+
+    async def _sanitize_rotating_tasks_after_removal(
+        self, removed_slug: str | None, remaining: list[Member]
+    ) -> None:
+        """Sanitize rotating tasks when a member is removed.
+
+        Drops the removed member from each rotating task's owner list.
+        If zero owners remain, deletes the task. If the current owner was removed,
+        advances current_owner to the next remaining owner.
+        """
+        from homeassistant.components.todo.const import DATA_COMPONENT
+
+        from .const import DOMAIN, HOUSEHOLD_ENTITY_ID
+        from .rotation import next_owner, parse_owners, sanitize_owners, serialize_owners
+        from .store import LucarneFamilyStore
+
+        store: LucarneFamilyStore = self.hass.data[DOMAIN][self._entry.entry_id]["store"]
+        remaining_slugs = {m.slug for m in remaining}
+
+        try:
+            rotating_tasks = await store.async_get_rotating_tasks()
+        except Exception as exc:
+            _LOGGER.debug(
+                "Could not query rotating tasks during member removal: %s", exc
+            )
+            return
+        if not rotating_tasks:
+            return
+
+        todo_component = self.hass.data.get(DATA_COMPONENT)
+        entity = None
+        if todo_component is not None:
+            entity = todo_component.get_entity(HOUSEHOLD_ENTITY_ID)
+        if entity is None:
+            _LOGGER.warning(
+                "Household todo entity not available during member removal; "
+                "rotating task deletion may be incomplete"
+            )
+
+        for row in rotating_tasks:
+            uid: str = row["item_uid"]
+            current: str = row.get("current_owner", "")
+            owners_prime = sanitize_owners(
+                parse_owners(row.get("rotation_owners", "")), remaining_slugs
+            )
+
+            if not owners_prime:
+                # No owners left — delete the task entirely.
+                if entity is not None:
+                    try:
+                        await entity.async_delete_todo_items([uid])
+                    except Exception as exc:
+                        _LOGGER.warning(
+                            "Failed to delete rotating todo item %s: %s", uid, exc
+                        )
+                await store.async_delete_task_metadata(uid)
+                self.hass.bus.async_fire(
+                    "lucarne_family_task_deleted", {"uid": uid}
+                )
+            else:
+                new_current = current
+                if current == removed_slug or current not in owners_prime:
+                    # Advance to the next remaining owner.
+                    new_current = (
+                        next_owner(owners_prime, removed_slug or "", remaining_slugs)
+                        or owners_prime[0]
+                    )
+                await store.async_update_task_metadata(
+                    uid,
+                    rotation_owners=serialize_owners(owners_prime),
+                    current_owner=new_current,
+                )
 
     async def async_step_edit_schedule(
         self, user_input: dict[str, Any] | None = None

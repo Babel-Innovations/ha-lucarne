@@ -25,6 +25,8 @@ add_task:
               label: Routine
             - value: chore
               label: Chore
+            - value: rotating
+              label: Rotating
     recurrence:
       name: Recurrence
       description: >-
@@ -68,6 +70,20 @@ add_task:
               label: Afternoon
             - value: night
               label: Night
+    rotation_owners:
+      name: Rotation owners
+      description: >-
+        Ordered list of member slugs for rotating tasks (type=rotating only).
+        Minimum 2 unique known slugs. Duplicates are removed, preserving order.
+      selector:
+        object:
+    current_owner:
+      name: Current owner
+      description: >-
+        Member slug whose turn it is (rotating tasks only). Defaults to the
+        first entry in rotation_owners when not provided.
+      selector:
+        text:
 
 update_task_metadata:
   name: Update Task Metadata
@@ -99,6 +115,8 @@ update_task_metadata:
               label: Routine
             - value: chore
               label: Chore
+            - value: rotating
+              label: Rotating
     assignee:
       name: Assignee
       description: New assignee member slug (household tasks only).
@@ -118,6 +136,18 @@ update_task_metadata:
               label: Afternoon
             - value: night
               label: Night
+    rotation_owners:
+      name: Rotation owners
+      description: >-
+        New ordered list of member slugs for a rotating task. At least 1 slug;
+        current_owner must remain in the list.
+      selector:
+        object:
+    current_owner:
+      name: Current owner
+      description: New current owner slug for a rotating task. Must be in rotation_owners.
+      selector:
+        text:
 
 delete_task:
   name: Delete Task

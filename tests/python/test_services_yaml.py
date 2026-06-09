@@ -14,8 +14,12 @@ _EXPECTED_FIELDS: dict[str, set[str]] = {
     "add_task": {
         "member", "summary", "type", "recurrence", "icon",
         "due", "source", "assignee", "time_of_day",
+        "rotation_owners", "current_owner",
     },
-    "update_task_metadata": {"uid", "icon", "recurrence", "type", "assignee", "time_of_day"},
+    "update_task_metadata": {
+        "uid", "icon", "recurrence", "type", "assignee", "time_of_day",
+        "rotation_owners", "current_owner",
+    },
     "delete_task": {"uid"},
     "toggle_task": {"uid"},
     "upload_avatar": {"member", "image_data", "mime_type"},

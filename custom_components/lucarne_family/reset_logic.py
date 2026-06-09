@@ -7,8 +7,9 @@ from homeassistant.components.todo import TodoItem
 from homeassistant.components.todo.const import DATA_COMPONENT, TodoItemStatus
 from homeassistant.core import HomeAssistant
 
-from .completion_listener import _RESET_PENDING_KEY
-from .const import HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
+from .completion_listener import _RESET_PENDING_KEY, _RESET_ROTATING_PREV_KEY
+from .const import EVENT_ROTATION_ADVANCED, HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
+from .rotation import next_owner, parse_owners, sanitize_owners, serialize_owners
 from .store import LucarneFamilyStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -93,6 +94,62 @@ async def async_perform_daily_reset(hass: HomeAssistant, store: LucarneFamilySto
                     reset_pending.discard(item_uid)
                     raise
                 total_reset += 1
+            elif item_type == "rotating":
+                # Rotating tasks live in the household list only.
+                # If completed: advance current_owner to the next owner, then
+                # flip back to NEEDS_ACTION. If zero valid owners remain, delete.
+                known_slugs = {m.slug for m in store.get_members()}
+                owners = sanitize_owners(
+                    parse_owners(metadata.get("rotation_owners", "")), known_slugs
+                )
+                if not owners:
+                    # No valid owners left — delete the task.
+                    await entity.async_delete_todo_items([item_uid])
+                    await store.async_delete_task_metadata(item_uid)
+                    hass.bus.async_fire(
+                        "lucarne_family_task_deleted", {"uid": item_uid}
+                    )
+                    total_deleted += 1
+                    continue
+                prev = metadata.get("current_owner", "")
+                # owners is non-empty (guarded above), so next_owner cannot return None.
+                nxt = next_owner(owners, prev, known_slugs) or owners[0]
+                # Stash prev for the async completion_listener to attribute the
+                # reset log row to the person who completed the task. The listener
+                # runs via hass.async_create_task, so by the time it reads metadata
+                # current_owner will already be advanced to nxt in the DB — the
+                # stash lets it read the pre-advance value without a race.
+                hass.data.setdefault(_RESET_ROTATING_PREV_KEY, {})[item_uid] = prev
+                reset_pending.add(item_uid)
+                try:
+                    await entity.async_update_todo_item(
+                        TodoItem(
+                            uid=item_uid,
+                            summary=item.summary,
+                            status=TodoItemStatus.NEEDS_ACTION,
+                            due=item.due,
+                            description=item.description,
+                        )
+                    )
+                except Exception:
+                    reset_pending.discard(item_uid)
+                    raise
+                # Persist the new owner (and sanitized owners if changed).
+                owners_str = serialize_owners(owners)
+                await store.async_update_task_metadata(
+                    item_uid,
+                    rotation_owners=owners_str,
+                    current_owner=nxt,
+                )
+                hass.bus.async_fire(
+                    EVENT_ROTATION_ADVANCED,
+                    {
+                        "uid": item_uid,
+                        "summary": item.summary,
+                        "from": prev,
+                        "to": nxt,
+                    },
+                )
             elif item_type == "chore":
                 # One-off chores are removed once completed so they don't stay
                 # visible forever. Mirrors task_service.handle_delete_task.

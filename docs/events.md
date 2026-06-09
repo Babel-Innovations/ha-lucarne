@@ -12,12 +12,15 @@ automations via `trigger: event`.
 Fired when any managed todo item transitions from `needs_action` to `completed`, regardless of the
 source (card tap, Developer Tools, voice command, another automation, etc.).
 
+For **rotating tasks**, `member` is the `current_owner` slug (the person whose turn it was), not
+the generic `"household"` slug — so the history accurately shows who completed it.
+
 **Payload:**
 
 ```yaml
 event_type: lucarne_family_task_completed
 event_data:
-  member: anna            # member slug
+  member: anna            # member slug (for rotating tasks: current_owner at time of completion)
   uid: "abc-123"          # todo item UID
   summary: "Brush teeth"  # item display name at time of completion
 ```
@@ -58,6 +61,30 @@ action:
 
 ---
 
+### lucarne_family_rotation_advanced
+
+Fired when a rotating task's `current_owner` advances to the next owner. This happens at the daily
+reset window when the task was completed by the previous owner.
+
+**Payload:**
+
+```yaml
+event_type: lucarne_family_rotation_advanced
+event_data:
+  uid: "abc-123"           # rotating task UID
+  summary: "Pick up milk"  # task display name
+  from: alice              # previous owner slug
+  to: bob                  # new owner slug
+```
+
+**Notes:**
+- Only fires when the task was **completed** before reset. An uncompleted rotating task does not
+  advance the owner and does not fire this event.
+- If the previous owner was removed from the family (an edge case where the owner list is sanitized
+  at reset time), `from` may reflect the slug that was removed.
+
+---
+
 ### lucarne_family_task_added
 
 Fired when `lucarne_family.add_task` successfully creates a new task.
@@ -69,7 +96,7 @@ event_type: lucarne_family_task_added
 event_data:
   member: anna
   uid: "abc-123"
-  type: routine       # "routine" or "chore"
+  type: routine       # "routine", "chore", or "rotating"
   summary: "Make bed"
 ```
 
