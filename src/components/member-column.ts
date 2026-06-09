@@ -34,13 +34,13 @@ function choreCompare(a: RenderableTask, b: RenderableTask): number {
 }
 
 // Within a time-of-day bucket, routines list first (alpha) then one-off chores
-// (by due date, then alpha), so recurring items stay above ad-hoc tasks.
+// and rotating tasks (by due date / alpha), so recurring items stay above ad-hoc tasks.
 function sortWithinBucket(tasks: RenderableTask[]): RenderableTask[] {
   const routines = tasks
     .filter((t) => t.metadata.type === 'routine')
     .sort((a, b) => a.summary.localeCompare(b.summary));
-  const chores = tasks.filter((t) => t.metadata.type === 'chore').sort(choreCompare);
-  return [...routines, ...chores];
+  const rest = tasks.filter((t) => t.metadata.type !== 'routine').sort(choreCompare);
+  return [...routines, ...rest];
 }
 
 // Bucket every task — routines AND one-off chores — by its time_of_day, so a
@@ -166,6 +166,7 @@ export class LucarneMemberColumn extends LitElement {
 
   @property({ attribute: false }) member!: MemberSummary;
   @property({ attribute: false }) tasks: RenderableTask[] = [];
+  @property({ attribute: false }) members: MemberSummary[] = [];
   @property({ type: Number }) streak = 0;
   @property({ type: Boolean, attribute: 'show-routines' }) showRoutines = true;
   @property({ type: Boolean, attribute: 'show-tasks' }) showTasks = true;
@@ -251,6 +252,7 @@ export class LucarneMemberColumn extends LitElement {
     const visibleTasks = this.tasks.filter((t) => {
       if (t.metadata.type === 'routine') return this.showRoutines;
       if (t.metadata.type === 'chore') return this.showTasks;
+      if (t.metadata.type === 'rotating') return this.showTasks;
       return false;
     });
     const buckets = bucketTasks(visibleTasks);
@@ -292,6 +294,7 @@ export class LucarneMemberColumn extends LitElement {
                 <lucarne-task-row
                   .task=${t}
                   .memberColor=${this.member.color}
+                  .members=${this.members}
                 ></lucarne-task-row>
               `)}
             </div>

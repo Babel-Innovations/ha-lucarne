@@ -229,6 +229,84 @@ Each member has: `slug` (stable ID, used in entity IDs), `name` (display, freely
 
 **Reconciliation**: `async_setup_entry` calls `_async_reconcile_member_entities` on every load. If both entities for a member are missing, they are recreated. If only one is missing (partial state), a warning is logged — per-side recovery is deferred to Phase 3.
 
+### Rotating tasks
+
+A **rotating task** is a shared household chore that cycles through an ordered list of owners. It
+lives exclusively in `todo.lucarne_household` (member_slug = `"household"`) and carries two extra
+columns in `task_metadata`:
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `rotation_owners` | `TEXT` (JSON array) | Ordered list of member slugs who take turns |
+| `current_owner` | `TEXT` | Slug of the person whose turn it is *right now* |
+
+**Storage invariants**
+- `rotation_owners` is a JSON-serialised `list[str]`; `rotation.py` owns all ser/de and must be
+  the only place these strings are parsed or produced.
+- `current_owner` must always be a member in `rotation_owners`. When a member is removed from the
+  family, `_sanitize_rotating_tasks_after_removal` in `config_flow.py` strips the removed slug,
+  advances `current_owner` if needed, and deletes the task if no valid owners remain.
+
+**Rotation-advances-at-reset flow**
+
+The daily-reset window (not the moment of completion) is when ownership shifts:
+
+```
+Daily reset fires
+    │
+    ├── For each item in todo.lucarne_household with type == "rotating":
+    │       is the item completed?
+    │           yes → advance current_owner → flip item back to NEEDS_ACTION
+    │                  → fire lucarne_family_rotation_advanced {uid, summary, from, to}
+    │           no  → leave current_owner unchanged → flip item back to NEEDS_ACTION
+    │                  (no event)
+    └── (rotating items are NOT counted in the routine reset total)
+```
+
+Because `completion_listener._on_state_changed` dispatches the handler via `hass.async_create_task`
+(an async task), the handler runs after `reset_logic` has completed all its awaits — including the
+`async_update_task_metadata(current_owner=nxt)` call. A naive "flip before advance" ordering would
+still attribute the reset row to `nxt` (the wrong person).
+
+The actual mechanism is a **stash dict** in `hass.data[_RESET_ROTATING_PREV_KEY]`: `reset_logic`
+writes `{uid: prev}` into the stash before flipping the item. When the listener runs and detects a
+rotating reset row, it pops from the stash (using `prev`) instead of reading `current_owner` from
+the already-advanced metadata. This is the same pattern as `_RESET_PENDING_KEY` (the dict that
+tells the listener to log `action="reset"` instead of `action="undone"`).
+
+**Streak exclusion**
+
+Rotating tasks are excluded from streak computation:
+- `recurrence_evaluator` (in `recurrence.py`) filters by `type == "routine"` — rotating items are
+  never returned, so they cannot satisfy or break a streak.
+- The `all_routines_done` gate in `completion_listener.py` also filters on routine type — a
+  rotating task completion does not trigger `lucarne_family_all_routines_done`.
+
+**Completion attribution**
+
+When `completion_listener.py` detects a transition to `completed` for a rotating task, it
+overrides `member_slug` with `metadata["current_owner"]`. This means `lucarne_family_task_completed`
+fires with the turn-holder's slug, not `"household"`.
+
+**Card-side routing (chores card)**
+
+`tasksByMember` is keyed by the todo entity a task lives in — all rotating tasks appear
+in `tasksByMember.get('household')`, never in `tasksByMember.get(<owner-slug>)`. The chores
+card's `_resolveMembers()` therefore routes rotating tasks explicitly:
+
+- **Non-household column** (`slug !== 'household'`): pull rotating tasks from the household
+  bucket where `metadata.current_owner === slug` and concatenate them onto the member's own
+  tasks. Gate by `show_tasks` (same toggle as chores).
+- **Household column**: rotating tasks are excluded so they don't double-render in both the
+  owner's column and the household column.
+
+A `↻` badge and a "next: \<name\>" sub-line are rendered by `lucarne-task-row` for rotating
+tasks. The next-owner hint is computed via `nextOwner()` from `src/shared/rotation.ts`, which
+mirrors the Python backend's wrapping logic. It is display-only — the backend advances
+`current_owner` at reset time.
+
+---
+
 ### SQLite schema versioning
 
 `schema_version` table tracks the applied DDL version. Phase 1 initialises version 1. Future phases add migration logic in `store.async_migrate`.

@@ -45,3 +45,6 @@ AVATAR_ALLOWED_MIME: frozenset[str] = frozenset({"image/png", "image/jpeg", "ima
 
 # Round-trip event names
 EVENT_APPLE_WRITEBACK_REQUESTED = "lucarne_family_apple_writeback_requested"
+
+# Rotating-task event names
+EVENT_ROTATION_ADVANCED = "lucarne_family_rotation_advanced"

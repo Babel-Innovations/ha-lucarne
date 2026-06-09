@@ -288,6 +288,75 @@ describe('subscribeFamilyState', () => {
     assert.equal(last.streakByMember.get('anna'), 7, 'streak value from counter state propagates');
   });
 
+  it('parses rotation_owners JSON string into string[]', async () => {
+    const fakeHass = makeFamilyHass({
+      members: [MEMBER_ANNA],
+      taskMetadata: [
+        {
+          ...TASK_META,
+          item_uid: 'rot-1',
+          member_slug: 'household',
+          type: 'rotating',
+          recurrence: '',
+          // Wire sends rotation_owners as a JSON string
+          ...(({ rotation_owners: '["alice","bob","cara"]' } as unknown) as Partial<TaskMetadata>),
+          current_owner: 'alice',
+        } as TaskMetadata,
+      ],
+      todoItems: {
+        'todo.anna': [],
+        'todo.lucarne_household': [{ uid: 'rot-1', summary: 'Clean bathroom', status: 'needs_action' }],
+      },
+    });
+
+    const states: import('../../src/shared/family-subscription.js').FamilyState[] = [];
+    const unsub = subscribeFamilyState(fakeHass as unknown as import('../../src/shared/types.js').HomeAssistant, (s) => {
+      states.push(s);
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+    unsub();
+
+    const last = states[states.length - 1];
+    const meta = last.taskMetadataByUid.get('rot-1');
+    assert.ok(meta, 'metadata found for rotating task');
+    assert.deepEqual(meta!.rotation_owners, ['alice', 'bob', 'cara'], 'rotation_owners parsed from JSON string');
+    assert.equal(meta!.current_owner, 'alice');
+  });
+
+  it('produces [] for malformed rotation_owners JSON string', async () => {
+    const fakeHass = makeFamilyHass({
+      members: [MEMBER_ANNA],
+      taskMetadata: [
+        {
+          ...TASK_META,
+          item_uid: 'rot-bad',
+          member_slug: 'household',
+          type: 'rotating',
+          recurrence: '',
+          ...(({ rotation_owners: 'not-json' } as unknown) as Partial<TaskMetadata>),
+        } as TaskMetadata,
+      ],
+      todoItems: {
+        'todo.anna': [],
+        'todo.lucarne_household': [{ uid: 'rot-bad', summary: 'Broken', status: 'needs_action' }],
+      },
+    });
+
+    const states: import('../../src/shared/family-subscription.js').FamilyState[] = [];
+    const unsub = subscribeFamilyState(fakeHass as unknown as import('../../src/shared/types.js').HomeAssistant, (s) => {
+      states.push(s);
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+    unsub();
+
+    const last = states[states.length - 1];
+    const meta = last.taskMetadataByUid.get('rot-bad');
+    assert.ok(meta, 'metadata found for bad rotating task');
+    assert.deepEqual(meta!.rotation_owners, [], 'malformed JSON produces []');
+  });
+
   it('includes household tasks in tasksByMember under slug "household"', async () => {
     const fakeHass = makeFamilyHass({
       members: [MEMBER_ANNA],

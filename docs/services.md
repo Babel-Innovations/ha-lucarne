@@ -14,13 +14,23 @@ Add a task to a family member's or household todo list.
 |-------|------|----------|-------------|
 | `member` | string | yes | Member slug, or `"household"` for the shared list |
 | `summary` | string | yes | Task title (max 200 characters) |
-| `type` | string | no | `"routine"` or `"chore"` (default: `"chore"`) |
-| `recurrence` | string | no | RRULE string (empty string = one-off) |
+| `type` | string | no | `"routine"`, `"chore"`, or `"rotating"` (default: `"chore"`) |
+| `recurrence` | string | no | RRULE string (empty string = one-off). Must be empty for `rotating` tasks. |
 | `icon` | string | no | Single emoji icon |
 | `due` | datetime | no | Optional due date/time |
 | `source` | string | no | Creation source: `"manual"`, `"template"`, or `"apple"` (default: `"manual"`) |
 | `assignee` | string | no | Member slug to assign; only accepted when `member == "household"` |
 | `time_of_day` | string | no | One of `"anytime"`, `"morning"`, `"afternoon"`, `"night"` (default: `"anytime"`). Display attribute only — does not affect reset/streak logic. |
+| `rotation_owners` | list[string] | no | **Rotating tasks only.** Ordered list of member slugs (minimum 2 unique known slugs). Duplicates are removed preserving order. |
+| `current_owner` | string | no | **Rotating tasks only.** Slug of the member whose turn it is. Defaults to `rotation_owners[0]` when not provided. Must be in `rotation_owners`. |
+
+**Rotating task rules:**
+- `member` must be `"household"` — rotating tasks only live in the shared list.
+- `rotation_owners` must have ≥ 2 unique, known member slugs.
+- `recurrence` must be absent or empty.
+- `current_owner` must be one of the `rotation_owners`.
+- Rotation advances at the next daily-reset window, not instantly on completion.
+- Rotating tasks are excluded from streaks.
 
 **Fires event**: `lucarne_family_task_added` with `{member, uid, type, summary}`
 
@@ -30,6 +40,10 @@ Add a task to a family member's or household todo list.
 - `source` not in `{"manual", "template", "apple"}` → schema error
 - `assignee` on a non-household member → `ServiceValidationError`
 - `assignee` not a known member slug → `ServiceValidationError`
+- `type == "rotating"` and `member != "household"` → `ServiceValidationError`
+- `type == "rotating"` and `rotation_owners` has < 2 unique known slugs → `ServiceValidationError`
+- `type == "rotating"` and `recurrence` is non-empty → `ServiceValidationError`
+- `type == "rotating"` and `current_owner` not in `rotation_owners` → `ServiceValidationError`
 
 **Example call (Developer Tools)**:
 ```yaml
@@ -53,18 +67,23 @@ Update metadata fields on an existing task. Only the fields provided are changed
 | `uid` | string | yes | The task's unique identifier (UUID) |
 | `icon` | string | no | New emoji icon |
 | `recurrence` | string | no | New RRULE string |
-| `type` | string | no | New type: `"routine"` or `"chore"` |
+| `type` | string | no | New type: `"routine"`, `"chore"`, or `"rotating"` |
 | `assignee` | string | no | New assignee member slug (household tasks only) |
 | `time_of_day` | string | no | New bucket value (`"anytime"`, `"morning"`, `"afternoon"`, `"night"`). |
+| `rotation_owners` | list[string] | no | **Rotating tasks only.** New ordered owner list (≥ 1 unique known slug; `current_owner` must remain in the list). |
+| `current_owner` | string | no | **Rotating tasks only.** New current-owner slug. Must be in `rotation_owners`. |
 
 **Fires event**: `lucarne_family_task_metadata_updated`
 
 **Validation errors**:
 - `uid` not found in task_metadata → `ServiceValidationError`
 - `recurrence` non-empty and not a valid RRULE → schema error
-- `type` not in `{"routine", "chore"}` → schema error
+- `type` not in `{"routine", "chore", "rotating"}` → schema error
 - `assignee` on a non-household task → `ServiceValidationError`
 - `assignee` not a known member slug → `ServiceValidationError`
+- `rotation_owners` or `current_owner` on a non-rotating task → `ServiceValidationError`
+- `rotation_owners` contains unknown slugs → `ServiceValidationError`
+- `current_owner` not in the effective `rotation_owners` list → `ServiceValidationError`
 
 **Example call**:
 ```yaml

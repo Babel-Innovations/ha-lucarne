@@ -46,6 +46,76 @@ def _init_db(db_path: str, schema_sql: str) -> None:
                 "ALTER TABLE task_metadata ADD COLUMN time_of_day "
                 "TEXT NOT NULL DEFAULT 'anytime'"
             )
+        # Migration: add rotating-task columns (Phase 2).
+        if "rotation_owners" not in existing_cols:
+            con.execute(
+                "ALTER TABLE task_metadata ADD COLUMN rotation_owners "
+                "TEXT NOT NULL DEFAULT ''"
+            )
+        if "current_owner" not in existing_cols:
+            con.execute(
+                "ALTER TABLE task_metadata ADD COLUMN current_owner "
+                "TEXT NOT NULL DEFAULT ''"
+            )
+        # Migration: refresh the `type` CHECK constraint to allow 'rotating'.
+        # Unlike ADD COLUMN, SQLite cannot ALTER a CHECK constraint, so an
+        # existing table created with CHECK (type IN ('routine','chore'))
+        # actively REJECTS rotating inserts at the SQLite level (the voluptuous
+        # validator alone is not enough). Rebuild the table once: rename →
+        # recreate with the new CHECK → copy rows → drop old. Detected by the
+        # absence of 'rotating' in the stored CREATE TABLE SQL, so it runs at
+        # most once and is a no-op on fresh installs (whose schema already has it).
+        table_sql_row = con.execute(
+            "SELECT sql FROM sqlite_master "
+            "WHERE type='table' AND name='task_metadata'"
+        ).fetchone()
+        if table_sql_row and "rotating" not in (table_sql_row[0] or ""):
+            # Defensive: clear any leftover temp table from a prior interrupted
+            # rebuild so the RENAME below cannot fail with "table already exists".
+            con.execute("DROP TABLE IF EXISTS _task_metadata_pre_rotating")
+            con.execute(
+                "ALTER TABLE task_metadata RENAME TO _task_metadata_pre_rotating"
+            )
+            con.execute(
+                """
+                CREATE TABLE task_metadata (
+                    item_uid TEXT PRIMARY KEY NOT NULL,
+                    member_slug TEXT NOT NULL,
+                    assignee_slug TEXT NOT NULL DEFAULT '',
+                    type TEXT NOT NULL CHECK (type IN ('routine','chore','rotating')),
+                    recurrence TEXT NOT NULL DEFAULT '',
+                    icon TEXT NOT NULL DEFAULT '',
+                    source TEXT NOT NULL DEFAULT 'manual'
+                        CHECK (source IN ('manual','template','apple')),
+                    apple_uid TEXT NOT NULL DEFAULT '',
+                    summary TEXT NOT NULL DEFAULT '',
+                    time_of_day TEXT NOT NULL DEFAULT 'anytime'
+                        CHECK (time_of_day IN ('anytime','morning','afternoon','night')),
+                    rotation_owners TEXT NOT NULL DEFAULT '',
+                    current_owner TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            con.execute(
+                """
+                INSERT INTO task_metadata
+                  (item_uid, member_slug, assignee_slug, type, recurrence, icon,
+                   source, apple_uid, summary, time_of_day, rotation_owners,
+                   current_owner, created_at)
+                SELECT
+                  item_uid, member_slug, assignee_slug, type, recurrence, icon,
+                  source, apple_uid, summary, time_of_day, rotation_owners,
+                  current_owner, created_at
+                FROM _task_metadata_pre_rotating
+                """
+            )
+            con.execute("DROP TABLE _task_metadata_pre_rotating")
+            # The member index was dropped with the old table; recreate it.
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS idx_task_metadata_member "
+                "ON task_metadata(member_slug)"
+            )
         con.commit()
     finally:
         con.close()
@@ -111,6 +181,8 @@ class LucarneFamilyStore:
         assignee_slug: str = "",
         summary: str = "",
         time_of_day: str = "anytime",
+        rotation_owners: str = "",
+        current_owner: str = "",
     ) -> None:
         """INSERT a new task_metadata row."""
 
@@ -120,12 +192,14 @@ class LucarneFamilyStore:
                     """
                     INSERT INTO task_metadata
                       (item_uid, member_slug, assignee_slug, type, recurrence,
-                       icon, source, apple_uid, summary, time_of_day, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       icon, source, apple_uid, summary, time_of_day,
+                       rotation_owners, current_owner, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         item_uid, member_slug, assignee_slug, type, recurrence,
                         icon, source, apple_uid, summary, time_of_day,
+                        rotation_owners, current_owner,
                         datetime.now(UTC).isoformat(),
                     ),
                 )
@@ -136,7 +210,7 @@ class LucarneFamilyStore:
         """UPDATE allowed fields on a task_metadata row."""
         allowed = {
             "type", "recurrence", "icon", "source", "apple_uid",
-            "assignee_slug", "time_of_day",
+            "assignee_slug", "time_of_day", "rotation_owners", "current_owner",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -193,6 +267,18 @@ class LucarneFamilyStore:
         def _get() -> list[dict[str, Any]]:
             with self._db_connect() as con:
                 rows = con.execute("SELECT * FROM task_metadata").fetchall()
+                return [dict(r) for r in rows]
+
+        return await self._hass.async_add_executor_job(_get)
+
+    async def async_get_rotating_tasks(self) -> list[dict[str, Any]]:
+        """Return all task_metadata rows where type='rotating'."""
+
+        def _get() -> list[dict[str, Any]]:
+            with self._db_connect() as con:
+                rows = con.execute(
+                    "SELECT * FROM task_metadata WHERE type = 'rotating'"
+                ).fetchall()
                 return [dict(r) for r in rows]
 
         return await self._hass.async_add_executor_job(_get)

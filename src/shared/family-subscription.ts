@@ -119,7 +119,19 @@ export function subscribeFamilyState(
 
       const metaMap = new Map<string, TaskMetadata>();
       for (const t of resp.task_metadata ?? []) {
-        metaMap.set(t.item_uid, t);
+        let rotation_owners: string[] = [];
+        const raw = (t as unknown as { rotation_owners?: unknown }).rotation_owners;
+        if (typeof raw === 'string' && raw !== '') {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) rotation_owners = parsed.map(String);
+          } catch {
+            // malformed JSON — keep []
+          }
+        } else if (Array.isArray(raw)) {
+          rotation_owners = raw.map(String);
+        }
+        metaMap.set(t.item_uid, { ...t, rotation_owners });
       }
       metadataByUid = metaMap;
       resetTime = resp.reset_time ?? '';

@@ -99,3 +99,24 @@ time-of-day section for the current local time, and re-scrolls as the clock cros
 `afternoon_start` and `night_start` — handy for a wall-mounted tablet left open all day.
 Manually scrolling a column is preserved until the next threshold (toggling a task
 does not jump it back). Set `auto_scroll: false` to keep every column at the top.
+
+### Rotating tasks in the chores card
+
+Rotating tasks are stored in the shared household list but the card routes each one into
+the **current owner's column** — not the household column — so the person whose turn it
+is always sees it alongside their own tasks.
+
+Visual markers on a rotating task row:
+
+| Element | Meaning |
+|---------|---------|
+| **↻** badge (right edge) | Indicates this is a rotating task |
+| **"next: \<name\>"** hint (below the title) | Shows the next owner in the rotation order; hidden when only one owner is configured |
+
+The **↻ badge** and **"next" hint** are display-only — the backend is authoritative for
+actual ownership advancement (at the daily-reset window). The hint is computed client-side
+from `rotation_owners` and `current_owner` using the same wrapping logic as the backend,
+so it will always agree with what the reset produces.
+
+**Column placement**: `show_tasks` controls whether rotating tasks are visible (same toggle as chores).
+The `show_routines` toggle does not affect rotating tasks.

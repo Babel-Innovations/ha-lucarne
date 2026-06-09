@@ -14,13 +14,14 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .const import DOMAIN, HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
 from .recurrence import is_valid_rrule
+from .rotation import parse_owners, serialize_owners
 from .store import LucarneFamilyStore
 
 _LOGGER = logging.getLogger(__name__)
 # Aliases to the shared constants in const.py (single source of truth).
 _HOUSEHOLD_SLUG = HOUSEHOLD_SLUG
 _HOUSEHOLD_ENTITY_ID = HOUSEHOLD_ENTITY_ID
-_TASK_TYPES = ("routine", "chore")
+_TASK_TYPES = ("routine", "chore", "rotating")
 _TIME_OF_DAY_VALUES = ("anytime", "morning", "afternoon", "night")
 
 
@@ -68,6 +69,8 @@ ADD_TASK_SCHEMA = vol.Schema(
         vol.Optional("source", default="manual"): vol.In(["manual", "template", "apple"]),
         vol.Optional("assignee", default=""): cv.string,
         vol.Optional("time_of_day", default="anytime"): vol.In(list(_TIME_OF_DAY_VALUES)),
+        vol.Optional("rotation_owners", default=list): [cv.string],
+        vol.Optional("current_owner", default=""): cv.string,
     }
 )
 
@@ -79,6 +82,8 @@ UPDATE_METADATA_SCHEMA = vol.Schema(
         vol.Optional("type"): vol.In(list(_TASK_TYPES)),
         vol.Optional("assignee"): cv.string,
         vol.Optional("time_of_day"): vol.In(list(_TIME_OF_DAY_VALUES)),
+        vol.Optional("rotation_owners"): [cv.string],
+        vol.Optional("current_owner"): cv.string,
     }
 )
 
@@ -102,6 +107,8 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         source: str = call.data.get("source", "manual")
         assignee: str = call.data.get("assignee", "")
         time_of_day: str = call.data.get("time_of_day", "anytime")
+        rotation_owners_raw: list[str] = call.data.get("rotation_owners", [])
+        current_owner_raw: str = call.data.get("current_owner", "")
 
         if member_slug != _HOUSEHOLD_SLUG and member_slug not in known_slugs:
             raise ServiceValidationError(f"Unknown member: {member_slug!r}")
@@ -109,6 +116,40 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
             raise ServiceValidationError("assignee is only valid for household tasks")
         if assignee and member_slug == _HOUSEHOLD_SLUG and assignee not in known_slugs:
             raise ServiceValidationError(f"Unknown assignee: {assignee!r}")
+
+        rotation_owners_str = ""
+        resolved_current_owner = ""
+
+        if task_type == "rotating":
+            if member_slug != _HOUSEHOLD_SLUG:
+                raise ServiceValidationError(
+                    "rotating tasks must use member='household'"
+                )
+            if recurrence:
+                raise ServiceValidationError(
+                    "rotating tasks must not have a recurrence rule"
+                )
+            # Validate owners: de-duplicate preserving order, check membership
+            owners_deduped: list[str] = []
+            seen_owners: set[str] = set()
+            for slug in rotation_owners_raw:
+                if slug not in known_slugs:
+                    raise ServiceValidationError(
+                        f"Unknown rotation_owners member: {slug!r}"
+                    )
+                if slug not in seen_owners:
+                    seen_owners.add(slug)
+                    owners_deduped.append(slug)
+            if len(owners_deduped) < 2:
+                raise ServiceValidationError(
+                    "rotating tasks require at least 2 owners in rotation_owners"
+                )
+            resolved_current_owner = current_owner_raw or owners_deduped[0]
+            if resolved_current_owner not in owners_deduped:
+                raise ServiceValidationError(
+                    f"current_owner {resolved_current_owner!r} must be in rotation_owners"
+                )
+            rotation_owners_str = serialize_owners(owners_deduped)
 
         todo_entity_id = _resolve_todo_entity_id(store, member_slug)
         entity = _get_todo_entity(hass, todo_entity_id)
@@ -133,6 +174,8 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
                 assignee_slug=assignee,
                 summary=summary,
                 time_of_day=time_of_day,
+                rotation_owners=rotation_owners_str,
+                current_owner=resolved_current_owner,
             )
         except Exception:
             # Best-effort rollback: remove the orphaned todo item.
@@ -165,6 +208,90 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
                 update_fields[field_name] = call.data[field_name]
         if "assignee" in call.data:
             update_fields["assignee_slug"] = call.data["assignee"]
+
+        # Validate and serialize rotating-task owner fields when provided.
+        new_owners_raw = call.data.get("rotation_owners")
+        new_current_owner = call.data.get("current_owner")
+        effective_type = update_fields.get("type", metadata.get("type", ""))
+
+        # Enforce the rotating-task invariants whenever the effective type is
+        # rotating — whether the task already is rotating or is being converted
+        # to it via this update. A rotating task must live in the household list
+        # and never carry an RRULE; converting to rotating must supply owners so
+        # we never persist type=rotating with an empty owners list.
+        if effective_type == "rotating":
+            if metadata.get("member_slug") != _HOUSEHOLD_SLUG:
+                raise ServiceValidationError(
+                    "rotating tasks must live in the household list"
+                )
+            if update_fields.get("recurrence"):
+                raise ServiceValidationError(
+                    "rotating tasks cannot have a recurrence"
+                )
+            converting_to_rotating = (
+                update_fields.get("type") == "rotating"
+                and metadata.get("type") != "rotating"
+            )
+            if converting_to_rotating and new_owners_raw is None:
+                raise ServiceValidationError(
+                    "converting a task to rotating requires rotation_owners"
+                )
+
+        if new_owners_raw is not None or new_current_owner is not None:
+            if effective_type != "rotating":
+                raise ServiceValidationError(
+                    "rotation_owners / current_owner can only be set on rotating tasks"
+                )
+            known_slugs = {m.slug for m in store.get_members()}
+            if new_owners_raw is not None:
+                owners_deduped: list[str] = []
+                seen_owners: set[str] = set()
+                for slug in new_owners_raw:
+                    if slug not in known_slugs:
+                        raise ServiceValidationError(
+                            f"Unknown rotation_owners member: {slug!r}"
+                        )
+                    if slug not in seen_owners:
+                        seen_owners.add(slug)
+                        owners_deduped.append(slug)
+                if len(owners_deduped) < 1:
+                    raise ServiceValidationError(
+                        "rotation_owners must have at least 1 owner"
+                    )
+                update_fields["rotation_owners"] = serialize_owners(owners_deduped)
+                # Re-validate current_owner against the new list
+                existing_current = new_current_owner or metadata.get("current_owner", "")
+                if existing_current and existing_current not in owners_deduped:
+                    raise ServiceValidationError(
+                        f"current_owner {existing_current!r} must be in rotation_owners"
+                    )
+            if new_current_owner is not None:
+                # Validate against whichever owners list is authoritative
+                effective_owners_raw = (
+                    call.data["rotation_owners"]
+                    if new_owners_raw is not None
+                    else parse_owners(metadata.get("rotation_owners", ""))
+                )
+                if new_current_owner not in effective_owners_raw:
+                    raise ServiceValidationError(
+                        f"current_owner {new_current_owner!r} must be in rotation_owners"
+                    )
+                update_fields["current_owner"] = new_current_owner
+
+        # Converting a task to rotating without an explicit current_owner: seed
+        # it from the first owner so the task never lands ownerless (which would
+        # break the daily-reset advance and column routing).
+        if (
+            effective_type == "rotating"
+            and "current_owner" not in update_fields
+            and not metadata.get("current_owner")
+        ):
+            seeded_owners = parse_owners(
+                update_fields.get("rotation_owners")
+                or metadata.get("rotation_owners", "")
+            )
+            if seeded_owners:
+                update_fields["current_owner"] = seeded_owners[0]
 
         await store.async_update_task_metadata(uid, **update_fields)
         hass.bus.async_fire("lucarne_family_task_metadata_updated", {"uid": uid})

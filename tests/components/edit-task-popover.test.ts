@@ -470,6 +470,119 @@ describe('lucarne-edit-task-popover', () => {
     assert.equal(metaCall.payload.time_of_day, 'morning');
   });
 
+  // ---------- rotating type ----------
+
+  it('prefills rotation_owners from metadata and hides recurrence', async () => {
+    const rotatingTask: RenderableTask = {
+      uid: 'rot-uid-1',
+      summary: 'Clean bathroom',
+      status: 'needs_action',
+      due: null,
+      description: '',
+      metadata: {
+        item_uid: 'rot-uid-1',
+        member_slug: 'household',
+        assignee_slug: '',
+        type: 'rotating',
+        recurrence: '',
+        icon: '🧹',
+        source: 'manual',
+        rotation_owners: ['anna', 'bob'],
+        current_owner: 'anna',
+      },
+    };
+    const el = await makeEl(rotatingTask, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+
+    // Recurrence controls hidden for rotating
+    assert.equal(shadow(el, '#et-recurrence'), null, 'recurrence select hidden for rotating');
+    assert.equal(shadow(el, '.custom-recurrence-note'), null, 'no custom recurrence note for rotating');
+
+    // Owners picker shown
+    const ownersList = el.shadowRoot!.querySelector('.owners-list');
+    assert.ok(ownersList, 'owners-list shown for rotating task');
+
+    // Anna and Bob should both be checked
+    const checkboxes = Array.from(ownersList!.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    const checked = checkboxes.filter((cb) => cb.checked);
+    assert.equal(checked.length, 2, 'both owners checked in prefill');
+  });
+
+  it('prevents removing the last owner and disables save with <2 owners', async () => {
+    const rotatingTask: RenderableTask = {
+      uid: 'rot-uid-2',
+      summary: 'Take out trash',
+      status: 'needs_action',
+      due: null,
+      description: '',
+      metadata: {
+        item_uid: 'rot-uid-2',
+        member_slug: 'household',
+        assignee_slug: '',
+        type: 'rotating',
+        recurrence: '',
+        icon: '',
+        source: 'manual',
+        rotation_owners: ['anna'],
+        current_owner: 'anna',
+      },
+    };
+    const el = await makeEl(rotatingTask, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+
+    const ownersList = el.shadowRoot!.querySelector('.owners-list');
+    assert.ok(ownersList, 'owners-list shown');
+    const annaCb = ownersList!.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+    assert.ok(annaCb.length >= 1, 'at least one checkbox');
+    // The checkbox for Anna (last owner) should be disabled
+    const annaCheckbox = Array.from(annaCb).find((cb) => {
+      const item = cb.closest('.owner-item');
+      return item?.textContent?.includes('Anna');
+    });
+    assert.ok(annaCheckbox, 'Anna checkbox found');
+    assert.equal(annaCheckbox!.disabled, true, 'last owner checkbox is disabled');
+
+    // Save button should be disabled since only 1 owner (< 2 required)
+    const saveBtn = Array.from(el.shadowRoot!.querySelectorAll('button.btn-save')).pop() as HTMLButtonElement;
+    assert.equal(saveBtn.disabled, true, 'save disabled with only 1 owner');
+  });
+
+  it('emits update_task_metadata with reordered rotation_owners on save', async () => {
+    const rotatingTask: RenderableTask = {
+      uid: 'rot-uid-3',
+      summary: 'Clean bathroom',
+      status: 'needs_action',
+      due: null,
+      description: '',
+      metadata: {
+        item_uid: 'rot-uid-3',
+        member_slug: 'household',
+        assignee_slug: '',
+        type: 'rotating',
+        recurrence: '',
+        icon: '',
+        source: 'manual',
+        rotation_owners: ['anna', 'bob'],
+        current_owner: 'anna',
+      },
+    };
+    const el = await makeEl(rotatingTask, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
+    const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+
+    // Move Bob up (Bob is at index 1, click his up button)
+    const upBtns = Array.from(el.shadowRoot!.querySelectorAll<HTMLButtonElement>('.reorder-btn'));
+    const bobUp = upBtns.find((b) => !b.disabled && b.getAttribute('aria-label')?.includes('Bob') && b.getAttribute('aria-label')?.includes('earlier'));
+    assert.ok(bobUp, 'Bob up button found');
+    bobUp!.click();
+    await el.updateComplete;
+
+    const saveBtn = Array.from(el.shadowRoot!.querySelectorAll('button.btn-save')).pop() as HTMLButtonElement;
+    saveBtn.click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    const metaCall = (fakeHass.calls.callService as any[]).find((c) => c.service === 'update_task_metadata');
+    assert.ok(metaCall, 'update_task_metadata called');
+    assert.deepEqual(metaCall.payload.rotation_owners, ['bob', 'anna'], 'Bob moved to first');
+  });
+
   it('shows custom recurrence as read-only note', async () => {
     const task = makeTask({
       metadata: {
@@ -491,5 +604,36 @@ describe('lucarne-edit-task-popover', () => {
     // Recurrence select should NOT be rendered
     const recurrenceSelect = shadow(el, '#et-recurrence');
     assert.equal(recurrenceSelect, null, 'recurrence select hidden for custom recurrence');
+  });
+
+  it('hides the Rotating type option for a non-household task', async () => {
+    // Default makeTask() is member_slug 'anna' — a per-member task that cannot
+    // move to the household list, so Rotating must not be offered.
+    const el = await makeEl();
+
+    const rotatingBtn = Array.from(el.shadowRoot!.querySelectorAll('.type-btn')).find(
+      (b) => b.textContent?.trim() === 'Rotating',
+    );
+    assert.equal(rotatingBtn, undefined, 'Rotating option hidden for non-household task');
+  });
+
+  it('shows the Rotating type option for a household task', async () => {
+    const task = makeTask({
+      metadata: {
+        item_uid: 'task-uid-1',
+        member_slug: 'household',
+        assignee_slug: '',
+        type: 'chore',
+        recurrence: '',
+        icon: '',
+        source: 'manual',
+      },
+    });
+    const el = await makeEl(task);
+
+    const rotatingBtn = Array.from(el.shadowRoot!.querySelectorAll('.type-btn')).find(
+      (b) => b.textContent?.trim() === 'Rotating',
+    );
+    assert.ok(rotatingBtn, 'Rotating option shown for household task');
   });
 });

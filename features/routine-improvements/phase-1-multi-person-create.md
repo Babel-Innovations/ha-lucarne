@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 ---
 
 # Phase 1: Multi-person routine creation
@@ -33,8 +33,8 @@ docs/
 
 ### Baseline Test Verification (before starting implementation)
 
-- [ ] Run the full TS suite: `npm run test:coverage && npm run lint && npm run typecheck && npm run build` — all green
-- [ ] Run the full Python suite: `pytest tests/python/` (via `.venv/bin/pytest` — see `CLAUDE.md`) — all green
+- [x] Run the full TS suite: `npm run test:coverage && npm run lint && npm run typecheck && npm run build` — all green
+- [x] Run the full Python suite: `pytest tests/python/` (via `.venv/bin/pytest` — see `CLAUDE.md`) — all green
 - [ ] If any test fails, fix and commit separately before proceeding
 
 > **Why both runners?** Even though this phase is TS-only, a green Python baseline proves the working tree is clean before you start.
@@ -45,43 +45,43 @@ Deliverable: from a single open of the add-task popover in **Routine** mode, a p
 
 #### UI
 
-- [ ] In `add-task-popover.ts`, add an **"Also add to:"** checklist that renders **only when the selected type is `routine`** (hidden for `chore`; rotating is added in Phase 3).
-- [ ] Populate the checklist with all members **except** the currently selected member and **except** household (`slug === 'household'`). "Currently selected member" means `this._selectedMemberSlug` (the value of the existing Member `<select>`, which the user can change after opening — not the static `this.member` prop). Use `this.members` (the popover already receives the full list via the `members` property). Recompute the checklist when `_selectedMemberSlug` changes so the selected member is never also offered as an "also add to" target.
-- [ ] Track the set of ticked additional slugs in component state; default to none ticked.
-- [ ] When the user switches type away from `routine`, hide the checklist and clear the selection so a hidden selection can't leak into a chore submit.
+- [x] In `add-task-popover.ts`, add an **"Also add to:"** checklist that renders **only when the selected type is `routine`** (hidden for `chore`; rotating is added in Phase 3).
+- [x] Populate the checklist with all members **except** the currently selected member and **except** household (`slug === 'household'`). "Currently selected member" means `this._selectedMemberSlug` (the value of the existing Member `<select>`, which the user can change after opening — not the static `this.member` prop). Use `this.members` (the popover already receives the full list via the `members` property). Recompute the checklist when `_selectedMemberSlug` changes so the selected member is never also offered as an "also add to" target.
+- [x] Track the set of ticked additional slugs in component state; default to none ticked.
+- [x] When the user switches type away from `routine`, hide the checklist and clear the selection so a hidden selection can't leak into a chore submit.
 
 #### Submit / fan-out
 
-- [ ] On submit for a routine, build the target list = `[this._selectedMemberSlug, ...tickedMembers]` (de-duplicated; the selected member is always included, even if somehow also ticked).
-- [ ] Issue one `addTask(this.hass, {…})` call (the `src/shared/integration-services.ts` helper) **per target member**, each with the same `summary`, `type: 'routine'`, `recurrence`, `icon`, and `time_of_day`, and `member` set to that target's slug. Each call gets its own server-generated uid → independent copies.
-- [ ] Issue the calls sequentially (`for … of targets { await addTask(...) }`), stopping on the first rejection — do **not** attempt to roll back copies already created (there is no batch/transaction across `add_task` calls; partial success is acceptable and the family subscription will show whatever was created). On a rejection, surface the error in the popover via the existing `this._error` field (the same `.error-msg` block the single-member path uses — see `add-task-popover.ts` `_submit` catch at lines ~298–301) and set `this._saving = false` so the user can retry. Do **not** silently swallow the failure and do **not** close the popover on error.
-- [ ] After all calls succeed, close the popover exactly as the single-member path does today (the existing family subscription refresh repopulates the card — this is the issue-#57 auto-refresh that already works).
+- [x] On submit for a routine, build the target list = `[this._selectedMemberSlug, ...tickedMembers]` (de-duplicated; the selected member is always included, even if somehow also ticked).
+- [x] Issue one `addTask(this.hass, {…})` call (the `src/shared/integration-services.ts` helper) **per target member**, each with the same `summary`, `type: 'routine'`, `recurrence`, `icon`, and `time_of_day`, and `member` set to that target's slug. Each call gets its own server-generated uid → independent copies.
+- [x] Issue the calls sequentially (`for … of targets { await addTask(...) }`), stopping on the first rejection — do **not** attempt to roll back copies already created (there is no batch/transaction across `add_task` calls; partial success is acceptable and the family subscription will show whatever was created). On a rejection, surface the error in the popover via the existing `this._error` field (the same `.error-msg` block the single-member path uses — see `add-task-popover.ts` `_submit` catch at lines ~298–301) and set `this._saving = false` so the user can retry. Do **not** silently swallow the failure and do **not** close the popover on error.
+- [x] After all calls succeed, close the popover exactly as the single-member path does today (the existing family subscription refresh repopulates the card — this is the issue-#57 auto-refresh that already works).
 
 #### Tests
 
-- [ ] Checklist is **not** rendered when type is `chore`.
-- [ ] Checklist is rendered for `routine` and excludes the current member and household.
-- [ ] Submitting with 2 extra members ticked issues exactly 3 `add_task` calls, one per slug, each `type: 'routine'` with identical summary/recurrence/icon/time_of_day.
-- [ ] Submitting with none ticked issues exactly 1 call (unchanged single-member behavior).
-- [ ] Switching type from routine → chore clears the ticked selection (a later routine submit doesn't reuse stale ticks).
-- [ ] A rejected `add_task` call keeps the popover open and shows the error (does not close as if successful).
+- [x] Checklist is **not** rendered when type is `chore`.
+- [x] Checklist is rendered for `routine` and excludes the current member and household.
+- [x] Submitting with 2 extra members ticked issues exactly 3 `add_task` calls, one per slug, each `type: 'routine'` with identical summary/recurrence/icon/time_of_day.
+- [x] Submitting with none ticked issues exactly 1 call (unchanged single-member behavior).
+- [x] Switching type from routine → chore clears the ticked selection (a later routine submit doesn't reuse stale ticks).
+- [x] A rejected `add_task` call keeps the popover open and shows the error (does not close as if successful).
 
 > Use the shared HA stub at `tests/setup/ha-mock.mjs` to capture `callService` invocations. Tests run with `node:test`, **not vitest** (see `CLAUDE.md` → pitfalls).
 
 #### Documentation (End of Sub-Phase)
 
-- [ ] `docs/integration.md` — document that a routine can be added to multiple members at once and that copies are independent
+- [x] `docs/integration.md` — document that a routine can be added to multiple members at once and that copies are independent
 - [ ] `CLAUDE.md` — only if a new convention is introduced (none expected for this phase)
 
 ### Build Verification (required before marking phase complete)
 
-- [ ] `npm run lint` — zero warnings/errors
-- [ ] `npm run typecheck` — zero errors
-- [ ] `npm run test:coverage` — all pass, coverage at/above gate (line 88 / branch 80 / funcs 73)
-- [ ] `npm run build` — rebuilds `custom_components/lucarne_family/frontend/ha-lucarne.js`; **stage the rebuilt bundle** (it is committed)
-- [ ] `pytest tests/python/` — still green (no regressions; statement floor 86)
-- [ ] Scan all test/lint/build output for non-fatal warnings — a zero exit code does not mean clean output
-- [ ] Mark phase `status: done` only after all steps pass
+- [x] `npm run lint` — zero warnings/errors
+- [x] `npm run typecheck` — zero errors
+- [x] `npm run test:coverage` — all pass, coverage at/above gate (line 88 / branch 80 / funcs 73)
+- [x] `npm run build` — rebuilds `custom_components/lucarne_family/frontend/ha-lucarne.js`; **stage the rebuilt bundle** (it is committed)
+- [x] `pytest tests/python/` — still green (no regressions; statement floor 86)
+- [x] Scan all test/lint/build output for non-fatal warnings — a zero exit code does not mean clean output
+- [x] Mark phase `status: done` only after all steps pass
 
 > **This is a hard gate.** The built bundle must be committed — HACS ships repo files and does not run a build.
 

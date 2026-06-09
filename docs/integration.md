@@ -93,18 +93,48 @@ A shared household todo list (`todo.lucarne_household`) is created once at integ
 
 ### Task types
 
-Every task is one of two types. Pick the type by what the task **does next** after
+Every task is one of three types. Pick the type by what the task **does next** after
 you check it off, not by how often you do it.
 
-| Behavior | `routine` | `chore` |
-|---|---|---|
-| Auto-reset at `reset_time` (flips `completed` → `needs_action` next day) | **yes** — by `reset_logic.py` | no, stays checked |
-| Counts toward streak (`counter.<slug>_streak`) | yes — when its RRULE is due today | no |
-| RRULE has any runtime effect | yes — drives "is this due today?" via `recurrence.py` | no — silently ignored |
-| Recurrence picker shown in **Add Task** UI | yes | no — hidden |
-| Due-date field shown in **Add Task** UI | no | yes — `<input type="datetime-local">` |
-| Card visibility toggle (`lucarne-chores-card`) | `show_routines` (default true) | `show_tasks` (default true) |
-| Default when `type` is omitted from `add_task` | — | yes (see `task_service.py`) |
+| Behavior | `routine` | `chore` | `rotating` |
+|---|---|---|---|
+| Auto-reset at `reset_time` (flips `completed` → `needs_action` next day) | **yes** — by `reset_logic.py` | no, stays checked | **yes** — and advances `current_owner` if it was completed |
+| Counts toward streak (`counter.<slug>_streak`) | yes — when its RRULE is due today | no | **no** — excluded from streak computation |
+| RRULE has any runtime effect | yes — drives "is this due today?" via `recurrence.py` | no — silently ignored | no — no RRULE |
+| Recurrence picker shown in **Add Task** UI | yes | no — hidden | no — hidden |
+| Due-date field shown in **Add Task** UI | no | yes | no — hidden |
+| Owner | per-member `todo.<slug>` | per-member or household | always `todo.lucarne_household` |
+| Card visibility toggle (`lucarne-chores-card`) | `show_routines` (default true) | `show_tasks` (default true) | `show_tasks` (default true) |
+| Default when `type` is omitted from `add_task` | — | yes (see `task_service.py`) | — |
+
+#### Rotating tasks
+
+A rotating task is a shared household chore that cycles through an ordered list of members — useful
+for jobs like vacuuming or taking out the trash where you want turns to be fair.
+
+**Creating a rotating task**
+
+Open the Chores card, click **+** on any member's column (or the household column), and choose type **Rotating** in the Add Task dialog. You must select at least 2 owners in order — these define the rotation sequence. The task is always stored in the household list (`todo.lucarne_household`), regardless of which column's **+** button you used.
+
+**How turns advance**
+
+Ownership advances at the daily-reset window (configured as `reset_time` in the integration options), not at the moment of completion:
+
+- If the task was **completed** by the reset window: ownership advances to the next member in the list, and the task flips back to `needs_action` in the new owner's column.
+- If the task was **not completed**: ownership stays with the current member and the task flips back to `needs_action` (giving the same person another chance).
+- The `lucarne_family_rotation_advanced` event fires when ownership advances; subscribers can use it for notifications or automations.
+
+**Streak exclusion**
+
+Rotating tasks are intentionally excluded from streak computation — completing a shared chore should not boost any individual member's streak counter.
+
+**Editing owners**
+
+Long-press a rotating task in the card and choose **Edit** to reorder, add, or remove owners (minimum 2 at all times). If you remove a member from the family entirely, the integration removes their slug from `rotation_owners` of all rotating tasks and advances `current_owner` if needed; if no valid owners would remain, the task is deleted.
+
+**Completing a rotating task**
+
+Tap the task in any column as you would any other task. The toggle is attributed to the current owner — `lucarne_family_task_completed` fires with the current owner's slug, not `"household"`. The task stays in its current position until the daily reset.
 
 > **Household-list exemption.** Tasks on the shared `todo.lucarne_household`
 > list are skipped by both `reset_logic.py` and `streak_logic.py`, which only
@@ -135,6 +165,14 @@ A `chore` that you also want on a schedule (e.g. "water plants weekly") is
 currently a manual workflow — you'll re-add the chore each time. There is no
 "regenerate chore on RRULE" logic today; the Add Task form intentionally hides
 Recurrence when type is `chore` to avoid implying otherwise.
+
+### Adding a routine to multiple members at once
+
+When creating a **routine** from the chores card, an **"Also add to:"** checklist appears below the type selector. Tick any additional members to create one independent copy for each. This is only available for routines — the checklist is hidden when the type is `chore`.
+
+Each copy is fully independent: it lives in that member's own `todo.<slug>` list, tracks its own completion and streak contribution, and is edited or deleted separately. Changing or deleting one copy has no effect on the others.
+
+On submit, the popover issues one `lucarne_family.add_task` call per target member (the primary column member plus each ticked member). All copies share the same `summary`, `recurrence`, `icon`, and `time_of_day`. If any call fails, the popover stays open and shows the error — copies already created are kept (there is no rollback across independent service calls).
 
 ### Time-of-day buckets
 

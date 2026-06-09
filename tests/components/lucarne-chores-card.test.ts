@@ -299,6 +299,48 @@ describe('lucarne-chores-card', () => {
     };
   }
 
+  function makeRotatingTask(currentOwner = 'bob'): RenderableTask {
+    return {
+      uid: 'r-1',
+      summary: 'Vacuum',
+      status: 'needs_action',
+      due: null,
+      description: '',
+      metadata: {
+        item_uid: 'r-1',
+        member_slug: 'household',
+        assignee_slug: '',
+        type: 'rotating',
+        recurrence: '',
+        icon: '',
+        source: 'manual',
+        time_of_day: 'anytime',
+        rotation_owners: ['anna', 'bob'],
+        current_owner: currentOwner,
+      },
+    };
+  }
+
+  function seedHouseholdRotating(el: LucarneChoresCard, task: RenderableTask) {
+    const state: FamilyState = {
+      members: [
+        { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+        { slug: 'bob', name: 'Bob', color: '#b8e0d2', avatar: null, todo_entity_id: 'todo.bob', streak_counter_id: 'counter.bob_streak' },
+      ],
+      tasksByMember: new Map([
+        ['anna', []],
+        ['bob', []],
+        ['household', [task]],
+      ]),
+      streakByMember: new Map([['anna', 0], ['bob', 0]]),
+      taskMetadataByUid: new Map(),
+      resetTime: '03:00',
+      streakCheckTime: '02:00',
+      integrationError: null,
+    };
+    (el as unknown as { _familyState: FamilyState })._familyState = state;
+  }
+
   function seedAnnaTask(el: LucarneChoresCard, task: RenderableTask) {
     const state: FamilyState = {
       members: [
@@ -399,6 +441,59 @@ describe('lucarne-chores-card', () => {
     });
 
     assert.equal(internals._optimistic.size, 0, 'override pruned for the vanished task');
+  });
+
+  it('rotating task with current_owner=bob renders in Bob column, not household', async () => {
+    const el = await makeCard(['anna', 'bob']);
+    seedHouseholdRotating(el, makeRotatingTask('bob'));
+    await el.updateComplete;
+
+    type ColEl = HTMLElement & { member: { slug: string }; tasks: RenderableTask[] };
+    const cols = Array.from(el.shadowRoot!.querySelectorAll('lucarne-member-column')) as ColEl[];
+    const bobCol = cols.find((c) => c.member.slug === 'bob');
+    const annaCol = cols.find((c) => c.member.slug === 'anna');
+    assert.ok(bobCol, 'bob column exists');
+    assert.equal(bobCol!.tasks.length, 1, 'rotating task in bob column');
+    assert.equal(bobCol!.tasks[0].uid, 'r-1', 'correct task uid');
+    assert.equal(annaCol!.tasks.length, 0, 'anna column is empty');
+  });
+
+  it('when current_owner changes to anna, rotating task moves to anna column', async () => {
+    const el = await makeCard(['anna', 'bob']);
+    seedHouseholdRotating(el, makeRotatingTask('bob'));
+    await el.updateComplete;
+
+    // Simulate owner advancing to anna
+    seedHouseholdRotating(el, makeRotatingTask('anna'));
+    await el.updateComplete;
+
+    type ColEl = HTMLElement & { member: { slug: string }; tasks: RenderableTask[] };
+    const cols = Array.from(el.shadowRoot!.querySelectorAll('lucarne-member-column')) as ColEl[];
+    const bobCol = cols.find((c) => c.member.slug === 'bob');
+    const annaCol = cols.find((c) => c.member.slug === 'anna');
+    assert.equal(annaCol!.tasks.length, 1, 'rotating task moved to anna column');
+    assert.equal(annaCol!.tasks[0].uid, 'r-1');
+    assert.equal(bobCol!.tasks.length, 0, 'bob column is now empty');
+  });
+
+  it('toggling a rotating task issues todo.update_item against todo.lucarne_household', async () => {
+    const el = await makeCard(['bob']);
+    seedHouseholdRotating(el, makeRotatingTask('bob'));
+    await el.updateComplete;
+
+    const col = el.shadowRoot!.querySelector('lucarne-member-column');
+    const row = col?.shadowRoot?.querySelector('lucarne-task-row') as (HTMLElement & { task: RenderableTask }) | null;
+    assert.ok(row, 'rotating task row found in bob column');
+
+    row!.dispatchEvent(
+      new CustomEvent('task-toggle', { detail: { task: row!.task }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    const hass = el.hass as unknown as { calls: { callService: { domain: string; service: string; payload: Record<string, string>; target: { entity_id: string } }[] } };
+    const call = hass.calls.callService.find((c) => c.domain === 'todo' && c.service === 'update_item');
+    assert.ok(call, 'todo.update_item called');
+    assert.equal(call!.target.entity_id, 'todo.lucarne_household', 'routed to household entity');
   });
 
   // Regression for #68 (part 1): a card left open overnight kept showing the

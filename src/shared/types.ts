@@ -1,7 +1,7 @@
 export type { HassEntity } from 'home-assistant-js-websocket';
 export type { HomeAssistant } from 'custom-card-helpers';
 
-export type TaskType = 'routine' | 'chore';
+export type TaskType = 'routine' | 'chore' | 'rotating';
 export type TaskSource = 'manual' | 'template' | 'apple';
 export type TimeOfDay = 'anytime' | 'morning' | 'afternoon' | 'night';
 
@@ -44,6 +44,8 @@ export interface TaskMetadata {
   icon: string;
   source: TaskSource;
   time_of_day?: TimeOfDay;
+  rotation_owners?: string[];
+  current_owner?: string;
 }
 
 export interface RenderableTask {

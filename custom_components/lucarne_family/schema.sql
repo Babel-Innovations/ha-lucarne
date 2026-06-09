@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS task_metadata (
     item_uid TEXT PRIMARY KEY NOT NULL,
     member_slug TEXT NOT NULL,
     assignee_slug TEXT NOT NULL DEFAULT '',
-    type TEXT NOT NULL CHECK (type IN ('routine','chore')),
+    type TEXT NOT NULL CHECK (type IN ('routine','chore','rotating')),
     recurrence TEXT NOT NULL DEFAULT '',
     icon TEXT NOT NULL DEFAULT '',
     source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','template','apple')),
@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS task_metadata (
     summary TEXT NOT NULL DEFAULT '',
     time_of_day TEXT NOT NULL DEFAULT 'anytime'
         CHECK (time_of_day IN ('anytime','morning','afternoon','night')),
+    rotation_owners TEXT NOT NULL DEFAULT '',
+    current_owner TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_task_metadata_member ON task_metadata(member_slug);

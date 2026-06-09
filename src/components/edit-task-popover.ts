@@ -230,6 +230,91 @@ export class LucarneEditTaskPopover extends LitElement {
         font-size: var(--lucarne-fs-sm);
         min-height: 36px;
       }
+      .owners-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 4px;
+      }
+      .owner-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: var(--lucarne-fs-sm);
+        color: var(--lucarne-on-surface);
+        min-height: 44px;
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+      }
+      .owner-item:last-child {
+        border-bottom: none;
+      }
+      .owner-item input[type='checkbox'] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        min-height: unset;
+        margin: 0;
+        cursor: pointer;
+        border: 2px solid var(--primary-color, #03a9f4);
+        border-radius: 3px;
+        background: transparent;
+        position: relative;
+        flex-shrink: 0;
+      }
+      .owner-item input[type='checkbox']:checked::after {
+        content: '';
+        position: absolute;
+        left: 3px;
+        top: 0;
+        width: 4px;
+        height: 9px;
+        border: solid var(--primary-color, #03a9f4);
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+      }
+      .owner-item input[type='checkbox']:focus-visible {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: 2px;
+      }
+      .owner-order {
+        font-size: 0.7rem;
+        color: var(--lucarne-on-surface-muted);
+        min-width: 16px;
+        text-align: right;
+        flex-shrink: 0;
+      }
+      .owner-name {
+        flex: 1;
+      }
+      .reorder-btns {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex-shrink: 0;
+      }
+      .reorder-btn {
+        background: none;
+        border: 1px solid rgba(0,0,0,0.15);
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.65rem;
+        padding: 1px 5px;
+        min-height: 18px;
+        line-height: 1;
+        color: var(--lucarne-on-surface-muted);
+      }
+      .reorder-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+      .owners-hint {
+        font-size: var(--lucarne-fs-sm);
+        color: var(--lucarne-on-surface-muted);
+        font-style: italic;
+        margin-top: 4px;
+      }
     `,
   ];
 
@@ -255,6 +340,7 @@ export class LucarneEditTaskPopover extends LitElement {
   @state() private _error = '';
   @state() private _saving = false;
   @state() private _confirmingDelete = false;
+  @state() private _rotatingOwners: string[] = [];
 
   updated(changed: Map<string, unknown>) {
     super.updated(changed);
@@ -284,6 +370,8 @@ export class LucarneEditTaskPopover extends LitElement {
     this._recurrenceMonth = 1;
     this._rawRecurrence = '';
     this._isCustomRecurrence = false;
+
+    this._rotatingOwners = t.metadata.rotation_owners ? [...t.metadata.rotation_owners] : [];
 
     const parsed = parseRRule(t.metadata.recurrence);
     if (parsed.mode === 'unknown') {
@@ -377,6 +465,10 @@ export class LucarneEditTaskPopover extends LitElement {
       this._error = 'Due date cannot be cleared here — delete and recreate the task to remove it';
       return;
     }
+    if (this._type === 'rotating' && this._rotatingOwners.length < 2) {
+      this._error = 'Select at least 2 owners for a rotating task';
+      return;
+    }
 
     this._saving = true;
     this._error = '';
@@ -390,12 +482,18 @@ export class LucarneEditTaskPopover extends LitElement {
       // Determine what changed.
       const summaryChanged = this._summary.trim() !== this.task.summary;
       const dueChanged = !!this._due && this._due !== (this.task.due ?? '');
+      const isRotating = this._type === 'rotating';
+      const origOwners = this.task.metadata.rotation_owners ?? [];
+      const rotatingOwnersChanged =
+        isRotating &&
+        JSON.stringify(this._rotatingOwners) !== JSON.stringify(origOwners);
       const metaChanged =
         this._type !== this.task.metadata.type ||
         this._icon !== this.task.metadata.icon ||
-        this._buildRRule() !== this.task.metadata.recurrence ||
+        (!isRotating && this._buildRRule() !== this.task.metadata.recurrence) ||
         this._timeOfDay !== (this.task.metadata.time_of_day ?? 'anytime') ||
-        (this.task.metadata.member_slug === 'household' && this._assignee !== this.task.metadata.assignee_slug);
+        (this.task.metadata.member_slug === 'household' && !isRotating && this._assignee !== this.task.metadata.assignee_slug) ||
+        rotatingOwnersChanged;
 
       if (summaryChanged || dueChanged) {
         if (!ownerEntityId) throw new Error('Could not resolve todo entity for this task');
@@ -408,14 +506,21 @@ export class LucarneEditTaskPopover extends LitElement {
 
       if (metaChanged) {
         const isHousehold = this.task.metadata.member_slug === 'household';
+        // If current owner was removed from rotation, reset to new first owner
+        const currentOwnerRemoved =
+          isRotating &&
+          !!this.task.metadata.current_owner &&
+          !this._rotatingOwners.includes(this.task.metadata.current_owner);
         await updateTaskMetadata(this.hass, this.task.uid, {
           ...(this._type !== this.task.metadata.type ? { type: this._type } : {}),
           ...(this._icon !== this.task.metadata.icon ? { icon: this._icon } : {}),
-          ...(this._buildRRule() !== this.task.metadata.recurrence ? { recurrence: this._buildRRule() } : {}),
+          ...(!isRotating && this._buildRRule() !== this.task.metadata.recurrence ? { recurrence: this._buildRRule() } : {}),
           ...(this._timeOfDay !== (this.task.metadata.time_of_day ?? 'anytime')
             ? { time_of_day: this._timeOfDay }
             : {}),
-          ...(isHousehold && this._assignee !== this.task.metadata.assignee_slug ? { assignee: this._assignee } : {}),
+          ...(isHousehold && !isRotating && this._assignee !== this.task.metadata.assignee_slug ? { assignee: this._assignee } : {}),
+          ...(rotatingOwnersChanged ? { rotation_owners: this._rotatingOwners } : {}),
+          ...(currentOwnerRemoved ? { current_owner: this._rotatingOwners[0] } : {}),
         });
       }
 
@@ -438,6 +543,26 @@ export class LucarneEditTaskPopover extends LitElement {
       this._saving = false;
       this._confirmingDelete = false;
     }
+  }
+
+  private _toggleRotatingOwner(slug: string) {
+    if (this._rotatingOwners.includes(slug)) {
+      // Prevent removing the last owner
+      if (this._rotatingOwners.length <= 1) return;
+      this._rotatingOwners = this._rotatingOwners.filter((s) => s !== slug);
+    } else {
+      this._rotatingOwners = [...this._rotatingOwners, slug];
+    }
+  }
+
+  private _moveOwner(slug: string, direction: 'up' | 'down') {
+    const idx = this._rotatingOwners.indexOf(slug);
+    if (idx < 0) return;
+    const next = [...this._rotatingOwners];
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= next.length) return;
+    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    this._rotatingOwners = next;
   }
 
   private _toggleDay(day: WeekdayCode) {
@@ -479,7 +604,7 @@ export class LucarneEditTaskPopover extends LitElement {
           <div class="readonly-tooltip">Member cannot be changed here</div>
         </div>
 
-        ${isHousehold
+        ${isHousehold && this._type !== 'rotating'
           ? html`
               <div class="field">
                 <label for="et-assignee">Assignee (optional)</label>
@@ -513,6 +638,9 @@ export class LucarneEditTaskPopover extends LitElement {
           <div class="type-row">
             <button class="type-btn ${this._type === 'routine' ? 'active' : ''}" @click=${() => (this._type = 'routine')}>Routine</button>
             <button class="type-btn ${this._type === 'chore' ? 'active' : ''}" @click=${() => (this._type = 'chore')}>Chore</button>
+            ${this.task?.metadata?.member_slug === 'household'
+              ? html`<button class="type-btn ${this._type === 'rotating' ? 'active' : ''}" @click=${() => (this._type = 'rotating')}>Rotating</button>`
+              : ''}
           </div>
         </div>
 
@@ -542,6 +670,50 @@ export class LucarneEditTaskPopover extends LitElement {
           />
         </div>
 
+        ${this._type === 'rotating' ? html`
+        <div class="field">
+          <label>Owners (turn order)</label>
+          <div class="owners-list">
+            ${this.members.filter((m) => m.slug !== 'household').map((m) => {
+              const checked = this._rotatingOwners.includes(m.slug);
+              const orderIdx = this._rotatingOwners.indexOf(m.slug);
+              const isLast = this._rotatingOwners.length <= 1 && checked;
+              return html`
+                <div class="owner-item">
+                  <input
+                    type="checkbox"
+                    .checked=${checked}
+                    ?disabled=${isLast}
+                    @change=${() => this._toggleRotatingOwner(m.slug)}
+                    aria-label="${m.name}"
+                  />
+                  ${checked ? html`<span class="owner-order">${orderIdx + 1}.</span>` : html`<span class="owner-order"></span>`}
+                  <span class="owner-name">${m.name}</span>
+                  ${checked ? html`
+                    <div class="reorder-btns">
+                      <button
+                        class="reorder-btn"
+                        ?disabled=${orderIdx === 0}
+                        @click=${() => this._moveOwner(m.slug, 'up')}
+                        aria-label="Move ${m.name} earlier"
+                      >▲</button>
+                      <button
+                        class="reorder-btn"
+                        ?disabled=${orderIdx === this._rotatingOwners.length - 1}
+                        @click=${() => this._moveOwner(m.slug, 'down')}
+                        aria-label="Move ${m.name} later"
+                      >▼</button>
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+            })}
+          </div>
+          ${this._rotatingOwners.length < 2
+            ? html`<div class="owners-hint">Select at least 2 owners — delete the task to remove all owners</div>`
+            : ''}
+        </div>
+        ` : html`
         <div class="field">
           <label for="et-recurrence">Recurrence</label>
           ${this._isCustomRecurrence
@@ -708,7 +880,9 @@ export class LucarneEditTaskPopover extends LitElement {
                   : ''}
               `}
         </div>
+        `}
 
+        ${this._type !== 'rotating' ? html`
         <div class="field">
           <label for="et-due">Due (optional)</label>
           <input
@@ -718,12 +892,17 @@ export class LucarneEditTaskPopover extends LitElement {
             @change=${(e: Event) => (this._due = (e.target as HTMLInputElement).value)}
           />
         </div>
+        ` : ''}
 
         ${this._error ? html`<div class="error-msg">${this._error}</div>` : ''}
 
         <div class="actions">
           <button class="btn btn-cancel" @click=${this._close}>Cancel</button>
-          <button class="btn btn-save" ?disabled=${this._saving} @click=${this._save}>
+          <button
+            class="btn btn-save"
+            ?disabled=${this._saving || (this._type === 'rotating' && this._rotatingOwners.length < 2)}
+            @click=${this._save}
+          >
             ${this._saving ? 'Saving…' : 'Save'}
           </button>
         </div>

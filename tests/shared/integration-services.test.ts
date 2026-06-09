@@ -58,6 +58,30 @@ describe('addTask', () => {
     const call = hass.calls.callService[0];
     assert.ok(!('assignee' in call.payload), 'assignee must not be sent for non-household tasks');
   });
+
+  it('sends rotation_owners and current_owner for rotating tasks', async () => {
+    const hass = makeHass();
+    await addTask(hass, {
+      member: 'household',
+      summary: 'Clean bathroom',
+      type: 'rotating',
+      rotation_owners: ['alice', 'bob', 'cara'],
+    });
+
+    const call = hass.calls.callService[0];
+    assert.equal(call.payload.member, 'household');
+    assert.equal(call.payload.type, 'rotating');
+    assert.deepEqual(call.payload.rotation_owners, ['alice', 'bob', 'cara']);
+    assert.equal(call.payload.current_owner, undefined, 'current_owner not sent when not provided');
+  });
+
+  it('does NOT send rotation_owners when not provided', async () => {
+    const hass = makeHass();
+    await addTask(hass, { member: 'anna', summary: 'Make bed', type: 'routine' });
+
+    const call = hass.calls.callService[0];
+    assert.ok(!('rotation_owners' in call.payload), 'rotation_owners must not be sent when not provided');
+  });
 });
 
 describe('updateTaskMetadata', () => {
@@ -82,6 +106,18 @@ describe('updateTaskMetadata', () => {
     assert.equal(call.payload.recurrence, 'FREQ=DAILY');
     assert.ok(!('type' in call.payload), 'type not sent when not provided');
     assert.ok(!('icon' in call.payload), 'icon not sent when not provided');
+  });
+
+  it('sends rotation_owners and current_owner when provided', async () => {
+    const hass = makeHass();
+    await updateTaskMetadata(hass, 'uid-rot', {
+      rotation_owners: ['alice', 'cara'],
+      current_owner: 'alice',
+    });
+
+    const call = hass.calls.callService[0];
+    assert.deepEqual(call.payload.rotation_owners, ['alice', 'cara']);
+    assert.equal(call.payload.current_owner, 'alice');
   });
 });
 

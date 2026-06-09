@@ -1,9 +1,14 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LucarneTaskRow } from '../../src/components/task-row.js';
-import type { RenderableTask } from '../../src/shared/types.js';
+import type { MemberSummary, RenderableTask } from '../../src/shared/types.js';
 
 await import('../../src/components/task-row.js');
+
+const MEMBERS: MemberSummary[] = [
+  { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+  { slug: 'bob', name: 'Bob', color: '#b8e0d2', avatar: null, todo_entity_id: 'todo.bob', streak_counter_id: 'counter.bob_streak' },
+];
 
 function makeTask(overrides: Partial<RenderableTask> = {}): RenderableTask {
   return {
@@ -22,6 +27,28 @@ function makeTask(overrides: Partial<RenderableTask> = {}): RenderableTask {
       source: 'template',
     },
     ...overrides,
+  };
+}
+
+function makeRotatingTask(rotationOwners: string[], currentOwner: string): RenderableTask {
+  return {
+    uid: 'r-1',
+    summary: 'Vacuum',
+    status: 'needs_action',
+    due: null,
+    description: '',
+    metadata: {
+      item_uid: 'r-1',
+      member_slug: 'household',
+      assignee_slug: '',
+      type: 'rotating',
+      recurrence: '',
+      icon: '',
+      source: 'manual',
+      time_of_day: 'anytime',
+      rotation_owners: rotationOwners,
+      current_owner: currentOwner,
+    },
   };
 }
 
@@ -194,6 +221,47 @@ describe('lucarne-task-row', () => {
     const row = shadow(el, '.row') as HTMLElement;
     const styles = window.getComputedStyle(row);
     assert.equal(styles.minHeight, '44px', 'compact mode keeps the 44px hit area');
+  });
+
+  it('renders ↻ badge for rotating task', async () => {
+    const task = makeRotatingTask(['anna', 'bob'], 'anna');
+    const el = makeEl(task);
+    el.members = MEMBERS;
+    await el.updateComplete;
+
+    const badge = shadow(el, '.rotation-badge');
+    assert.ok(badge, '.rotation-badge rendered for rotating task');
+    assert.ok(badge!.textContent!.includes('↻'), 'badge shows ↻ symbol');
+  });
+
+  it('does not render ↻ badge for routine task', async () => {
+    const el = makeEl(makeTask());
+    await el.updateComplete;
+
+    const badge = shadow(el, '.rotation-badge');
+    assert.equal(badge, null, 'no rotation badge for routine');
+  });
+
+  it('renders "next: <name>" hint for rotating task with >1 owners', async () => {
+    // anna is current, bob is next
+    const task = makeRotatingTask(['anna', 'bob'], 'anna');
+    const el = makeEl(task);
+    el.members = MEMBERS;
+    await el.updateComplete;
+
+    const hint = shadow(el, '.rotation-next');
+    assert.ok(hint, '.rotation-next rendered');
+    assert.ok(hint!.textContent!.includes('Bob'), `hint should mention Bob, got: "${hint!.textContent}"`);
+  });
+
+  it('hides "next" hint for single-owner rotating task', async () => {
+    const task = makeRotatingTask(['anna'], 'anna');
+    const el = makeEl(task);
+    el.members = MEMBERS;
+    await el.updateComplete;
+
+    const hint = shadow(el, '.rotation-next');
+    assert.equal(hint, null, 'no next hint when only one owner');
   });
 
   it('wraps long task text instead of truncating it (issue #69)', async () => {

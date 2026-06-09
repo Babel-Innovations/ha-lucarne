@@ -183,6 +183,138 @@ export class LucarneAddTaskPopover extends LitElement {
         opacity: 0.5;
         cursor: not-allowed;
       }
+      .also-add-section {
+        margin-top: var(--lucarne-spacing-sm);
+      }
+      .also-add-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      .also-add-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: var(--lucarne-fs-sm);
+        color: var(--lucarne-on-surface);
+        cursor: pointer;
+        min-height: 32px;
+      }
+      .also-add-item input[type='checkbox'] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        min-height: unset;
+        margin: 0;
+        cursor: pointer;
+        border: 2px solid var(--primary-color, #03a9f4);
+        border-radius: 3px;
+        background: transparent;
+        position: relative;
+        flex-shrink: 0;
+      }
+      .also-add-item input[type='checkbox']:checked::after {
+        content: '';
+        position: absolute;
+        left: 3px;
+        top: 0;
+        width: 4px;
+        height: 9px;
+        border: solid var(--primary-color, #03a9f4);
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+      }
+      .also-add-item input[type='checkbox']:focus-visible {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: 2px;
+      }
+      .owners-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 4px;
+      }
+      .owner-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: var(--lucarne-fs-sm);
+        color: var(--lucarne-on-surface);
+        min-height: 44px;
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+      }
+      .owner-item:last-child {
+        border-bottom: none;
+      }
+      .owner-item input[type='checkbox'] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        min-height: unset;
+        margin: 0;
+        cursor: pointer;
+        border: 2px solid var(--primary-color, #03a9f4);
+        border-radius: 3px;
+        background: transparent;
+        position: relative;
+        flex-shrink: 0;
+      }
+      .owner-item input[type='checkbox']:checked::after {
+        content: '';
+        position: absolute;
+        left: 3px;
+        top: 0;
+        width: 4px;
+        height: 9px;
+        border: solid var(--primary-color, #03a9f4);
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+      }
+      .owner-item input[type='checkbox']:focus-visible {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: 2px;
+      }
+      .owner-order {
+        font-size: 0.7rem;
+        color: var(--lucarne-on-surface-muted);
+        min-width: 16px;
+        text-align: right;
+        flex-shrink: 0;
+      }
+      .owner-name {
+        flex: 1;
+      }
+      .reorder-btns {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex-shrink: 0;
+      }
+      .reorder-btn {
+        background: none;
+        border: 1px solid rgba(0,0,0,0.15);
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.65rem;
+        padding: 1px 5px;
+        min-height: 18px;
+        line-height: 1;
+        color: var(--lucarne-on-surface-muted);
+      }
+      .reorder-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+      .owners-hint {
+        font-size: var(--lucarne-fs-sm);
+        color: var(--lucarne-on-surface-muted);
+        font-style: italic;
+        margin-top: 4px;
+      }
     `,
   ];
 
@@ -205,6 +337,8 @@ export class LucarneAddTaskPopover extends LitElement {
   @state() private _timeOfDay: TimeOfDay = 'anytime';
   @state() private _error = '';
   @state() private _saving = false;
+  @state() private _alsoAddSlugs: Set<string> = new Set();
+  @state() private _rotatingOwners: string[] = [];
 
   updated(changed: Map<string, unknown>) {
     super.updated(changed);
@@ -274,31 +408,84 @@ export class LucarneAddTaskPopover extends LitElement {
       this._error = 'Select at least one day for weekly recurrence';
       return;
     }
+    if (this._type === 'rotating' && this._rotatingOwners.length < 2) {
+      this._error = 'Select at least 2 owners for a rotating task';
+      return;
+    }
 
     this._saving = true;
     this._error = '';
 
     try {
-      // Recurrence applies only to routines; due date applies only to chores
-      // (matching what the UI exposes). Strip the field for the wrong type so a
-      // lingering state from a previous type toggle never ships an invisible value.
-      const rrule = this._type === 'routine' ? this._buildRRule() : '';
-      const due = this._type === 'chore' ? this._due : '';
-      await addTask(this.hass, {
-        member: this._selectedMemberSlug,
-        summary: this._summary.trim(),
-        type: this._type,
-        ...(rrule ? { recurrence: rrule } : {}),
-        ...(this._icon ? { icon: this._icon } : {}),
-        ...(due ? { due } : {}),
-        time_of_day: this._timeOfDay,
-        source: 'manual',
-      });
+      if (this._type === 'rotating') {
+        await addTask(this.hass, {
+          member: 'household',
+          summary: this._summary.trim(),
+          type: 'rotating',
+          ...(this._icon ? { icon: this._icon } : {}),
+          time_of_day: this._timeOfDay,
+          source: 'manual',
+          rotation_owners: this._rotatingOwners,
+        });
+      } else {
+        // Recurrence applies only to routines; due date applies only to chores
+        // (matching what the UI exposes). Strip the field for the wrong type so a
+        // lingering state from a previous type toggle never ships an invisible value.
+        const rrule = this._type === 'routine' ? this._buildRRule() : '';
+        const due = this._type === 'chore' ? this._due : '';
+
+        // Build de-duplicated target list (primary member always first).
+        const targets =
+          this._type === 'routine'
+            ? [this._selectedMemberSlug, ...Array.from(this._alsoAddSlugs).filter((s) => s !== this._selectedMemberSlug)]
+            : [this._selectedMemberSlug];
+
+        for (const slug of targets) {
+          await addTask(this.hass, {
+            member: slug,
+            summary: this._summary.trim(),
+            type: this._type,
+            ...(rrule ? { recurrence: rrule } : {}),
+            ...(this._icon ? { icon: this._icon } : {}),
+            ...(due ? { due } : {}),
+            time_of_day: this._timeOfDay,
+            source: 'manual',
+          });
+        }
+      }
       this._close();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'Failed to add task';
       this._saving = false;
     }
+  }
+
+  private _toggleAlsoAdd(slug: string) {
+    const next = new Set(this._alsoAddSlugs);
+    if (next.has(slug)) {
+      next.delete(slug);
+    } else {
+      next.add(slug);
+    }
+    this._alsoAddSlugs = next;
+  }
+
+  private _toggleRotatingOwner(slug: string) {
+    if (this._rotatingOwners.includes(slug)) {
+      this._rotatingOwners = this._rotatingOwners.filter((s) => s !== slug);
+    } else {
+      this._rotatingOwners = [...this._rotatingOwners, slug];
+    }
+  }
+
+  private _moveOwner(slug: string, direction: 'up' | 'down') {
+    const idx = this._rotatingOwners.indexOf(slug);
+    if (idx < 0) return;
+    const next = [...this._rotatingOwners];
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= next.length) return;
+    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    this._rotatingOwners = next;
   }
 
   private _toggleDay(day: WeekdayCode) {
@@ -354,10 +541,20 @@ export class LucarneAddTaskPopover extends LitElement {
           <select
             id="at-type"
             .value=${this._type}
-            @change=${(e: Event) => (this._type = (e.target as HTMLSelectElement).value as TaskType)}
+            @change=${(e: Event) => {
+              const newType = (e.target as HTMLSelectElement).value as TaskType;
+              this._type = newType;
+              if (newType !== 'routine') {
+                this._alsoAddSlugs = new Set();
+              }
+              if (newType !== 'rotating') {
+                this._rotatingOwners = [];
+              }
+            }}
           >
             <option value="routine">Routine</option>
             <option value="chore">Chore</option>
+            <option value="rotating">Rotating</option>
           </select>
         </div>
 
@@ -566,6 +763,73 @@ export class LucarneAddTaskPopover extends LitElement {
               `
             : ''}
         </div>
+
+        ${(() => {
+          const alsoAddTargets = this.members.filter(
+            (m) => m.slug !== this._selectedMemberSlug && m.slug !== 'household',
+          );
+          if (alsoAddTargets.length === 0) return '';
+          return html`
+            <div class="field also-add-section">
+              <label>Also add to:</label>
+              <div class="also-add-list">
+                ${alsoAddTargets.map((m) => html`
+                  <label class="also-add-item">
+                    <input
+                      type="checkbox"
+                      .checked=${this._alsoAddSlugs.has(m.slug)}
+                      @change=${() => this._toggleAlsoAdd(m.slug)}
+                    />
+                    ${m.name}
+                  </label>
+                `)}
+              </div>
+            </div>
+          `;
+        })()}
+        ` : ''}
+
+        ${this._type === 'rotating' ? html`
+        <div class="field">
+          <label>Owners (turn order)</label>
+          <div class="owners-list">
+            ${this.members.filter((m) => m.slug !== 'household').map((m) => {
+              const checked = this._rotatingOwners.includes(m.slug);
+              const orderIdx = this._rotatingOwners.indexOf(m.slug);
+              return html`
+                <div class="owner-item">
+                  <input
+                    type="checkbox"
+                    .checked=${checked}
+                    @change=${() => this._toggleRotatingOwner(m.slug)}
+                    aria-label="${m.name}"
+                  />
+                  ${checked ? html`<span class="owner-order">${orderIdx + 1}.</span>` : html`<span class="owner-order"></span>`}
+                  <span class="owner-name">${m.name}</span>
+                  ${checked ? html`
+                    <div class="reorder-btns">
+                      <button
+                        class="reorder-btn"
+                        ?disabled=${orderIdx === 0}
+                        @click=${() => this._moveOwner(m.slug, 'up')}
+                        aria-label="Move ${m.name} earlier"
+                      >▲</button>
+                      <button
+                        class="reorder-btn"
+                        ?disabled=${orderIdx === this._rotatingOwners.length - 1}
+                        @click=${() => this._moveOwner(m.slug, 'down')}
+                        aria-label="Move ${m.name} later"
+                      >▼</button>
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+            })}
+          </div>
+          ${this._rotatingOwners.length < 2
+            ? html`<div class="owners-hint">Select at least 2 owners to enable rotation</div>`
+            : ''}
+        </div>
         ` : ''}
 
         ${this._type === 'chore'
@@ -586,7 +850,11 @@ export class LucarneAddTaskPopover extends LitElement {
 
         <div class="actions">
           <button class="btn btn-cancel" @click=${this._close}>Cancel</button>
-          <button class="btn btn-submit" ?disabled=${this._saving} @click=${this._submit}>
+          <button
+            class="btn btn-submit"
+            ?disabled=${this._saving || (this._type === 'rotating' && this._rotatingOwners.length < 2)}
+            @click=${this._submit}
+          >
             ${this._saving ? 'Adding…' : 'Add Task'}
           </button>
         </div>
