@@ -2,7 +2,7 @@ import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LucarneTodayCard, LucarneTodayCardConfig } from '../../src/cards/lucarne-today-card.js';
 import { normalizeSectionOrder } from '../../src/cards/lucarne-today-card.js';
-import type { HomeAssistant } from '../../src/shared/types.js';
+import type { HomeAssistant, RenderableTask } from '../../src/shared/types.js';
 import { makeFakeHass } from '../setup/ha-mock.mjs';
 
 await import('../../src/cards/lucarne-today-card.js');
@@ -505,6 +505,85 @@ describe('lucarne-today-card — max_tasks clamp', () => {
       'lucarne-tasks-summary',
     );
     assert.equal(summary.limit, 1, 'limit clamped to 1, not 0');
+  });
+});
+
+describe('lucarne-today-card — rotating tasks excluded', () => {
+  it('omits rotating household tasks from the Today tasks section', async () => {
+    // Regression: rotating tasks live in the household list (member_slug='household',
+    // type='rotating') and belong to the chores card. They must NOT leak into Today.
+    const familyResponse = {
+      members: [],
+      task_metadata: [
+        {
+          item_uid: 'household-chore-1',
+          member_slug: 'household',
+          assignee_slug: '',
+          type: 'chore',
+          recurrence: '',
+          icon: '🧹',
+          source: 'manual',
+        },
+        {
+          item_uid: 'household-rotating-1',
+          member_slug: 'household',
+          assignee_slug: '',
+          type: 'rotating',
+          recurrence: '',
+          icon: '🥛',
+          source: 'manual',
+          rotation_owners: '["anna","ben"]',
+          current_owner: 'anna',
+        },
+      ],
+      reset_time: '04:00',
+      streak_check_time: '21:00',
+      household_entity_id: 'todo.lucarne_household',
+    };
+    const householdItems = [
+      { uid: 'household-chore-1', summary: 'Take out trash', status: 'needs_action' as const },
+      { uid: 'household-rotating-1', summary: 'Get milk', status: 'needs_action' as const },
+    ];
+    const base = makeFakeHass();
+    const hass = {
+      ...base,
+      connection: {
+        ...base.connection,
+        async sendMessagePromise(payload: Record<string, unknown>) {
+          if (payload['type'] === 'lucarne_family/get_family') return familyResponse;
+          if (payload['type'] === 'call_service') {
+            const target = (payload['target'] as { entity_id?: string } | undefined)?.entity_id;
+            const service = payload['service'];
+            if (service === 'get_items' && target === 'todo.lucarne_household') {
+              return { response: { 'todo.lucarne_household': { items: householdItems } } };
+            }
+            return { response: {} };
+          }
+          return undefined;
+        },
+      },
+    };
+    const el = await makeCard(
+      { household_tasks_from_integration: true },
+      hass as unknown as HomeAssistant,
+    );
+    const summary = await waitForShadow<HTMLElement & { updateComplete: Promise<unknown> }>(
+      el.shadowRoot!,
+      'lucarne-tasks-summary',
+    );
+    // Household items arrive via a second async subscription after the summary
+    // mounts; wait for the (single, non-rotating) task row to render.
+    await waitForShadow(summary.shadowRoot!, 'lucarne-task-row');
+    const summaries = Array.from(
+      summary.shadowRoot!.querySelectorAll<HTMLElement & { task?: RenderableTask }>(
+        'lucarne-task-row',
+      ),
+    ).map((row) => row.task?.summary);
+    assert.deepEqual(
+      summaries,
+      ['Take out trash'],
+      'only the non-rotating household task renders; the rotating "Get milk" is excluded',
+    );
   });
 });
 
