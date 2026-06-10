@@ -6022,7 +6022,7 @@ function Ar(e) {
 }
 var jr = class extends V {
 	constructor(...e) {
-		super(...e), this.tasks = [], this.members = [], this.streak = 0, this.showRoutines = !0, this.showTasks = !0, this.showStreak = !0, this.hideName = !1, this.scrollToBucket = "", this._celebrating = !1, this._celebrationTimer = null, this._lastAllRoutinesDone = null;
+		super(...e), this.tasks = [], this.members = [], this.streak = 0, this.showRoutines = !0, this.showTasks = !0, this.showStreak = !0, this.hideName = !1, this.scrollToBucket = "", this._celebrating = !1, this._celebrationTimer = null, this._lastAllRoutinesDone = null, this._scrollRaf = null, this._pendingScrollBucket = !1;
 	}
 	static {
 		this.styles = k`
@@ -6122,7 +6122,7 @@ var jr = class extends V {
   `;
 	}
 	updated(e) {
-		if (super.updated(e), e.has("scrollToBucket") && this._applyScroll(), !e.has("tasks")) return;
+		if (super.updated(e), e.has("scrollToBucket") && this._onScrollBucketChanged(), !e.has("tasks")) return;
 		let t = this.tasks.filter((e) => e.metadata.type === "routine");
 		if (t.length === 0) return;
 		let n = t.every((e) => e.status === "completed");
@@ -6138,14 +6138,28 @@ var jr = class extends V {
 		}, 2200), this.requestUpdate();
 	}
 	disconnectedCallback() {
-		super.disconnectedCallback(), this._celebrationTimer && clearTimeout(this._celebrationTimer);
+		super.disconnectedCallback(), this._celebrationTimer && clearTimeout(this._celebrationTimer), this._scrollRaf !== null && (cancelAnimationFrame(this._scrollRaf), this._scrollRaf = null), this._listsResizeObs?.disconnect();
 	}
-	_applyScroll() {
-		if (!this.scrollToBucket) return;
+	_onScrollBucketChanged() {
+		if (!this.scrollToBucket) {
+			this._pendingScrollBucket = !1, this._scrollRaf !== null && (cancelAnimationFrame(this._scrollRaf), this._scrollRaf = null), this._listsResizeObs?.disconnect();
+			return;
+		}
+		this._pendingScrollBucket = !0, this._scrollRaf !== null && cancelAnimationFrame(this._scrollRaf), this._scrollRaf = requestAnimationFrame(() => {
+			this._scrollRaf = null, this._tryApplyScroll();
+		}), this._observeListsResize();
+	}
+	_tryApplyScroll() {
+		if (!this._pendingScrollBucket || !this.scrollToBucket) return;
 		let e = this.renderRoot.querySelector(".lists");
 		if (!e) return;
 		let t = this._sectionForBucket(e);
-		t && (e.scrollTop = t.offsetTop - e.offsetTop);
+		t && (e.scrollTop = t.offsetTop - e.offsetTop), e.clientHeight > 0 && (this._pendingScrollBucket = !1, this._listsResizeObs?.disconnect());
+	}
+	_observeListsResize() {
+		if (typeof ResizeObserver > "u") return;
+		let e = this.renderRoot?.querySelector(".lists");
+		e && (this._listsResizeObs ||= new ResizeObserver(() => this._tryApplyScroll()), this._listsResizeObs.observe(e));
 	}
 	_sectionForBucket(e) {
 		let t = Tr.indexOf(this.scrollToBucket);

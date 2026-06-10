@@ -181,13 +181,24 @@ export class LucarneMemberColumn extends LitElement {
   @state() private _celebrating = false;
   private _celebrationTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastAllRoutinesDone: boolean | null = null;
+  private _scrollRaf: ReturnType<typeof requestAnimationFrame> | null = null;
+  /** True while we still owe an auto-scroll for the current bucket. Kept set
+   *  until the column actually has layout (clientHeight > 0), so a hidden /
+   *  zero-height container — e.g. the card rendered on a not-yet-visible
+   *  dashboard view, or before async avatars/rows reflow the sections — doesn't
+   *  strand the column at the top. Cleared once delivered so manual scrolling
+   *  afterwards isn't yanked back. */
+  private _pendingScrollBucket = false;
+  /** Watches `.lists` so a queued scroll re-applies when the column finally
+   *  gets laid out (hidden→visible) or its content height settles. */
+  private _listsResizeObs?: ResizeObserver;
 
   updated(changed: Map<string, unknown>) {
     super.updated(changed);
     // Auto-scroll only when the target bucket actually changes (initial set or a
     // time-boundary crossing) — never on a plain task/state re-render, so tapping
     // a row doesn't jerk a manually-scrolled column back.
-    if (changed.has('scrollToBucket')) this._applyScroll();
+    if (changed.has('scrollToBucket')) this._onScrollBucketChanged();
     if (!changed.has('tasks')) return;
     const routines = this.tasks.filter((t) => t.metadata.type === 'routine');
     if (routines.length === 0) return;
@@ -217,19 +228,76 @@ export class LucarneMemberColumn extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._celebrationTimer) clearTimeout(this._celebrationTimer);
+    if (this._scrollRaf !== null) {
+      cancelAnimationFrame(this._scrollRaf);
+      this._scrollRaf = null;
+    }
+    this._listsResizeObs?.disconnect();
+  }
+
+  /** React to a new target bucket (initial set or a time-boundary crossing).
+   *  Arms a pending scroll and applies it on the next frame, and attaches the
+   *  resize observer so it re-applies as the column lays out — landing even when
+   *  the card first rendered hidden/zero-height. A bucket change always runs
+   *  through here (including the card's midnight/threshold timers, even while the
+   *  element is detached), so the observer is (re)attached whenever there is work
+   *  to do. An empty bucket (auto-scroll off) cancels any in-flight frame and
+   *  detaches the observer so it can't fire a stray scroll. */
+  private _onScrollBucketChanged() {
+    if (!this.scrollToBucket) {
+      this._pendingScrollBucket = false;
+      if (this._scrollRaf !== null) {
+        cancelAnimationFrame(this._scrollRaf);
+        this._scrollRaf = null;
+      }
+      this._listsResizeObs?.disconnect();
+      return;
+    }
+    this._pendingScrollBucket = true;
+    // Defer the first attempt to the next frame: the per-task <lucarne-task-row>
+    // children render on their own update cycle (a microtask), so a synchronous
+    // read here would measure `offsetTop` against zero-height sections. (#68)
+    if (this._scrollRaf !== null) cancelAnimationFrame(this._scrollRaf);
+    this._scrollRaf = requestAnimationFrame(() => {
+      this._scrollRaf = null;
+      this._tryApplyScroll();
+    });
+    this._observeListsResize();
   }
 
   /** Scroll the `.lists` container so the section for `scrollToBucket` sits at the
    *  top. If that bucket has no tasks (no section rendered) fall through to the
    *  next non-empty section in display order. When no section at or after the
    *  target exists, leave the scroll position untouched (a 'morning' target with a
-   *  morning section present naturally lands at the top). */
-  private _applyScroll() {
-    if (!this.scrollToBucket) return;
+   *  morning section present naturally lands at the top). Once the column has real
+   *  layout the scroll is considered delivered: the pending flag clears (so a later
+   *  manual scroll or content reflow isn't yanked back) and the observer detaches
+   *  (nothing left to re-apply). Before that — a hidden/zero-height container — it
+   *  stays pending so the observer keeps trying as the column becomes visible. */
+  private _tryApplyScroll() {
+    if (!this._pendingScrollBucket || !this.scrollToBucket) return;
     const lists = this.renderRoot.querySelector('.lists') as HTMLElement | null;
     if (!lists) return;
     const target = this._sectionForBucket(lists);
     if (target) lists.scrollTop = target.offsetTop - lists.offsetTop;
+    if (lists.clientHeight > 0) {
+      this._pendingScrollBucket = false;
+      this._listsResizeObs?.disconnect();
+    }
+  }
+
+  /** Lazily create and attach the `.lists` resize observer. Only called while a
+   *  scroll is pending; detached again in `_tryApplyScroll` once delivered (and on
+   *  disable/disconnect), so the observer is never live without work to do.
+   *  Re-observing the same element is a no-op, so re-arming is safe. */
+  private _observeListsResize() {
+    if (typeof ResizeObserver === 'undefined') return;
+    const lists = this.renderRoot?.querySelector('.lists') as HTMLElement | null;
+    if (!lists) return;
+    if (!this._listsResizeObs) {
+      this._listsResizeObs = new ResizeObserver(() => this._tryApplyScroll());
+    }
+    this._listsResizeObs.observe(lists);
   }
 
   /** First rendered `.section` at or after `scrollToBucket` in display order. */

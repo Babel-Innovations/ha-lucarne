@@ -335,7 +335,7 @@ describe('lucarne-member-column', () => {
 
   // happy-dom has no layout engine, so offsetTop is always 0 and we can't assert a
   // pixel scrollTop. Instead we spy on assignments to `.lists` scrollTop: a write
-  // happens iff _applyScroll found a section to scroll to.
+  // happens iff _tryApplyScroll found a section to scroll to.
   function spyScrollWrites(el: LucarneMemberColumn): () => number {
     const lists = shadow(el, '.lists') as HTMLElement;
     let writes = 0;
@@ -345,6 +345,13 @@ describe('lucarne-member-column', () => {
       set: () => { writes += 1; },
     });
     return () => writes;
+  }
+
+  // _onScrollBucketChanged defers the actual scrollTop write (done in _tryApplyScroll) to requestAnimationFrame so it
+  // measures against laid-out task rows (see member-column.ts). Tests must let that
+  // frame fire before asserting on the spy.
+  function nextFrame(): Promise<void> {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
   }
 
   it('tags each section with its time-of-day data-bucket', async () => {
@@ -362,11 +369,13 @@ describe('lucarne-member-column', () => {
 
     el.scrollToBucket = 'afternoon';
     await el.updateComplete;
+    await nextFrame();
     assert.equal(writes(), 1, 'a bucket change scrolls once');
 
     // A task push with the SAME bucket must not yank a manually-scrolled column.
     el.tasks = [bucketTask('morning', 'm1'), bucketTask('afternoon', 'a1'), bucketTask('morning', 'm2')];
     await el.updateComplete;
+    await nextFrame();
     assert.equal(writes(), 1, 'task-only re-render does not re-scroll');
   });
 
@@ -378,6 +387,7 @@ describe('lucarne-member-column', () => {
 
     el.scrollToBucket = 'afternoon';
     await el.updateComplete;
+    await nextFrame();
     assert.equal(writes(), 1, 'falls through afternoon→night→anytime and scrolls');
   });
 
@@ -389,6 +399,7 @@ describe('lucarne-member-column', () => {
 
     el.scrollToBucket = 'night';
     await el.updateComplete;
+    await nextFrame();
     assert.equal(writes(), 0, 'no section at or after the target → no scroll');
   });
 
@@ -400,6 +411,74 @@ describe('lucarne-member-column', () => {
     el.scrollToBucket = '';
     el.tasks = [bucketTask('morning', 'm1')];
     await el.updateComplete;
+    await nextFrame();
     assert.equal(writes(), 0, 'auto-scroll disabled → no scroll write');
+  });
+
+  it('re-applies the scroll when a hidden/zero-height column later lays out', async () => {
+    // happy-dom never fires ResizeObserver and reports clientHeight 0, so stub
+    // the observer to capture its callback and drive a hidden→visible layout by
+    // hand. This is the case the rAF-only fix missed: a card first rendered on a
+    // not-yet-visible dashboard view measures a zero-height container.
+    const RealRO = globalThis.ResizeObserver;
+    // Holder object: assigning to a property (vs a bare `let`) keeps TS from
+    // narrowing the captured callback to its initial null at the call sites.
+    const ro: { cb: (() => void) | null; disconnects: number } = { cb: null, disconnects: 0 };
+    globalThis.ResizeObserver = class {
+      constructor(cb: () => void) { ro.cb = cb; }
+      observe() {}
+      unobserve() {}
+      disconnect() { ro.disconnects += 1; }
+    } as unknown as typeof ResizeObserver;
+
+    try {
+      const el = makeEl([bucketTask('morning', 'm1'), bucketTask('night', 'n1')]);
+      await el.updateComplete;
+      const lists = shadow(el, '.lists') as HTMLElement;
+      let height = 0; // hidden view
+      Object.defineProperty(lists, 'clientHeight', { configurable: true, get: () => height });
+      const writes = spyScrollWrites(el);
+
+      el.scrollToBucket = 'night';
+      await el.updateComplete;
+      await nextFrame();
+      // The rAF fired, but the container is still hidden — the scroll isn't
+      // considered delivered, so the observer must keep re-applying it.
+      const afterHidden = writes();
+      assert.ok(afterHidden >= 1, 'an attempt is made even while hidden');
+
+      assert.equal(ro.disconnects, 0, 'observer stays attached while still pending');
+
+      // Column becomes visible; the resize observer fires.
+      height = 400;
+      ro.cb?.();
+      assert.ok(writes() > afterHidden, 're-applied once the column has layout');
+      // Delivered → the observer detaches (nothing left to re-apply).
+      assert.equal(ro.disconnects, 1, 'observer disconnected once the scroll is delivered');
+
+      // Now delivered — further resizes must not yank a manually-scrolled column.
+      const afterShown = writes();
+      ro.cb?.();
+      assert.equal(writes(), afterShown, 'no further re-scroll after layout settles');
+    } finally {
+      globalThis.ResizeObserver = RealRO;
+    }
+  });
+
+  it('cancels a queued frame when scrollToBucket is cleared before it fires', async () => {
+    const el = makeEl([bucketTask('morning', 'm1'), bucketTask('afternoon', 'a1')]);
+    await el.updateComplete;
+    const writes = spyScrollWrites(el);
+
+    // Arm a frame for 'afternoon', then disable auto-scroll before it fires.
+    // updateComplete resolves on a microtask while the rAF is still pending, so
+    // the clear path must cancel it — otherwise the stale frame would scroll
+    // after auto-scroll was turned off.
+    el.scrollToBucket = 'afternoon';
+    await el.updateComplete;
+    el.scrollToBucket = '';
+    await el.updateComplete;
+    await nextFrame();
+    assert.equal(writes(), 0, 'clearing the bucket cancels the pending scroll frame');
   });
 });
