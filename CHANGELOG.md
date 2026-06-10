@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.3.0 — 2026-06-10
+
+**Features:**
+-  multi-person routines and rotating tasks
+
+**Fixes:**
+-  keep edit popover open after long-press on iPad
+-  keep today's past calendar events visible (dimmed)
+-  exclude rotating tasks from the Today card
+-  optimistically render newly-added tasks
+-  defer column auto-scroll to rAF so it lands after rows render (#68)
+-  auto-scroll columns to current time-of-day section (fixes #68)
+-  refresh due-today window at local midnight (#68)
+-  wrap long task text instead of horizontal scroll (fixes #69)
+
+
 ## v1.2.0 — 2026-06-06
 
 **Features:**
