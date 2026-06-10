@@ -7088,7 +7088,7 @@ J([W({ attribute: !1 })], Q.prototype, "hass", void 0), J([W({ attribute: !1 })]
 //#region src/components/edit-task-popover.ts
 var $ = class extends V {
 	constructor(...e) {
-		super(...e), this.members = [], this._summary = "", this._type = "chore", this._icon = "", this._recurrenceMode = "none", this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._due = "", this._assignee = "", this._timeOfDay = "anytime", this._isCustomRecurrence = !1, this._rawRecurrence = "", this._error = "", this._saving = !1, this._confirmingDelete = !1, this._rotatingOwners = [];
+		super(...e), this.members = [], this._summary = "", this._type = "chore", this._icon = "", this._recurrenceMode = "none", this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._due = "", this._assignee = "", this._timeOfDay = "anytime", this._isCustomRecurrence = !1, this._rawRecurrence = "", this._error = "", this._saving = !1, this._confirmingDelete = !1, this._rotatingOwners = [], this._backdropPressActive = !1;
 	}
 	static {
 		this.styles = [K, k`
@@ -7406,6 +7406,15 @@ var $ = class extends V {
 		let t = Xt(e.metadata.recurrence);
 		t.mode === "unknown" ? (this._isCustomRecurrence = !0, this._rawRecurrence = t.raw, this._recurrenceMode = "unknown") : (this._isCustomRecurrence = !1, this._recurrenceMode = t.mode, t.mode === "daily" ? this._recurrenceInterval = t.interval ?? 1 : t.mode === "weekly" ? (this._recurrenceDays = [...t.days], this._recurrenceInterval = t.interval ?? 1) : t.mode === "monthly-date" ? (this._recurrenceMonthDay = t.dayOfMonth, this._recurrenceInterval = t.interval ?? 1) : t.mode === "monthly-nth" ? (this._recurrenceNth = t.nth, this._recurrenceNthDay = t.day, this._recurrenceInterval = t.interval ?? 1) : t.mode === "yearly" && (this._recurrenceMonth = t.month, this._recurrenceMonthDay = t.dayOfMonth, this._recurrenceInterval = t.interval ?? 1));
 	}
+	_onBackdropPointerDown(e) {
+		this._backdropPressActive = e.isPrimary && e.button === 0, this._backdropPressActive && e.currentTarget.setPointerCapture(e.pointerId);
+	}
+	_onBackdropPointerUp() {
+		this._backdropPressActive && (this._backdropPressActive = !1, this._close());
+	}
+	_onBackdropPointerCancel() {
+		this._backdropPressActive = !1;
+	}
 	_close() {
 		this.dispatchEvent(new CustomEvent("popover-close", {
 			bubbles: !0,
@@ -7524,7 +7533,12 @@ var $ = class extends V {
 			SU: "Sun"
 		};
 		return P`
-      <div class="backdrop" @click=${this._close}></div>
+      <div
+        class="backdrop"
+        @pointerdown=${this._onBackdropPointerDown}
+        @pointerup=${this._onBackdropPointerUp}
+        @pointercancel=${this._onBackdropPointerCancel}
+      ></div>
       <div class="popover" role="dialog" aria-modal="true" aria-label="Edit task">
         <div class="popover-header">
           <h2 class="popover-title">Edit Task</h2>

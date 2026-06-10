@@ -401,6 +401,39 @@ export class LucarneEditTaskPopover extends LitElement {
     }
   }
 
+  // Dismiss only on a primary press that both starts AND ends on the backdrop.
+  // The popover is mounted while a long-press finger is still down (see
+  // task-row.ts), so the backdrop appears under that finger; on iPad, lifting it
+  // synthesizes a click on the freshly-mounted backdrop. We deliberately do NOT
+  // listen for `click` — the opening gesture's pointer is captured by the task
+  // row, so the backdrop never sees its pointerdown/pointerup pair, and the stray
+  // synthesized click is ignored (issue #57). Tracking pointerup (not click) also
+  // means the flag can never go stale into a wrong dismissal: a real pointerup is
+  // always preceded by a real pointerdown that (re)evaluates the flag.
+  private _backdropPressActive = false;
+
+  private _onBackdropPointerDown(e: PointerEvent) {
+    // Only a primary press arms dismissal — ignore right/middle click and
+    // secondary touch points (a non-primary press also clears any prior state).
+    this._backdropPressActive = e.isPrimary && e.button === 0;
+    if (this._backdropPressActive) {
+      // Capture so the terminal pointerup/pointercancel reliably lands on the
+      // backdrop even if the finger drifts off before release.
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
+  }
+
+  private _onBackdropPointerUp() {
+    if (!this._backdropPressActive) return;
+    this._backdropPressActive = false;
+    this._close();
+  }
+
+  private _onBackdropPointerCancel() {
+    // Gesture aborted (scroll takeover, etc.) — don't leave the flag armed.
+    this._backdropPressActive = false;
+  }
+
   private _close() {
     this.dispatchEvent(new CustomEvent('popover-close', { bubbles: true, composed: true }));
   }
@@ -591,7 +624,12 @@ export class LucarneEditTaskPopover extends LitElement {
     };
 
     return html`
-      <div class="backdrop" @click=${this._close}></div>
+      <div
+        class="backdrop"
+        @pointerdown=${this._onBackdropPointerDown}
+        @pointerup=${this._onBackdropPointerUp}
+        @pointercancel=${this._onBackdropPointerCancel}
+      ></div>
       <div class="popover" role="dialog" aria-modal="true" aria-label="Edit task">
         <div class="popover-header">
           <h2 class="popover-title">Edit Task</h2>
