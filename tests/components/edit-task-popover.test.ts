@@ -260,16 +260,62 @@ describe('lucarne-edit-task-popover', () => {
     assert.equal(events.length, 1);
   });
 
-  it('fires popover-close on backdrop click', async () => {
+  it('fires popover-close on a genuine backdrop press (primary pointerdown then pointerup)', async () => {
     const el = await makeEl();
 
     const events: Event[] = [];
     el.addEventListener('popover-close', (e) => events.push(e));
 
     const backdrop = shadow(el, '.backdrop') as HTMLElement;
-    backdrop.click();
+    backdrop.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0, isPrimary: true }));
+    backdrop.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
 
     assert.equal(events.length, 1);
+  });
+
+  it('ignores a synthesized backdrop click with no pointer press (iPad open-gesture tap, issue #57)', async () => {
+    const el = await makeEl();
+
+    const events: Event[] = [];
+    el.addEventListener('popover-close', (e) => events.push(e));
+
+    // The long-press that opens the popover happens while the finger is down on
+    // the task row, whose pointer is captured there — so the backdrop never sees
+    // the pointerdown/pointerup pair. Lifting the finger only synthesizes a click
+    // on the freshly-mounted backdrop, which we do not listen for. Neither a bare
+    // click nor a bare pointerup (no preceding pointerdown) may dismiss.
+    const backdrop = shadow(el, '.backdrop') as HTMLElement;
+    backdrop.click();
+    backdrop.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+
+    assert.equal(events.length, 0);
+  });
+
+  it('ignores a non-primary backdrop press (right/middle click, secondary touch)', async () => {
+    const el = await makeEl();
+
+    const events: Event[] = [];
+    el.addEventListener('popover-close', (e) => events.push(e));
+
+    const backdrop = shadow(el, '.backdrop') as HTMLElement;
+    backdrop.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2, button: 2, isPrimary: false }));
+    backdrop.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 2 }));
+
+    assert.equal(events.length, 0);
+  });
+
+  it('does not dismiss after an aborted backdrop press (pointercancel clears the flag)', async () => {
+    const el = await makeEl();
+
+    const events: Event[] = [];
+    el.addEventListener('popover-close', (e) => events.push(e));
+
+    const backdrop = shadow(el, '.backdrop') as HTMLElement;
+    backdrop.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0, isPrimary: true }));
+    backdrop.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 }));
+    backdrop.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+
+    assert.equal(events.length, 0);
   });
 
   it('shows error when user tries to clear an existing due date (HA cannot clear via API)', async () => {
