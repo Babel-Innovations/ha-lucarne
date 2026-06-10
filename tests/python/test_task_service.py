@@ -270,6 +270,31 @@ async def test_add_task_creates_todo_item_and_metadata(
     assert events[0].data["summary"] == "Make the bed"
 
 
+async def test_add_task_returns_uid_with_response(
+    hass: HomeAssistant,
+    tmp_path: Path,
+) -> None:
+    """add_task returns the new uid so the frontend can reconcile its optimistic insert."""
+    _entry, store, _ = await _setup_with_member(hass, tmp_path)
+
+    result = await hass.services.async_call(
+        DOMAIN,
+        "add_task",
+        {"member": "anna", "summary": "Tidy room", "type": "chore"},
+        blocking=True,
+        return_response=True,
+    )
+
+    assert isinstance(result, dict)
+    uid = result["uid"]
+    assert uid
+
+    # The returned uid matches the stored metadata row's item_uid.
+    tasks = await store.async_get_tasks_for_member("anna")
+    assert len(tasks) == 1
+    assert tasks[0]["item_uid"] == uid
+
+
 async def test_add_task_invalid_member_raises(
     hass: HomeAssistant,
     tmp_path: Path,

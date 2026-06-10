@@ -539,4 +539,129 @@ describe('lucarne-chores-card', () => {
       mock.timers.reset();
     }
   });
+
+  // --- Optimistic add (the family-state subscription is too slow to feel live
+  // on some clients — e.g. iPad Safari — so a successful add injects the new
+  // task immediately, then reconciles once the real task arrives). ---
+
+  function dispatchTaskAdded(el: LucarneChoresCard, tasks: RenderableTask[]) {
+    (el as unknown as { _handleTaskAdded(e: Event): void })._handleTaskAdded(
+      new CustomEvent('task-added', { detail: { tasks } }),
+    );
+  }
+
+  it('optimistically renders a freshly-added task before any family-state push', async () => {
+    const el = await makeCard(['anna']);
+    assert.equal(annaTaskRow(el), null, 'anna column starts empty');
+
+    const provisional: RenderableTask = {
+      ...makeChore('needs_action'),
+      uid: 'new-1',
+      summary: 'Feed the cat',
+      metadata: { ...makeChore().metadata, item_uid: 'new-1' },
+    };
+    dispatchTaskAdded(el, [provisional]);
+    await el.updateComplete;
+
+    const row = annaTaskRow(el);
+    assert.ok(row, 'optimistic task rendered immediately');
+    assert.equal(row!.task.uid, 'new-1');
+  });
+
+  it('drops the optimistic add (no duplicate) once the real task with the same uid arrives', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _optimisticAdds: Map<string, RenderableTask>;
+      _onFamilyState: (s: FamilyState) => void;
+    };
+
+    const provisional: RenderableTask = {
+      ...makeChore('needs_action'),
+      uid: 'new-1',
+      metadata: { ...makeChore().metadata, item_uid: 'new-1' },
+    };
+    dispatchTaskAdded(el, [provisional]);
+    await el.updateComplete;
+    assert.equal(internals._optimisticAdds.size, 1, 'optimistic add recorded');
+
+    // Family state now carries the real task with the same uid.
+    internals._onFamilyState({
+      members: [
+        { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+      ],
+      tasksByMember: new Map([['anna', [provisional]]]),
+      streakByMember: new Map([['anna', 0]]),
+      taskMetadataByUid: new Map(),
+      resetTime: '03:00',
+      streakCheckTime: '02:00',
+      integrationError: null,
+    });
+    await el.updateComplete;
+
+    assert.equal(internals._optimisticAdds.size, 0, 'optimistic add reconciled away');
+    const col = el.shadowRoot!.querySelector('lucarne-member-column');
+    const rows = col?.shadowRoot?.querySelectorAll('lucarne-task-row') ?? [];
+    assert.equal(rows.length, 1, 'exactly one row — no duplicate');
+  });
+
+  it('ignores a task-added event carrying no tasks', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as { _optimisticAdds: Map<string, RenderableTask> };
+    dispatchTaskAdded(el, []);
+    await el.updateComplete;
+    assert.equal(internals._optimisticAdds.size, 0, 'no optimistic add recorded');
+    assert.equal(annaTaskRow(el), null, 'no phantom row rendered');
+  });
+
+  it('optimistically renders a rotating add in the current_owner column', async () => {
+    const el = await makeCard(['anna', 'bob']);
+    const provisional: RenderableTask = {
+      ...makeRotatingTask('bob'),
+      uid: 'new-rot',
+      metadata: { ...makeRotatingTask('bob').metadata, item_uid: 'new-rot' },
+    };
+    dispatchTaskAdded(el, [provisional]);
+    await el.updateComplete;
+
+    type ColEl = HTMLElement & { member: { slug: string }; tasks: RenderableTask[] };
+    const cols = Array.from(el.shadowRoot!.querySelectorAll('lucarne-member-column')) as ColEl[];
+    const bobCol = cols.find((c) => c.member.slug === 'bob');
+    const annaCol = cols.find((c) => c.member.slug === 'anna');
+    assert.equal(bobCol!.tasks.length, 1, 'rotating add in bob (current_owner) column');
+    assert.equal(bobCol!.tasks[0].uid, 'new-rot');
+    assert.equal(annaCol!.tasks.length, 0, 'not in the non-owner column');
+  });
+
+  it('drops an unreconciled optimistic add after the backstop timeout', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _midnightTimer?: ReturnType<typeof setTimeout>;
+      _scrollTimer?: ReturnType<typeof setTimeout>;
+      _optimisticAdds: Map<string, RenderableTask>;
+    };
+    // Cancel the real connectedCallback timers before faking the clock (see the
+    // midnight-rollover test for why this must use the real clearTimeout).
+    clearTimeout(internals._midnightTimer);
+    internals._midnightTimer = undefined;
+    clearTimeout(internals._scrollTimer);
+    internals._scrollTimer = undefined;
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      const provisional: RenderableTask = {
+        ...makeChore('needs_action'),
+        uid: 'ghost-1',
+        metadata: { ...makeChore().metadata, item_uid: 'ghost-1' },
+      };
+      dispatchTaskAdded(el, [provisional]);
+      await el.updateComplete;
+      assert.equal(internals._optimisticAdds.size, 1, 'optimistic add present');
+
+      // No reconciling push ever arrives; the backstop clears it after the TTL.
+      mock.timers.tick(10_000);
+      await el.updateComplete;
+      assert.equal(internals._optimisticAdds.size, 0, 'ghost add cleared by backstop');
+    } finally {
+      mock.timers.reset();
+    }
+  });
 });

@@ -9,7 +9,12 @@ import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.components.todo import TodoItem
 from homeassistant.components.todo.const import DATA_COMPONENT, TodoItemStatus
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .const import DOMAIN, HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
@@ -95,7 +100,7 @@ TOGGLE_TASK_SCHEMA = vol.Schema({vol.Required("uid"): cv.string})
 async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
     """Register lucarne_family task services. Re-registration replaces the handler."""
 
-    async def handle_add_task(call: ServiceCall) -> None:
+    async def handle_add_task(call: ServiceCall) -> ServiceResponse:
         store = _get_store(hass, entry_id)
         known_slugs = {m.slug for m in store.get_members()}
         member_slug: str = call.data["member"]
@@ -185,6 +190,12 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
             "lucarne_family_task_added",
             {"member": member_slug, "uid": item_uid, "type": task_type, "summary": summary},
         )
+        # Return the new uid so the frontend can reconcile its optimistic insert
+        # (the chores card flips a freshly-added row in immediately; the slow
+        # family-state subscription on some clients can't be relied on to deliver
+        # the add promptly). HA only surfaces this response to callers that pass
+        # return_response=True; for everyone else the return value is ignored.
+        return {"uid": item_uid}
 
     async def handle_update_task_metadata(call: ServiceCall) -> None:
         store = _get_store(hass, entry_id)
@@ -367,7 +378,13 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
             await async_apply_streak(hass, store, member, new_streak)
         _LOGGER.debug("Evaluated streaks for %d members", len(store.get_members()))
 
-    hass.services.async_register(DOMAIN, "add_task", handle_add_task, schema=ADD_TASK_SCHEMA)
+    hass.services.async_register(
+        DOMAIN,
+        "add_task",
+        handle_add_task,
+        schema=ADD_TASK_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
     hass.services.async_register(
         DOMAIN, "update_task_metadata", handle_update_task_metadata, schema=UPDATE_METADATA_SCHEMA
     )

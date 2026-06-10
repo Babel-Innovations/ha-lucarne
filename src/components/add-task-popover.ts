@@ -1,7 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
-import type { HomeAssistant, MemberSummary, TaskType, TimeOfDay } from '../shared/types.js';
+import type { HomeAssistant, MemberSummary, RenderableTask, TaskType, TimeOfDay } from '../shared/types.js';
 import { addTask } from '../shared/integration-services.js';
 import { buildRRule, friendlySummary, WEEKDAY_CODES } from '../shared/recurrence.js';
 import type { RecurrenceMode, WeekdayCode } from '../shared/recurrence.js';
@@ -416,17 +416,33 @@ export class LucarneAddTaskPopover extends LitElement {
     this._saving = true;
     this._error = '';
 
+    const summary = this._summary.trim();
+    // Provisional tasks built from the uids the service returns, so the chores
+    // card can flip them in instantly (the family-state subscription is too slow
+    // on some clients — see lucarne-chores-card._optimisticAdds). A null uid
+    // means the backend didn't return one; we skip the optimistic insert for it.
+    const added: RenderableTask[] = [];
+
     try {
       if (this._type === 'rotating') {
-        await addTask(this.hass, {
+        const uid = await addTask(this.hass, {
           member: 'household',
-          summary: this._summary.trim(),
+          summary,
           type: 'rotating',
           ...(this._icon ? { icon: this._icon } : {}),
           time_of_day: this._timeOfDay,
           source: 'manual',
           rotation_owners: this._rotatingOwners,
         });
+        if (uid) {
+          added.push(
+            this._provisionalTask(uid, 'household', summary, null, {
+              rotation_owners: this._rotatingOwners,
+              // Server defaults current_owner to the first listed owner.
+              current_owner: this._rotatingOwners[0],
+            }),
+          );
+        }
       } else {
         // Recurrence applies only to routines; due date applies only to chores
         // (matching what the UI exposes). Strip the field for the wrong type so a
@@ -441,9 +457,9 @@ export class LucarneAddTaskPopover extends LitElement {
             : [this._selectedMemberSlug];
 
         for (const slug of targets) {
-          await addTask(this.hass, {
+          const uid = await addTask(this.hass, {
             member: slug,
-            summary: this._summary.trim(),
+            summary,
             type: this._type,
             ...(rrule ? { recurrence: rrule } : {}),
             ...(this._icon ? { icon: this._icon } : {}),
@@ -451,13 +467,54 @@ export class LucarneAddTaskPopover extends LitElement {
             time_of_day: this._timeOfDay,
             source: 'manual',
           });
+          if (uid) {
+            added.push(this._provisionalTask(uid, slug, summary, due || null, { recurrence: rrule }));
+          }
         }
+      }
+      if (added.length > 0) {
+        this.dispatchEvent(
+          new CustomEvent('task-added', { detail: { tasks: added }, bubbles: true, composed: true }),
+        );
       }
       this._close();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'Failed to add task';
       this._saving = false;
     }
+  }
+
+  /**
+   * Build a provisional RenderableTask mirroring what the integration stores +
+   * `buildRenderableTasks` would produce, so the chores card's resolve/filter
+   * logic treats the optimistic insert identically to the eventual real task.
+   */
+  private _provisionalTask(
+    uid: string,
+    memberSlug: string,
+    summary: string,
+    due: string | null,
+    extra: { recurrence?: string; rotation_owners?: string[]; current_owner?: string } = {},
+  ): RenderableTask {
+    return {
+      uid,
+      summary,
+      status: 'needs_action',
+      due,
+      description: '',
+      metadata: {
+        item_uid: uid,
+        member_slug: memberSlug,
+        assignee_slug: '',
+        type: this._type,
+        recurrence: extra.recurrence ?? '',
+        icon: this._icon,
+        source: 'manual',
+        time_of_day: this._timeOfDay,
+        ...(extra.rotation_owners !== undefined ? { rotation_owners: extra.rotation_owners } : {}),
+        ...(extra.current_owner !== undefined ? { current_owner: extra.current_owner } : {}),
+      },
+    };
   }
 
   private _toggleAlsoAdd(slug: string) {

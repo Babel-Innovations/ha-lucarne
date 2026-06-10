@@ -14,7 +14,34 @@ export interface AddTaskParams {
   current_owner?: string;
 }
 
-export async function addTask(hass: HomeAssistant, params: AddTaskParams): Promise<void> {
+/**
+ * `hass.callService` with the `returnResponse` flag. The `custom-card-helpers`
+ * type is stale (4 args, `Promise<void>`), but the live HA frontend accepts
+ * `(domain, service, data, target, notifyOnError, returnResponse)` and returns
+ * `{ context, response }` when the service supports a response.
+ */
+type CallServiceWithResponse = (
+  domain: string,
+  service: string,
+  serviceData?: Record<string, unknown>,
+  target?: unknown,
+  notifyOnError?: boolean,
+  returnResponse?: boolean,
+) => Promise<{ response?: { uid?: string } } | undefined>;
+
+/**
+ * Add a task and return the server-generated uid (or `null` if the backend
+ * doesn't return one — e.g. an older integration build).
+ *
+ * The uid lets the chores card reconcile its optimistic insert: it flips the
+ * freshly-added task in immediately, then drops the placeholder once the real
+ * task with this uid arrives over the (slow on some clients) family-state
+ * subscription.
+ */
+export async function addTask(
+  hass: HomeAssistant,
+  params: AddTaskParams,
+): Promise<string | null> {
   const serviceData: Record<string, unknown> = {
     member: params.member,
     summary: params.summary,
@@ -29,7 +56,18 @@ export async function addTask(hass: HomeAssistant, params: AddTaskParams): Promi
   if (params.rotation_owners !== undefined) serviceData.rotation_owners = params.rotation_owners;
   if (params.current_owner !== undefined) serviceData.current_owner = params.current_owner;
 
-  await hass.callService('lucarne_family', 'add_task', serviceData);
+  // Invoke as a method on `hass` so the receiver binding is preserved — the
+  // live HA frontend's callService may rely on `this`. (Cast only widens the
+  // stale 4-arg type to accept the returnResponse flag.)
+  const result = await (hass as unknown as { callService: CallServiceWithResponse }).callService(
+    'lucarne_family',
+    'add_task',
+    serviceData,
+    undefined,
+    true,
+    true,
+  );
+  return result?.response?.uid ?? null;
 }
 
 export interface UpdateTaskMetadataFields {
