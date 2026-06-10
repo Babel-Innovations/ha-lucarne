@@ -39,6 +39,15 @@ export interface LucarneChoresCardConfig {
 export const DEFAULT_AFTERNOON_START = '12:00';
 export const DEFAULT_NIGHT_START = '19:00';
 
+/**
+ * How long an optimistic add lingers before self-clearing if the family-state
+ * subscription never delivers the real task (the subscription is slow/unreliable
+ * on some clients — e.g. iPad Safari). Bounds a missed reconcile so a phantom
+ * row can't stay forever; the task is on the server regardless and reappears on
+ * the next refresh/remount.
+ */
+const OPTIMISTIC_ADD_TTL_MS = 10_000;
+
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards =
   (window as Window & typeof globalThis & { customCards?: object[] }).customCards || [];
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards!.push({
@@ -153,6 +162,16 @@ export class LucarneChoresCard extends LucarneCardBase {
    * catches up. Reverted if the service call fails.
    */
   @state() private _optimistic: Map<string, RenderableTask['status']> = new Map();
+  /**
+   * Optimistically-added tasks keyed by uid. A successful add injects the new
+   * task here immediately (the family-state subscription is too slow to feel
+   * live on some clients), then `_onFamilyState` drops each entry once the real
+   * task with the same uid arrives. Self-cleared via `_addTimers` as a backstop.
+   */
+  @state() private _optimisticAdds: Map<string, RenderableTask> = new Map();
+
+  /** Per-uid backstop timers that drop an unreconciled optimistic add. */
+  private _addTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   private _unsubFamily?: () => void;
   /**
@@ -259,25 +278,75 @@ export class LucarneChoresCard extends LucarneCardBase {
 
   /** Apply a freshly-pushed family state, reconciling optimistic overrides. */
   private _onFamilyState = (state: FamilyState) => {
-    if (this._optimistic.size > 0) {
-      const next = new Map(this._optimistic);
+    if (this._optimistic.size > 0 || this._optimisticAdds.size > 0) {
       const presentUids = new Set<string>();
+      const nextToggle = new Map(this._optimistic);
       for (const tasks of state.tasksByMember.values()) {
         for (const t of tasks) {
           presentUids.add(t.uid);
-          // Server caught up to the optimistic value — stop overriding.
-          if (next.get(t.uid) === t.status) next.delete(t.uid);
+          // Server caught up to the optimistic toggle — stop overriding.
+          if (nextToggle.get(t.uid) === t.status) nextToggle.delete(t.uid);
         }
       }
-      // Drop overrides for tasks that no longer exist (e.g. a completed
-      // one-off chore deleted by the daily reset) so the map can't grow stale.
-      for (const uid of next.keys()) {
-        if (!presentUids.has(uid)) next.delete(uid);
+      if (this._optimistic.size > 0) {
+        // Drop overrides for tasks that no longer exist (e.g. a completed
+        // one-off chore deleted by the daily reset) so the map can't grow stale.
+        for (const uid of nextToggle.keys()) {
+          if (!presentUids.has(uid)) nextToggle.delete(uid);
+        }
+        this._optimistic = nextToggle;
       }
-      this._optimistic = next;
+      if (this._optimisticAdds.size > 0) {
+        // Drop optimistic adds once the real task (same uid) shows up.
+        const nextAdds = new Map(this._optimisticAdds);
+        let changed = false;
+        for (const uid of nextAdds.keys()) {
+          if (presentUids.has(uid)) {
+            nextAdds.delete(uid);
+            this._clearAddTimeout(uid);
+            changed = true;
+          }
+        }
+        if (changed) this._optimisticAdds = nextAdds;
+      }
     }
     this._familyState = state;
   };
+
+  private _handleTaskAdded = (e: Event) => {
+    const { tasks } = (e as CustomEvent<{ tasks: RenderableTask[] }>).detail;
+    if (!tasks?.length) return;
+    const next = new Map(this._optimisticAdds);
+    for (const t of tasks) {
+      next.set(t.uid, t);
+      this._scheduleAddCleanup(t.uid);
+    }
+    this._optimisticAdds = next;
+  };
+
+  /** Arm a backstop that drops an optimistic add if it's never reconciled. */
+  private _scheduleAddCleanup(uid: string) {
+    this._clearAddTimeout(uid);
+    this._addTimers.set(
+      uid,
+      setTimeout(() => {
+        this._addTimers.delete(uid);
+        if (this._optimisticAdds.has(uid)) {
+          const next = new Map(this._optimisticAdds);
+          next.delete(uid);
+          this._optimisticAdds = next;
+        }
+      }, OPTIMISTIC_ADD_TTL_MS),
+    );
+  }
+
+  private _clearAddTimeout(uid: string) {
+    const timer = this._addTimers.get(uid);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this._addTimers.delete(uid);
+    }
+  }
 
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -291,6 +360,8 @@ export class LucarneChoresCard extends LucarneCardBase {
       clearTimeout(this._scrollTimer);
       this._scrollTimer = undefined;
     }
+    for (const timer of this._addTimers.values()) clearTimeout(timer);
+    this._addTimers.clear();
   }
 
   private _resolveMembers(): Array<{ member: MemberSummary; tasks: RenderableTask[]; streak: number }> {
@@ -313,6 +384,27 @@ export class LucarneChoresCard extends LucarneCardBase {
       return optimistic && optimistic !== t.status ? { ...t, status: optimistic } : t;
     };
 
+    // Shared predicate for a member's own (non-rotating) tasks: routines gate on
+    // showRoutines; chores gate on showTasks and the due-today window. Applied to
+    // both real and optimistically-added tasks so they're treated identically.
+    const passesOwnFilter = (t: RenderableTask): boolean => {
+      if (t.metadata.type === 'routine') return showRoutines;
+      if (t.metadata.type === 'chore') {
+        if (!showTasks) return false;
+        if (t.due === null) return true;
+        // Date-only strings (no 'T') must be parsed as local midnight to avoid UTC off-by-one in non-UTC timezones
+        const dueDate = t.due.includes('T') ? new Date(t.due) : new Date(t.due + 'T00:00:00');
+        return dueDate <= endOfToday;
+      }
+      // Rotating tasks live in the household bucket — always excluded from a member's own
+      // allTasks (their member_slug is 'household', so they only appear in household bucket).
+      // For the household column, we explicitly drop them so they don't double-render.
+      return false;
+    };
+
+    const optimisticAdds = [...this._optimisticAdds.values()];
+    const householdUids = new Set(householdTasks.map((t) => t.uid));
+
     const result: Array<{ member: MemberSummary; tasks: RenderableTask[]; streak: number }> = [];
     for (const slug of slugs) {
       if (hidden.has(slug)) continue;
@@ -324,27 +416,23 @@ export class LucarneChoresCard extends LucarneCardBase {
       if (!member) continue;
 
       const allTasks = this._familyState.tasksByMember.get(slug) ?? [];
-      const ownTasks = allTasks
-        .filter((t) => {
-          if (t.metadata.type === 'routine') return showRoutines;
-          if (t.metadata.type === 'chore') {
-            if (!showTasks) return false;
-            if (t.due === null) return true;
-            // Date-only strings (no 'T') must be parsed as local midnight to avoid UTC off-by-one in non-UTC timezones
-            const dueDate = t.due.includes('T') ? new Date(t.due) : new Date(t.due + 'T00:00:00');
-            return dueDate <= endOfToday;
-          }
-          // Rotating tasks live in the household bucket — always excluded from a member's own
-          // allTasks (their member_slug is 'household', so they only appear in household bucket).
-          // For the household column, we explicitly drop them so they don't double-render.
-          return false;
-        })
-        .map(applyOptimistic);
+      const existingUids = new Set(allTasks.map((t) => t.uid));
+      const ownTasks = allTasks.filter(passesOwnFilter).map(applyOptimistic);
+
+      // Optimistic non-rotating adds for this column, filtered like real tasks and
+      // skipped if the real task already arrived (belt-and-suspenders vs `_onFamilyState`).
+      const optOwn = optimisticAdds.filter(
+        (t) =>
+          t.metadata.member_slug === slug &&
+          t.metadata.type !== 'rotating' &&
+          !existingUids.has(t.uid) &&
+          passesOwnFilter(t),
+      );
 
       let tasks: RenderableTask[];
       if (slug === 'household') {
         // Household column: rotating tasks are shown in their owner's column only.
-        tasks = ownTasks;
+        tasks = [...ownTasks, ...optOwn];
       } else {
         // Non-household column: pull rotating tasks from the household bucket for this owner.
         // Gate by showTasks (same toggle as chores) per spec.
@@ -353,7 +441,16 @@ export class LucarneChoresCard extends LucarneCardBase {
               .filter((t) => t.metadata.type === 'rotating' && t.metadata.current_owner === slug)
               .map(applyOptimistic)
           : [];
-        tasks = [...ownTasks, ...rotatingForMember];
+        // Optimistic rotating adds owned by this member (live in the household bucket).
+        const optRotating = showTasks
+          ? optimisticAdds.filter(
+              (t) =>
+                t.metadata.type === 'rotating' &&
+                t.metadata.current_owner === slug &&
+                !householdUids.has(t.uid),
+            )
+          : [];
+        tasks = [...ownTasks, ...rotatingForMember, ...optOwn, ...optRotating];
       }
 
       const streak = this._familyState.streakByMember.get(slug) ?? 0;
@@ -484,6 +581,7 @@ export class LucarneChoresCard extends LucarneCardBase {
               .hass=${this.hass}
               .member=${this._addTaskMember}
               .members=${allMembers}
+              @task-added=${this._handleTaskAdded}
               @popover-close=${() => { this._addTaskMember = null; }}
             ></lucarne-add-task-popover>
           `

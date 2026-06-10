@@ -82,6 +82,24 @@ describe('addTask', () => {
     const call = hass.calls.callService[0];
     assert.ok(!('rotation_owners' in call.payload), 'rotation_owners must not be sent when not provided');
   });
+
+  it('returns the uid from the service response', async () => {
+    const base = makeFakeHass();
+    const hass = {
+      ...base,
+      async callService() {
+        return { response: { uid: 'srv-uid-1' } };
+      },
+    } as unknown as HomeAssistant;
+    const uid = await addTask(hass, { member: 'anna', summary: 'Brush teeth', type: 'routine' });
+    assert.equal(uid, 'srv-uid-1');
+  });
+
+  it('returns null when the backend returns no response (older build)', async () => {
+    const hass = makeHass();
+    const uid = await addTask(hass, { member: 'anna', summary: 'Brush teeth', type: 'routine' });
+    assert.equal(uid, null);
+  });
 });
 
 describe('updateTaskMetadata', () => {

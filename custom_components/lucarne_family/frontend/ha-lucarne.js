@@ -6250,7 +6250,7 @@ async function Mr(e, t) {
 		summary: t.summary,
 		type: t.type
 	};
-	t.recurrence !== void 0 && (n.recurrence = t.recurrence), t.icon !== void 0 && (n.icon = t.icon), t.due !== void 0 && (n.due = t.due), t.source !== void 0 && (n.source = t.source), t.assignee !== void 0 && (n.assignee = t.assignee), t.time_of_day !== void 0 && (n.time_of_day = t.time_of_day), t.rotation_owners !== void 0 && (n.rotation_owners = t.rotation_owners), t.current_owner !== void 0 && (n.current_owner = t.current_owner), await e.callService("lucarne_family", "add_task", n);
+	return t.recurrence !== void 0 && (n.recurrence = t.recurrence), t.icon !== void 0 && (n.icon = t.icon), t.due !== void 0 && (n.due = t.due), t.source !== void 0 && (n.source = t.source), t.assignee !== void 0 && (n.assignee = t.assignee), t.time_of_day !== void 0 && (n.time_of_day = t.time_of_day), t.rotation_owners !== void 0 && (n.rotation_owners = t.rotation_owners), t.current_owner !== void 0 && (n.current_owner = t.current_owner), (await e.callService("lucarne_family", "add_task", n, void 0, !0, !0))?.response?.uid ?? null;
 }
 async function Nr(e, t, n) {
 	let r = { uid: t };
@@ -6634,52 +6634,85 @@ var Lr = [
 		}) : "";
 	}
 	async _submit() {
-		if (!this._saving) {
-			if (!this._summary.trim()) {
-				this._error = "Summary is required";
-				return;
-			}
-			if (this._summary.trim().length > 200) {
-				this._error = "Summary must be 200 characters or less";
-				return;
-			}
-			if (this._type === "routine" && this._recurrenceMode === "weekly" && this._recurrenceDays.length === 0) {
-				this._error = "Select at least one day for weekly recurrence";
-				return;
-			}
-			if (this._type === "rotating" && this._rotatingOwners.length < 2) {
-				this._error = "Select at least 2 owners for a rotating task";
-				return;
-			}
-			this._saving = !0, this._error = "";
-			try {
-				if (this._type === "rotating") await Mr(this.hass, {
+		if (this._saving) return;
+		if (!this._summary.trim()) {
+			this._error = "Summary is required";
+			return;
+		}
+		if (this._summary.trim().length > 200) {
+			this._error = "Summary must be 200 characters or less";
+			return;
+		}
+		if (this._type === "routine" && this._recurrenceMode === "weekly" && this._recurrenceDays.length === 0) {
+			this._error = "Select at least one day for weekly recurrence";
+			return;
+		}
+		if (this._type === "rotating" && this._rotatingOwners.length < 2) {
+			this._error = "Select at least 2 owners for a rotating task";
+			return;
+		}
+		this._saving = !0, this._error = "";
+		let e = this._summary.trim(), t = [];
+		try {
+			if (this._type === "rotating") {
+				let n = await Mr(this.hass, {
 					member: "household",
-					summary: this._summary.trim(),
+					summary: e,
 					type: "rotating",
 					...this._icon ? { icon: this._icon } : {},
 					time_of_day: this._timeOfDay,
 					source: "manual",
 					rotation_owners: this._rotatingOwners
 				});
-				else {
-					let e = this._type === "routine" ? this._buildRRule() : "", t = this._type === "chore" ? this._due : "", n = this._type === "routine" ? [this._selectedMemberSlug, ...Array.from(this._alsoAddSlugs).filter((e) => e !== this._selectedMemberSlug)] : [this._selectedMemberSlug];
-					for (let r of n) await Mr(this.hass, {
-						member: r,
-						summary: this._summary.trim(),
+				n && t.push(this._provisionalTask(n, "household", e, null, {
+					rotation_owners: this._rotatingOwners,
+					current_owner: this._rotatingOwners[0]
+				}));
+			} else {
+				let n = this._type === "routine" ? this._buildRRule() : "", r = this._type === "chore" ? this._due : "", i = this._type === "routine" ? [this._selectedMemberSlug, ...Array.from(this._alsoAddSlugs).filter((e) => e !== this._selectedMemberSlug)] : [this._selectedMemberSlug];
+				for (let a of i) {
+					let i = await Mr(this.hass, {
+						member: a,
+						summary: e,
 						type: this._type,
-						...e ? { recurrence: e } : {},
+						...n ? { recurrence: n } : {},
 						...this._icon ? { icon: this._icon } : {},
-						...t ? { due: t } : {},
+						...r ? { due: r } : {},
 						time_of_day: this._timeOfDay,
 						source: "manual"
 					});
+					i && t.push(this._provisionalTask(i, a, e, r || null, { recurrence: n }));
 				}
-				this._close();
-			} catch (e) {
-				this._error = e instanceof Error ? e.message : "Failed to add task", this._saving = !1;
 			}
+			t.length > 0 && this.dispatchEvent(new CustomEvent("task-added", {
+				detail: { tasks: t },
+				bubbles: !0,
+				composed: !0
+			})), this._close();
+		} catch (e) {
+			this._error = e instanceof Error ? e.message : "Failed to add task", this._saving = !1;
 		}
+	}
+	_provisionalTask(e, t, n, r, i = {}) {
+		return {
+			uid: e,
+			summary: n,
+			status: "needs_action",
+			due: r,
+			description: "",
+			metadata: {
+				item_uid: e,
+				member_slug: t,
+				assignee_slug: "",
+				type: this._type,
+				recurrence: i.recurrence ?? "",
+				icon: this._icon,
+				source: "manual",
+				time_of_day: this._timeOfDay,
+				...i.rotation_owners === void 0 ? {} : { rotation_owners: i.rotation_owners },
+				...i.current_owner === void 0 ? {} : { current_owner: i.current_owner }
+			}
+		};
 	}
 	_toggleAlsoAdd(e) {
 		let t = new Set(this._alsoAddSlugs);
@@ -7796,22 +7829,37 @@ var $ = class extends V {
     `;
 	}
 };
-J([W({ attribute: !1 })], $.prototype, "hass", void 0), J([W({ attribute: !1 })], $.prototype, "task", void 0), J([W({ attribute: !1 })], $.prototype, "members", void 0), J([G()], $.prototype, "_summary", void 0), J([G()], $.prototype, "_type", void 0), J([G()], $.prototype, "_icon", void 0), J([G()], $.prototype, "_recurrenceMode", void 0), J([G()], $.prototype, "_recurrenceDays", void 0), J([G()], $.prototype, "_recurrenceInterval", void 0), J([G()], $.prototype, "_recurrenceMonthDay", void 0), J([G()], $.prototype, "_recurrenceNth", void 0), J([G()], $.prototype, "_recurrenceNthDay", void 0), J([G()], $.prototype, "_recurrenceMonth", void 0), J([G()], $.prototype, "_due", void 0), J([G()], $.prototype, "_assignee", void 0), J([G()], $.prototype, "_timeOfDay", void 0), J([G()], $.prototype, "_isCustomRecurrence", void 0), J([G()], $.prototype, "_rawRecurrence", void 0), J([G()], $.prototype, "_error", void 0), J([G()], $.prototype, "_saving", void 0), J([G()], $.prototype, "_confirmingDelete", void 0), J([G()], $.prototype, "_rotatingOwners", void 0), $ = J([H("lucarne-edit-task-popover")], $), window.customCards = window.customCards || [], window.customCards.push({
+J([W({ attribute: !1 })], $.prototype, "hass", void 0), J([W({ attribute: !1 })], $.prototype, "task", void 0), J([W({ attribute: !1 })], $.prototype, "members", void 0), J([G()], $.prototype, "_summary", void 0), J([G()], $.prototype, "_type", void 0), J([G()], $.prototype, "_icon", void 0), J([G()], $.prototype, "_recurrenceMode", void 0), J([G()], $.prototype, "_recurrenceDays", void 0), J([G()], $.prototype, "_recurrenceInterval", void 0), J([G()], $.prototype, "_recurrenceMonthDay", void 0), J([G()], $.prototype, "_recurrenceNth", void 0), J([G()], $.prototype, "_recurrenceNthDay", void 0), J([G()], $.prototype, "_recurrenceMonth", void 0), J([G()], $.prototype, "_due", void 0), J([G()], $.prototype, "_assignee", void 0), J([G()], $.prototype, "_timeOfDay", void 0), J([G()], $.prototype, "_isCustomRecurrence", void 0), J([G()], $.prototype, "_rawRecurrence", void 0), J([G()], $.prototype, "_error", void 0), J([G()], $.prototype, "_saving", void 0), J([G()], $.prototype, "_confirmingDelete", void 0), J([G()], $.prototype, "_rotatingOwners", void 0), $ = J([H("lucarne-edit-task-popover")], $);
+var Rr = 1e4;
+window.customCards = window.customCards || [], window.customCards.push({
 	type: "lucarne-chores-card",
 	name: "Lucarne Chores",
 	description: "Family chore grid with streaks and celebration",
 	preview: !0
 });
-var Rr = class extends tt {
+var zr = class extends tt {
 	constructor(...e) {
-		super(...e), this._familyState = null, this._addTaskMember = null, this._editTask = null, this._optimistic = /* @__PURE__ */ new Map(), this._onFamilyState = (e) => {
-			if (this._optimistic.size > 0) {
-				let t = new Map(this._optimistic), n = /* @__PURE__ */ new Set();
-				for (let r of e.tasksByMember.values()) for (let e of r) n.add(e.uid), t.get(e.uid) === e.status && t.delete(e.uid);
-				for (let e of t.keys()) n.has(e) || t.delete(e);
-				this._optimistic = t;
+		super(...e), this._familyState = null, this._addTaskMember = null, this._editTask = null, this._optimistic = /* @__PURE__ */ new Map(), this._optimisticAdds = /* @__PURE__ */ new Map(), this._addTimers = /* @__PURE__ */ new Map(), this._onFamilyState = (e) => {
+			if (this._optimistic.size > 0 || this._optimisticAdds.size > 0) {
+				let t = /* @__PURE__ */ new Set(), n = new Map(this._optimistic);
+				for (let r of e.tasksByMember.values()) for (let e of r) t.add(e.uid), n.get(e.uid) === e.status && n.delete(e.uid);
+				if (this._optimistic.size > 0) {
+					for (let e of n.keys()) t.has(e) || n.delete(e);
+					this._optimistic = n;
+				}
+				if (this._optimisticAdds.size > 0) {
+					let e = new Map(this._optimisticAdds), n = !1;
+					for (let r of e.keys()) t.has(r) && (e.delete(r), this._clearAddTimeout(r), n = !0);
+					n && (this._optimisticAdds = e);
+				}
 			}
 			this._familyState = e;
+		}, this._handleTaskAdded = (e) => {
+			let { tasks: t } = e.detail;
+			if (!t?.length) return;
+			let n = new Map(this._optimisticAdds);
+			for (let e of t) n.set(e.uid, e), this._scheduleAddCleanup(e.uid);
+			this._optimisticAdds = n;
 		};
 	}
 	static {
@@ -7949,8 +7997,22 @@ var Rr = class extends tt {
 	updated(e) {
 		super.updated(e), e.has("hass") && this.hass && !this._unsubFamily && (this._unsubFamily = gt(this.hass, this._onFamilyState));
 	}
+	_scheduleAddCleanup(e) {
+		this._clearAddTimeout(e), this._addTimers.set(e, setTimeout(() => {
+			if (this._addTimers.delete(e), this._optimisticAdds.has(e)) {
+				let t = new Map(this._optimisticAdds);
+				t.delete(e), this._optimisticAdds = t;
+			}
+		}, Rr));
+	}
+	_clearAddTimeout(e) {
+		let t = this._addTimers.get(e);
+		t !== void 0 && (clearTimeout(t), this._addTimers.delete(e));
+	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), this._unsubFamily?.(), this._unsubFamily = void 0, this._midnightTimer &&= (clearTimeout(this._midnightTimer), void 0), this._scrollTimer &&= (clearTimeout(this._scrollTimer), void 0);
+		for (let e of this._addTimers.values()) clearTimeout(e);
+		this._addTimers.clear();
 	}
 	_resolveMembers() {
 		if (!this._config || !this._familyState) return [];
@@ -7960,25 +8022,30 @@ var Rr = class extends tt {
 				...e,
 				status: t
 			} : e;
-		}, c = [];
-		for (let i of e) {
-			if (t.has(i)) continue;
-			let e = i === "household" ? pt : this._familyState.members.find((e) => e.slug === i) ?? null;
+		}, c = (e) => e.metadata.type === "routine" ? n : e.metadata.type === "chore" && r ? e.due === null ? !0 : (e.due.includes("T") ? new Date(e.due) : /* @__PURE__ */ new Date(e.due + "T00:00:00")) <= a : !1, l = [...this._optimisticAdds.values()], u = new Set(o.map((e) => e.uid)), d = [];
+		for (let n of e) {
+			if (t.has(n)) continue;
+			let e = n === "household" ? pt : this._familyState.members.find((e) => e.slug === n) ?? null;
 			if (!e) continue;
-			let l = (this._familyState.tasksByMember.get(i) ?? []).filter((e) => e.metadata.type === "routine" ? n : e.metadata.type === "chore" && r ? e.due === null ? !0 : (e.due.includes("T") ? new Date(e.due) : /* @__PURE__ */ new Date(e.due + "T00:00:00")) <= a : !1).map(s), u;
-			if (i === "household") u = l;
+			let i = this._familyState.tasksByMember.get(n) ?? [], a = new Set(i.map((e) => e.uid)), f = i.filter(c).map(s), p = l.filter((e) => e.metadata.member_slug === n && e.metadata.type !== "rotating" && !a.has(e.uid) && c(e)), m;
+			if (n === "household") m = [...f, ...p];
 			else {
-				let e = r ? o.filter((e) => e.metadata.type === "rotating" && e.metadata.current_owner === i).map(s) : [];
-				u = [...l, ...e];
+				let e = r ? o.filter((e) => e.metadata.type === "rotating" && e.metadata.current_owner === n).map(s) : [], t = r ? l.filter((e) => e.metadata.type === "rotating" && e.metadata.current_owner === n && !u.has(e.uid)) : [];
+				m = [
+					...f,
+					...e,
+					...p,
+					...t
+				];
 			}
-			let d = this._familyState.streakByMember.get(i) ?? 0;
-			c.push({
+			let h = this._familyState.streakByMember.get(n) ?? 0;
+			d.push({
 				member: e,
-				tasks: u,
-				streak: d
+				tasks: m,
+				streak: h
 			});
 		}
-		return c;
+		return d;
 	}
 	async _handleTaskToggle(e) {
 		let { task: t } = e.detail;
@@ -8062,6 +8129,7 @@ var Rr = class extends tt {
               .hass=${this.hass}
               .member=${this._addTaskMember}
               .members=${s}
+              @task-added=${this._handleTaskAdded}
               @popover-close=${() => {
 			this._addTaskMember = null;
 		}}
@@ -8081,10 +8149,10 @@ var Rr = class extends tt {
     `;
 	}
 };
-J([W({ attribute: !1 })], Rr.prototype, "hass", void 0), J([G()], Rr.prototype, "_config", void 0), J([G()], Rr.prototype, "_familyState", void 0), J([G()], Rr.prototype, "_addTaskMember", void 0), J([G()], Rr.prototype, "_editTask", void 0), J([G()], Rr.prototype, "_optimistic", void 0), Rr = J([H("lucarne-chores-card")], Rr);
+J([W({ attribute: !1 })], zr.prototype, "hass", void 0), J([G()], zr.prototype, "_config", void 0), J([G()], zr.prototype, "_familyState", void 0), J([G()], zr.prototype, "_addTaskMember", void 0), J([G()], zr.prototype, "_editTask", void 0), J([G()], zr.prototype, "_optimistic", void 0), J([G()], zr.prototype, "_optimisticAdds", void 0), zr = J([H("lucarne-chores-card")], zr);
 //#endregion
 //#region src/shared/cropper-styles.ts
-var zr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
+var Br = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	(function(n, r) {
 		typeof e == "object" && t !== void 0 ? t.exports = r() : typeof define == "function" && define.amd ? define(r) : (n = typeof globalThis < "u" ? globalThis : n || self, n.Cropper = r());
 	})(e, (function() {
@@ -9254,18 +9322,18 @@ var zr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		}();
 		return z(xt.prototype, gt, q, J, _t, vt, yt), xt;
 	}));
-})))(), 1), Br = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", Vr = 2 * 1024 * 1024, Hr = new Set([
+})))(), 1), Vr = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", Hr = 2 * 1024 * 1024, Ur = new Set([
 	"image/png",
 	"image/jpeg",
 	"image/webp"
-]), Ur = 512, Wr = /* @__PURE__ */ "👶.🧒.👧.🧑.👦.👩.👨.🧓.👴.👵.🐶.🐱.🐻.🐼.🐨.🦊.🦁.🐯.🐸.🦄.🌟.⭐.🌈.🌸.🌺.🌻.🍀.🎈.🎨.🎯.🏃.⚽.🎸.🎤.📚.🎮.🏆.❤️.💙.💚".split("."), Gr = class extends V {
+]), Wr = 512, Gr = /* @__PURE__ */ "👶.🧒.👧.🧑.👦.👩.👨.🧓.👴.👵.🐶.🐱.🐻.🐼.🐨.🦊.🦁.🐯.🐸.🦄.🌟.⭐.🌈.🌸.🌺.🌻.🍀.🎈.🎨.🎯.🏃.⚽.🎸.🎤.📚.🎮.🏆.❤️.💙.💚".split("."), Kr = class extends V {
 	constructor(...e) {
 		super(...e), this._mode = "emoji", this._selectedEmoji = null, this._sourceUrl = null, this._error = null, this._submitting = !1, this._cropper = null;
 	}
 	static {
 		this.styles = [
 			K,
-			O(Br),
+			O(Vr),
 			k`
       :host {
         display: block;
@@ -9461,11 +9529,11 @@ var zr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	_onFileChange(e) {
 		let t = e.target, n = t.files?.[0];
 		if (t.value = "", n) {
-			if (!Hr.has(n.type)) {
+			if (!Ur.has(n.type)) {
 				this._error = "Only PNG, JPEG, and WebP images are accepted.";
 				return;
 			}
-			if (n.size > Vr) {
+			if (n.size > Hr) {
 				this._error = "Image must be 2 MB or smaller.";
 				return;
 			}
@@ -9477,7 +9545,7 @@ var zr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	}
 	_onCropImageLoad() {
 		let e = this._cropImage;
-		e && (this._cropper && this._cropper.destroy(), this._cropper = new zr.default(e, {
+		e && (this._cropper && this._cropper.destroy(), this._cropper = new Br.default(e, {
 			aspectRatio: 1,
 			viewMode: 1,
 			dragMode: "move",
@@ -9532,8 +9600,8 @@ var zr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				return;
 			}
 			let n = this._cropper.getCroppedCanvas({
-				width: Ur,
-				height: Ur,
+				width: Wr,
+				height: Wr,
 				imageSmoothingQuality: "high"
 			});
 			if (!n) {
@@ -9597,7 +9665,7 @@ var zr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	_renderEmojiMode() {
 		return P`
       <div class="emoji-grid">
-        ${Wr.map((e) => P`
+        ${Gr.map((e) => P`
             <button
               class="emoji-btn ${this._selectedEmoji === e ? "selected" : ""}"
               @click=${() => this._selectEmoji(e)}
@@ -9643,10 +9711,10 @@ var zr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		this.renderRoot.querySelector("#avatar-file-input")?.click();
 	}
 };
-J([W({ attribute: !1 })], Gr.prototype, "hass", void 0), J([W()], Gr.prototype, "memberSlug", void 0), J([W()], Gr.prototype, "memberName", void 0), J([G()], Gr.prototype, "_mode", void 0), J([G()], Gr.prototype, "_selectedEmoji", void 0), J([G()], Gr.prototype, "_sourceUrl", void 0), J([G()], Gr.prototype, "_error", void 0), J([G()], Gr.prototype, "_submitting", void 0), J([et("#crop-image")], Gr.prototype, "_cropImage", void 0), Gr = J([H("lucarne-avatar-upload-modal")], Gr);
+J([W({ attribute: !1 })], Kr.prototype, "hass", void 0), J([W()], Kr.prototype, "memberSlug", void 0), J([W()], Kr.prototype, "memberName", void 0), J([G()], Kr.prototype, "_mode", void 0), J([G()], Kr.prototype, "_selectedEmoji", void 0), J([G()], Kr.prototype, "_sourceUrl", void 0), J([G()], Kr.prototype, "_error", void 0), J([G()], Kr.prototype, "_submitting", void 0), J([et("#crop-image")], Kr.prototype, "_cropImage", void 0), Kr = J([H("lucarne-avatar-upload-modal")], Kr);
 //#endregion
 //#region src/editors/lucarne-chores-card-editor.ts
-var Kr = class extends V {
+var qr = class extends V {
 	constructor(...e) {
 		super(...e), this._familyState = null, this._avatarModalMember = null;
 	}
@@ -10026,5 +10094,5 @@ var Kr = class extends V {
 };
 //#endregion
 //#region src/index.ts
-J([W({ attribute: !1 })], Kr.prototype, "hass", void 0), J([G()], Kr.prototype, "_config", void 0), J([G()], Kr.prototype, "_familyState", void 0), J([G()], Kr.prototype, "_avatarModalMember", void 0), Kr = J([H("lucarne-chores-card-editor")], Kr), S();
+J([W({ attribute: !1 })], qr.prototype, "hass", void 0), J([G()], qr.prototype, "_config", void 0), J([G()], qr.prototype, "_familyState", void 0), J([G()], qr.prototype, "_avatarModalMember", void 0), qr = J([H("lucarne-chores-card-editor")], qr), S();
 //#endregion
