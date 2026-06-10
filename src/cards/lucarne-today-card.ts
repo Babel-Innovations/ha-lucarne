@@ -468,7 +468,12 @@ export class LucarneTodayCard extends LucarneCardBase {
     // Both modes now flow through the same `renderableTasks` path so emoji + owner
     // avatar render uniformly. Raw mode enriches items with integration metadata
     // when available (member_slug, icon); integration mode passes household tasks.
-    const tasks = showIntegrationTasks ? this._householdTasks : this._enrichedRawTasks;
+    // Rotating tasks belong to the chores card (they surface in the current
+    // owner's column and advance at the daily-reset window) — they may not be
+    // relevant on any given day, so they never appear in the Today card.
+    const tasks = (showIntegrationTasks ? this._householdTasks : this._enrichedRawTasks).filter(
+      (t) => t.metadata.type !== 'rotating',
+    );
     const entityId = showIntegrationTasks ? 'todo.lucarne_household' : this._config?.tasks;
     return html`
       <div

@@ -2466,7 +2466,7 @@ var un = class extends tt {
 	}
 	_renderTasksSection(e, t) {
 		if (!e && !t) return "";
-		let n = t ? this._householdTasks : this._enrichedRawTasks, r = t ? "todo.lucarne_household" : this._config?.tasks;
+		let n = (t ? this._householdTasks : this._enrichedRawTasks).filter((e) => e.metadata.type !== "rotating"), r = t ? "todo.lucarne_household" : this._config?.tasks;
 		return P`
       <div
         class="section section-tasks"
