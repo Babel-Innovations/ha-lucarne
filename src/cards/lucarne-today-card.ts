@@ -283,7 +283,12 @@ export class LucarneTodayCard extends LucarneCardBase {
   private async _fetchCalendarEvents() {
     if (!this._config || !this.hass) return;
     const entityIds = this._config.calendars.map((c) => c.entity);
+    // Anchor the fetch to the start of the local day, not "now" — HA's calendar
+    // API only returns events overlapping [start, end], so fetching from "now"
+    // drops events that already ended earlier today. The agenda strip wants
+    // today's full day so past events stay visible (dimmed).
     const start = new Date();
+    start.setHours(0, 0, 0, 0);
     const end = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const { events: map } = await fetchCalendarEvents(this.hass, entityIds, start, end);
 

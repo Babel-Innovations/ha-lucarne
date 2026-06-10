@@ -16,14 +16,24 @@ describe('filterAndSortEvents', () => {
     assert.deepEqual(filterAndSortEvents([], now, 1), []);
   });
 
-  it('filters out events that have already ended', () => {
+  it('keeps events that already ended earlier today (shown all day, dimmed)', () => {
     const events = [
+      // 00:00–02:00 PDT today — already ended at "now" (03:00 PDT) but still today.
       makeEvent('2026-05-21T07:00:00Z', '2026-05-21T09:00:00Z', 'Past'),
       makeEvent('2026-05-21T11:00:00Z', '2026-05-21T12:00:00Z', 'Future'),
     ];
     const result = filterAndSortEvents(events, now, 1);
-    assert.equal(result.length, 1);
-    assert.equal(result[0].summary, 'Future');
+    assert.deepEqual(result.map((e) => e.summary), ['Past', 'Future']);
+  });
+
+  it('excludes an event that ended before today started', () => {
+    const events = [
+      // 2026-05-20 23:00 PDT — ended yesterday, before the start-of-today anchor.
+      makeEvent('2026-05-21T05:00:00Z', '2026-05-21T06:00:00Z', 'Yesterday'),
+      makeEvent('2026-05-21T11:00:00Z', '2026-05-21T12:00:00Z', 'Today'),
+    ];
+    const result = filterAndSortEvents(events, now, 1);
+    assert.deepEqual(result.map((e) => e.summary), ['Today']);
   });
 
   it('includes events that are currently happening', () => {

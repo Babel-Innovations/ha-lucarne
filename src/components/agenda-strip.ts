@@ -15,21 +15,29 @@ function parseEventBoundary(value: string): Date {
 export type AgendaWindowDays = 1 | 2;
 
 /**
- * Keep the events relevant to the agenda window: still ongoing (end > now) AND
- * starting before the window closes. windowDays=1 shows only today; windowDays=2
- * adds tomorrow. The window boundary is computed in LOCAL time so date-only
- * all-day events line up with the viewer's calendar day rather than UTC.
+ * Keep the events relevant to the agenda window: ending strictly after the
+ * START OF TODAY (events ending exactly at local midnight are excluded) AND
+ * starting before the window closes. Anchoring to the
+ * start of the local day means events that already ended earlier today stay in
+ * the list all day — the card is titled "Today", so a 9am event should remain
+ * visible (dimmed) at 11am rather than vanishing and leaving "Nothing on the
+ * calendar today". windowDays=1 shows only today; windowDays=2 adds tomorrow.
+ * Both boundaries are computed in LOCAL time so date-only all-day events line up
+ * with the viewer's calendar day rather than UTC.
  */
 export function filterAndSortEvents(
   events: CalendarEvent[],
   now: Date,
   windowDays: AgendaWindowDays,
 ): CalendarEvent[] {
-  const windowEnd = new Date(now);
-  windowEnd.setHours(0, 0, 0, 0);
+  const windowStart = new Date(now);
+  windowStart.setHours(0, 0, 0, 0);
+  const windowEnd = new Date(windowStart);
   windowEnd.setDate(windowEnd.getDate() + windowDays);
   return events
-    .filter((e) => parseEventBoundary(e.end) > now && parseEventBoundary(e.start) < windowEnd)
+    .filter(
+      (e) => parseEventBoundary(e.end) > windowStart && parseEventBoundary(e.start) < windowEnd,
+    )
     .sort((a, b) => parseEventBoundary(a.start).getTime() - parseEventBoundary(b.start).getTime());
 }
 
@@ -99,6 +107,13 @@ export class LucarneAgendaStrip extends LitElement {
       }
       .event-row:last-child {
         border-bottom: none;
+      }
+      /* Events that already ended earlier today stay listed but read as done. */
+      .event-row.past {
+        opacity: 0.45;
+      }
+      .event-row.past .event-summary {
+        text-decoration: line-through;
       }
       .time-pill {
         flex-shrink: 0;
@@ -184,11 +199,15 @@ export class LucarneAgendaStrip extends LitElement {
         const startDate = parseEventBoundary(event.start);
         const endDate = parseEventBoundary(event.end);
         const isNow = startDate <= now && now < endDate;
+        // A timed event that already ended earlier today: keep it visible but
+        // dimmed so it reads as done. All-day events span the whole day, so they
+        // are never treated as past.
+        const isPast = !isAllDay(event) && endDate <= now;
         const pill = isAllDay(event) ? 'all day' : formatTimePill(startDate, endDate, now);
         const color = this._colorForEvent(event);
 
         return html`
-          <div class="event-row">
+          <div class="event-row ${isPast ? 'past' : ''}">
             <div class="time-pill ${isNow ? 'now' : ''}">
               ${isNow ? html`<span class="pulse-dot"></span>` : ''} ${pill}
             </div>
