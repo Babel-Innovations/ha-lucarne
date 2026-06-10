@@ -994,7 +994,9 @@ function _t(e) {
 }
 function vt(e, t, n) {
 	let r = new Date(t);
-	return r.setHours(0, 0, 0, 0), r.setDate(r.getDate() + n), e.filter((e) => _t(e.end) > t && _t(e.start) < r).sort((e, t) => _t(e.start).getTime() - _t(t.start).getTime());
+	r.setHours(0, 0, 0, 0);
+	let i = new Date(r);
+	return i.setDate(i.getDate() + n), e.filter((e) => _t(e.end) > r && _t(e.start) < i).sort((e, t) => _t(e.start).getTime() - _t(t.start).getTime());
 }
 function yt(e, t, n) {
 	let r = e.getTime() - n.getTime();
@@ -1052,6 +1054,13 @@ var xt = class extends V {
       }
       .event-row:last-child {
         border-bottom: none;
+      }
+      /* Events that already ended earlier today stay listed but read as done. */
+      .event-row.past {
+        opacity: 0.45;
+      }
+      .event-row.past .event-summary {
+        text-decoration: line-through;
       }
       .time-pill {
         flex-shrink: 0;
@@ -1123,13 +1132,13 @@ var xt = class extends V {
 		let e = /* @__PURE__ */ new Date(), t = vt(this.events, e, this.windowDays);
 		return t.length === 0 ? P`<div class="empty-state">${q.nothingOnCalendar}</div>` : P`
       ${t.map((t) => {
-			let n = _t(t.start), r = _t(t.end), i = n <= e && e < r, a = bt(t) ? "all day" : yt(n, r, e), o = this._colorForEvent(t);
+			let n = _t(t.start), r = _t(t.end), i = n <= e && e < r, a = !bt(t) && r <= e, o = bt(t) ? "all day" : yt(n, r, e), s = this._colorForEvent(t);
 			return P`
-          <div class="event-row">
+          <div class="event-row ${a ? "past" : ""}">
             <div class="time-pill ${i ? "now" : ""}">
-              ${i ? P`<span class="pulse-dot"></span>` : ""} ${a}
+              ${i ? P`<span class="pulse-dot"></span>` : ""} ${o}
             </div>
-            <div class="color-bar" style="background:${o}"></div>
+            <div class="color-bar" style="background:${s}"></div>
             <div class="event-content">
               <div class="event-summary">${t.summary}</div>
               ${t.location ? P`<div class="event-secondary">${t.location}</div>` : ""}
@@ -2344,7 +2353,9 @@ var un = class extends tt {
 	}
 	async _fetchCalendarEvents() {
 		if (!this._config || !this.hass) return;
-		let e = this._config.calendars.map((e) => e.entity), t = /* @__PURE__ */ new Date(), n = new Date(Date.now() + 10080 * 60 * 1e3), { events: r } = await at(this.hass, e, t, n), i = /* @__PURE__ */ new Map();
+		let e = this._config.calendars.map((e) => e.entity), t = /* @__PURE__ */ new Date();
+		t.setHours(0, 0, 0, 0);
+		let n = new Date(Date.now() + 10080 * 60 * 1e3), { events: r } = await at(this.hass, e, t, n), i = /* @__PURE__ */ new Map();
 		for (let [e, t] of r.entries()) i.set(e, t.map((t) => ({
 			...t,
 			uid: `${e}::${t.uid ?? t.summary}`
