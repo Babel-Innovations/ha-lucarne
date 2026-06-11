@@ -198,6 +198,50 @@ async def test_reset_deletes_completed_household_chore(
     assert any(ev.get("uid") == "h-001" for ev in deleted_events), "delete event fired"
 
 
+async def test_reset_flips_completed_household_routine(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """Completed routines on the shared household list are flipped back too.
+
+    Regression: a completed recurring household routine (e.g. a biweekly task)
+    must be reset to needs_action so it shows fresh on its next due day instead
+    of lingering crossed-out. The card hides it on off-days via its RRULE, but
+    only the reset can clear the stale completion.
+    """
+    await _setup_member_todo(hass, "anna")
+    await _setup_member_todo(hass, "lucarne_household")
+    entry = _make_entry(hass, "anna")
+    store = await _make_store(hass, entry.entry_id, tmp_path)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store}
+
+    await _add_item_and_metadata(
+        hass,
+        store,
+        "todo.lucarne_household",
+        "h-rt",
+        "Take out Ridwell",
+        "routine",
+        member_slug="household",
+        recurrence="FREQ=WEEKLY;BYDAY=WE;INTERVAL=2",
+    )
+    await _complete_item(hass, "todo.lucarne_household", "h-rt", "Take out Ridwell")
+    await hass.async_block_till_done()
+
+    reset_count = await async_perform_daily_reset(hass, store)
+    await hass.async_block_till_done()
+
+    assert reset_count == 1, "household routine counts toward the reset total"
+    todo_component = hass.data[DATA_COMPONENT]
+    entity = todo_component.get_entity("todo.lucarne_household")
+    assert entity is not None
+    items = {i.uid: i for i in (entity.todo_items or []) if i.uid}
+    assert "h-rt" in items, "household routine is kept, not deleted"
+    assert items["h-rt"].status == TodoItemStatus.NEEDS_ACTION, (
+        "completed household routine is flipped back to needs_action"
+    )
+    assert await store.async_get_task_metadata("h-rt") is not None
+
+
 async def test_reset_is_idempotent(hass: HomeAssistant, tmp_path: Path) -> None:
     """Calling reset twice: second call finds nothing completed, returns 0."""
     await _setup_member_todo(hass, "anna")

@@ -18,10 +18,10 @@ _LOGGER = logging.getLogger(__name__)
 async def async_perform_daily_reset(hass: HomeAssistant, store: LucarneFamilyStore) -> int:
     """Run the daily routine reset and clear completed one-off chores.
 
-    For every member's todo list, completed *routine* items are flipped back to
-    needs_action. Across both member lists and the shared household list,
-    completed one-off *chores* are deleted so they don't linger forever
-    (issue #63); incomplete chores are left in place.
+    Across both member lists and the shared household list, completed *routine*
+    items are flipped back to needs_action and completed one-off *chores* are
+    deleted so they don't linger forever (issue #63); incomplete chores are left
+    in place.
 
     Returns the number of routine items reset (not counting deleted chores), so
     the value stays a stable signal of "routines flipped today".
@@ -43,13 +43,17 @@ async def async_perform_daily_reset(hass: HomeAssistant, store: LucarneFamilySto
         _LOGGER.warning("todo component not loaded; skipping daily reset")
         return 0
 
-    # (slug, entity_id, reset_routines). Member lists reset routines and clear
-    # completed chores; the household list only clears completed chores (its
-    # routines, if any, keep their prior behavior of not being auto-reset).
+    # (slug, entity_id, reset_routines). Both member lists and the household list
+    # reset completed routines back to needs_action and clear completed one-off
+    # chores. Resetting household routines is required so a completed recurring
+    # household routine (e.g. a biweekly task) is flipped back and shows fresh on
+    # its next due day instead of lingering crossed-out — the card hides it on
+    # off-days via its RRULE, but only the reset can clear the stale completion.
+    # Rotating tasks are handled by their own branch below regardless of this flag.
     targets: list[tuple[str, str, bool]] = [
         (m.slug, m.todo_entity_id, True) for m in members if m.todo_entity_id
     ]
-    targets.append((HOUSEHOLD_SLUG, HOUSEHOLD_ENTITY_ID, False))
+    targets.append((HOUSEHOLD_SLUG, HOUSEHOLD_ENTITY_ID, True))
 
     for slug, entity_id, reset_routines in targets:
         entity = todo_component.get_entity(entity_id)
