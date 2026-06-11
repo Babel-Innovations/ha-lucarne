@@ -138,6 +138,14 @@ export class LucarneTodayCard extends LucarneCardBase {
   @state() private _forecast: { temperature: number; templow?: number; condition: string; datetime: string; precipitation_probability?: number }[] = [];
   @state() private _todoItems: TodoItem[] = [];
   @state() private _familyState: FamilyState | null = null;
+  /**
+   * Optimistic toggle overrides keyed by task uid. A tap flips the row here
+   * immediately — the server round-trip + push is too slow to feel live on an
+   * idle WKWebView kiosk — then `_reconcileOptimistic` drops each entry once the
+   * real status catches up. Reverted if the service call fails. Mirrors the
+   * chores card's `_optimistic`.
+   */
+  @state() private _optimistic: Map<string, RenderableTask['status']> = new Map();
 
   private _calendarIntervalId?: ReturnType<typeof setInterval>;
   private _todoUnsub?: () => void;
@@ -231,6 +239,7 @@ export class LucarneTodayCard extends LucarneCardBase {
     if (this._config.tasks && !this._config.household_tasks_from_integration) {
       this._todoUnsub = subscribeTodoItems(this.hass, this._config.tasks, (items) => {
         this._todoItems = items;
+        this._reconcileOptimistic();
       });
     }
     // Always subscribe to family state when the user has any task surface enabled.
@@ -245,6 +254,7 @@ export class LucarneTodayCard extends LucarneCardBase {
     if (wantsFamily) {
       this._unsubFamily = subscribeFamilyState(this.hass, (state) => {
         this._familyState = state;
+        this._reconcileOptimistic();
       });
     }
   }
@@ -396,12 +406,54 @@ export class LucarneTodayCard extends LucarneCardBase {
     const ownerEntityId = this._resolveTaskEntityId(task);
     if (!ownerEntityId) return;
 
-    await this.hass.callService(
-      'todo',
-      'update_item',
-      { item: task.uid, status: newStatus },
-      { entity_id: ownerEntityId },
-    );
+    // Flip the row immediately; `_reconcileOptimistic` clears the override once
+    // the server confirms. Revert if the service call fails so the UI stays true.
+    this._optimistic = new Map(this._optimistic).set(task.uid, newStatus);
+    try {
+      await this.hass.callService(
+        'todo',
+        'update_item',
+        { item: task.uid, status: newStatus },
+        { entity_id: ownerEntityId },
+      );
+    } catch (err) {
+      const reverted = new Map(this._optimistic);
+      reverted.delete(task.uid);
+      this._optimistic = reverted;
+      throw err;
+    }
+  }
+
+  /** Apply any optimistic status override to a task (no-op if none / already matched). */
+  private _applyOptimistic = (t: RenderableTask): RenderableTask => {
+    const optimistic = this._optimistic.get(t.uid);
+    return optimistic && optimistic !== t.status ? { ...t, status: optimistic } : t;
+  };
+
+  /**
+   * Drop optimistic overrides once the authoritative source (raw todo items or
+   * integration family state) reports the expected status, or the task vanishes.
+   * Called whenever either source updates so the map can't grow stale.
+   */
+  private _reconcileOptimistic() {
+    if (this._optimistic.size === 0) return;
+    const statusByUid = new Map<string, RenderableTask['status']>();
+    for (const item of this._todoItems) statusByUid.set(item.uid, item.status);
+    if (this._familyState) {
+      for (const tasks of this._familyState.tasksByMember.values()) {
+        for (const t of tasks) statusByUid.set(t.uid, t.status);
+      }
+    }
+    let changed = false;
+    const next = new Map(this._optimistic);
+    for (const [uid, status] of next) {
+      const real = statusByUid.get(uid);
+      if (real === undefined || real === status) {
+        next.delete(uid);
+        changed = true;
+      }
+    }
+    if (changed) this._optimistic = next;
   }
 
   private _handleTaskLongPress(e: Event) {
@@ -476,9 +528,9 @@ export class LucarneTodayCard extends LucarneCardBase {
     // Rotating tasks belong to the chores card (they surface in the current
     // owner's column and advance at the daily-reset window) — they may not be
     // relevant on any given day, so they never appear in the Today card.
-    const tasks = (showIntegrationTasks ? this._householdTasks : this._enrichedRawTasks).filter(
-      (t) => t.metadata.type !== 'rotating',
-    );
+    const tasks = (showIntegrationTasks ? this._householdTasks : this._enrichedRawTasks)
+      .filter((t) => t.metadata.type !== 'rotating')
+      .map(this._applyOptimistic);
     const entityId = showIntegrationTasks ? 'todo.lucarne_household' : this._config?.tasks;
     return html`
       <div

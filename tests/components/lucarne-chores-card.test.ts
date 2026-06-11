@@ -755,4 +755,136 @@ describe('lucarne-chores-card', () => {
     await el.updateComplete;
     assert.equal(internals._deletedUids.size, 0, 'no tombstone recorded');
   });
+
+  // --- Optimistic edit. A successful save in the edit popover renders the
+  // post-edit task immediately; otherwise the row shows stale summary/icon/etc
+  // until the slow state push arrives. ---
+
+  function dispatchTaskUpdated(el: LucarneChoresCard, task: RenderableTask) {
+    (el as unknown as { _handleTaskUpdated(e: Event): void })._handleTaskUpdated(
+      new CustomEvent('task-updated', { detail: { task } }),
+    );
+  }
+
+  it('optimistically renders an edited task before any family-state push', async () => {
+    const el = await makeCard(['anna']);
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+    assert.equal(annaTaskRow(el)!.task.summary, 'Clean up', 'original summary');
+
+    const edited: RenderableTask = {
+      ...makeChore('needs_action'),
+      summary: 'Clean up the playroom',
+      metadata: { ...makeChore().metadata, icon: '🧸' },
+    };
+    dispatchTaskUpdated(el, edited);
+    await el.updateComplete;
+
+    const row = annaTaskRow(el);
+    assert.equal(row!.task.summary, 'Clean up the playroom', 'edited summary shown immediately');
+    assert.equal(row!.task.metadata.icon, '🧸', 'edited icon shown immediately');
+    const internals = el as unknown as { _optimisticEdits: Map<string, RenderableTask> };
+    assert.ok(internals._optimisticEdits.has('c-1'), 'edit override recorded');
+  });
+
+  it('drops the edit override once the pushed task reflects the saved values', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _optimisticEdits: Map<string, RenderableTask>;
+      _onFamilyState: (s: FamilyState) => void;
+    };
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+
+    const edited: RenderableTask = {
+      ...makeChore('needs_action'),
+      summary: 'Clean up the playroom',
+      metadata: { ...makeChore().metadata, icon: '🧸' },
+    };
+    dispatchTaskUpdated(el, edited);
+    await el.updateComplete;
+    assert.equal(internals._optimisticEdits.size, 1, 'override present');
+
+    // Push carries the saved values → override retired.
+    internals._onFamilyState({
+      members: [
+        { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+      ],
+      tasksByMember: new Map([['anna', [edited]]]),
+      streakByMember: new Map([['anna', 0]]),
+      taskMetadataByUid: new Map(),
+      resetTime: '03:00',
+      streakCheckTime: '02:00',
+      integrationError: null,
+    });
+    await el.updateComplete;
+
+    assert.equal(internals._optimisticEdits.size, 0, 'override cleared once server matches');
+    assert.equal(annaTaskRow(el)!.task.summary, 'Clean up the playroom', 'edited value persists from real data');
+  });
+
+  it('keeps the edit override while the pushed task still has stale values', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _optimisticEdits: Map<string, RenderableTask>;
+      _onFamilyState: (s: FamilyState) => void;
+    };
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+
+    const edited: RenderableTask = {
+      ...makeChore('needs_action'),
+      summary: 'Clean up the playroom',
+      metadata: { ...makeChore().metadata, icon: '🧸' },
+    };
+    dispatchTaskUpdated(el, edited);
+    await el.updateComplete;
+
+    // Stale push (edit not propagated yet) → override kept, edited value still shown.
+    internals._onFamilyState({
+      members: [
+        { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+      ],
+      tasksByMember: new Map([['anna', [makeChore('needs_action')]]]),
+      streakByMember: new Map([['anna', 0]]),
+      taskMetadataByUid: new Map(),
+      resetTime: '03:00',
+      streakCheckTime: '02:00',
+      integrationError: null,
+    });
+    await el.updateComplete;
+
+    assert.ok(internals._optimisticEdits.has('c-1'), 'override kept while server is stale');
+    assert.equal(annaTaskRow(el)!.task.summary, 'Clean up the playroom', 'edited value still shown');
+  });
+
+  it('drops an unreconciled optimistic edit after the backstop timeout', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _midnightTimer?: ReturnType<typeof setTimeout>;
+      _scrollTimer?: ReturnType<typeof setTimeout>;
+      _optimisticEdits: Map<string, RenderableTask>;
+    };
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+    clearTimeout(internals._midnightTimer);
+    internals._midnightTimer = undefined;
+    clearTimeout(internals._scrollTimer);
+    internals._scrollTimer = undefined;
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      dispatchTaskUpdated(el, {
+        ...makeChore('needs_action'),
+        summary: 'Never reconciles',
+      });
+      await el.updateComplete;
+      assert.equal(internals._optimisticEdits.size, 1, 'edit override present');
+
+      mock.timers.tick(30_000);
+      await el.updateComplete;
+      assert.equal(internals._optimisticEdits.size, 0, 'edit override cleared by backstop');
+    } finally {
+      mock.timers.reset();
+    }
+  });
 });

@@ -520,13 +520,19 @@ export class LucarneEditTaskPopover extends LitElement {
       const rotatingOwnersChanged =
         isRotating &&
         JSON.stringify(this._rotatingOwners) !== JSON.stringify(origOwners);
+      const isHousehold = this.task.metadata.member_slug === 'household';
       const metaChanged =
         this._type !== this.task.metadata.type ||
         this._icon !== this.task.metadata.icon ||
         (!isRotating && this._buildRRule() !== this.task.metadata.recurrence) ||
         this._timeOfDay !== (this.task.metadata.time_of_day ?? 'anytime') ||
-        (this.task.metadata.member_slug === 'household' && !isRotating && this._assignee !== this.task.metadata.assignee_slug) ||
+        (isHousehold && !isRotating && this._assignee !== this.task.metadata.assignee_slug) ||
         rotatingOwnersChanged;
+      // If the current owner was removed from rotation, reset to the new first owner.
+      const currentOwnerRemoved =
+        isRotating &&
+        !!this.task.metadata.current_owner &&
+        !this._rotatingOwners.includes(this.task.metadata.current_owner);
 
       if (summaryChanged || dueChanged) {
         if (!ownerEntityId) throw new Error('Could not resolve todo entity for this task');
@@ -538,12 +544,6 @@ export class LucarneEditTaskPopover extends LitElement {
       }
 
       if (metaChanged) {
-        const isHousehold = this.task.metadata.member_slug === 'household';
-        // If current owner was removed from rotation, reset to new first owner
-        const currentOwnerRemoved =
-          isRotating &&
-          !!this.task.metadata.current_owner &&
-          !this._rotatingOwners.includes(this.task.metadata.current_owner);
         await updateTaskMetadata(this.hass, this.task.uid, {
           ...(this._type !== this.task.metadata.type ? { type: this._type } : {}),
           ...(this._icon !== this.task.metadata.icon ? { icon: this._icon } : {}),
@@ -555,6 +555,35 @@ export class LucarneEditTaskPopover extends LitElement {
           ...(rotatingOwnersChanged ? { rotation_owners: this._rotatingOwners } : {}),
           ...(currentOwnerRemoved ? { current_owner: this._rotatingOwners[0] } : {}),
         });
+      }
+
+      // Hand the card the post-edit task so it can render the change immediately.
+      // The saves above succeeded server-side (fast request/response), but the
+      // state push that carries the new values lags on an idle WKWebView kiosk —
+      // without this the row shows stale summary/icon/recurrence until then.
+      if (summaryChanged || dueChanged || metaChanged) {
+        const updated: RenderableTask = {
+          ...this.task,
+          summary: this._summary.trim(),
+          due: this._due || this.task.due,
+          metadata: {
+            ...this.task.metadata,
+            type: this._type,
+            icon: this._icon,
+            recurrence: isRotating ? this.task.metadata.recurrence : this._buildRRule(),
+            time_of_day: this._timeOfDay,
+            ...(isHousehold && !isRotating ? { assignee_slug: this._assignee } : {}),
+            ...(isRotating
+              ? {
+                  rotation_owners: this._rotatingOwners,
+                  current_owner: currentOwnerRemoved ? this._rotatingOwners[0] : this.task.metadata.current_owner,
+                }
+              : {}),
+          },
+        };
+        this.dispatchEvent(
+          new CustomEvent('task-updated', { detail: { task: updated }, bubbles: true, composed: true }),
+        );
       }
 
       this._close();

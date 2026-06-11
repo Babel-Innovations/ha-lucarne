@@ -115,6 +115,51 @@ User taps "complete" on chores card
 - Refreshes task metadata on any `lucarne_family_task_*` or `lucarne_family_all_routines_done` event (debounced ≤ 1/sec)
 - Mutations go through `todo.update_item` (HA service) and `lucarne_family.*` services (integration)
 
+## Optimistic UI
+
+**Rule: every user-initiated mutation must update the acting device's UI immediately
+and reconcile when the authoritative state arrives. Never rely on the server
+round-trip + WebSocket push to reflect the user's *own* action.**
+
+Why: the cards live-update purely through server→client WebSocket pushes
+(`lucarne_family_*` events and per-entity state triggers; see *Card subscription
+model*). On the always-on iPad Companion-app kiosk (a WKWebView), those *inbound*
+push frames stall while the page sits idle and aren't delivered to JS until a user
+interaction wakes the runloop — so a mutation's effect would not appear on its own.
+*Outbound* request/response calls keep working (a direct tap updates instantly),
+which is exactly why an immediate local update + a later reconcile is reliable.
+`subscribeFamilyState` also runs a ~20 s fallback poll + visibility refresh
+(`src/shared/family-subscription.ts`) as a safety net, but that bounds staleness —
+it does not make a mutation feel live. Optimistic UI is what makes it feel live.
+
+Four mechanisms are in use; pick the one that fits the mutation:
+
+| Mechanism | State | Used by | Reconcile |
+|-----------|-------|---------|-----------|
+| **Status override** | `Map<uid, status>` | chores + Today task toggle (`_optimistic`) | drop when the pushed status matches (or the task vanishes) |
+| **Provisional inject + TTL** | `Map<uid, task>` / array | chores add (`_optimisticAdds`), calendar create (`_pendingEvents`) | drop when the real item (same uid) arrives; TTL backstop clears a never-reconciled phantom |
+| **Tombstone** | `Set<uid>` | chores delete (`_deletedUids`), calendar delete (`_deletedUids`) | keep hiding while the server still returns the item; drop once it's gone |
+| **Full-replace override + TTL** | `Map<uid, task>` | chores edit save (`_optimisticEdits`, reconciled via `editMatches`) | drop when the pushed task reflects every saved field; TTL backstop |
+
+Two timing patterns, by cost of being wrong:
+
+- **Flip-then-revert** (toggle): set the override *before* the service call and revert
+  in `catch` on failure. A status flip is cheap to undo.
+- **Confirm-then-apply** (add / delete / edit): dispatch the optimistic event only
+  *after* the service call resolves, so a failed mutation never leaves phantom UI.
+  These calls return fast (direct request/response); only the *push* is slow.
+
+Reconciliation lives in each card's family-state callback (`_onFamilyState` for the
+chores card, `_reconcileOptimistic` for the Today card): every override is dropped as
+soon as the next authoritative push/poll proves the server agrees, so the override
+maps can't grow stale. TTL backstops are sized **above** the ~20 s family poll
+interval so an override survives until at least one refresh can confirm it.
+
+**Intentionally excluded:** member-avatar changes. The only mutation site is the
+chores-card *editor* (`src/editors/lucarne-chores-card-editor.ts`), an interactive
+config surface — not a kiosk-runtime card — so the idle-WKWebView stall does not
+apply. If avatar editing ever moves onto a live card, it needs optimistic treatment.
+
 ## Design-token layer
 
 All three cards import `lucarneStyles` from `src/shared/design-tokens.ts`. This block defines CSS

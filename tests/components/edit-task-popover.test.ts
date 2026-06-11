@@ -132,6 +132,56 @@ describe('lucarne-edit-task-popover', () => {
     assert.equal(todoCall.payload.rename, 'Brush teeth thoroughly', 'rename always included');
   });
 
+  it('fires task-updated with the post-edit task on a successful save', async () => {
+    const el = await makeEl();
+    const updated: CustomEvent[] = [];
+    el.addEventListener('task-updated', (e) => updated.push(e as CustomEvent));
+
+    const summaryInput = shadow(el, '#et-summary') as HTMLInputElement;
+    summaryInput.value = 'Brush teeth thoroughly';
+    summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await el.updateComplete;
+
+    (shadow(el, '.btn-save') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(updated.length, 1, 'task-updated fired once');
+    assert.equal(updated[0].detail.task.uid, 'task-uid-1');
+    assert.equal(updated[0].detail.task.summary, 'Brush teeth thoroughly', 'event carries the edited summary');
+  });
+
+  it('does not fire task-updated when nothing changed', async () => {
+    const el = await makeEl();
+    const updated: CustomEvent[] = [];
+    el.addEventListener('task-updated', (e) => updated.push(e as CustomEvent));
+
+    // Save without touching any field.
+    (shadow(el, '.btn-save') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(updated.length, 0, 'no event when there is no edit');
+  });
+
+  it('does not fire task-updated when the save service call fails', async () => {
+    const el = await makeEl();
+    const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+    fakeHass.callService = async () => {
+      throw new Error('save failed');
+    };
+    const updated: CustomEvent[] = [];
+    el.addEventListener('task-updated', (e) => updated.push(e as CustomEvent));
+
+    const summaryInput = shadow(el, '#et-summary') as HTMLInputElement;
+    summaryInput.value = 'Changed';
+    summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await el.updateComplete;
+    (shadow(el, '.btn-save') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(updated.length, 0, 'no optimistic event on failure');
+    assert.ok(shadow(el, '.error-msg'), 'error surfaced');
+  });
+
   it('calls updateTaskMetadata when type changes', async () => {
     const el = await makeEl();
     const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;

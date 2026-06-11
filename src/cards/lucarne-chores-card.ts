@@ -48,6 +48,42 @@ export const DEFAULT_NIGHT_START = '19:00';
  */
 const OPTIMISTIC_ADD_TTL_MS = 10_000;
 
+/**
+ * How long an optimistic edit lingers before self-clearing if no push ever
+ * confirms it. Sized above the family-state fallback poll interval (~20s) so the
+ * override survives until at least one refresh carries the saved values; the
+ * edit is on the server regardless and wins on the next refresh/remount.
+ */
+const OPTIMISTIC_EDIT_TTL_MS = 30_000;
+
+/**
+ * Whether a pushed task reflects an optimistic edit's saved values, across every
+ * field the edit popover can change. Used to retire an edit override once the
+ * server catches up.
+ *
+ * Comparison is by string equality. If the backend echoes `due` or `recurrence`
+ * in a normalized form that differs from what the popover sent (e.g. a date-only
+ * `due` round-tripped as `…T00:00:00`, or an equivalent RRULE reserialized), the
+ * match can miss even though the values are semantically equal — the override
+ * then lingers until its TTL backstop (`OPTIMISTIC_EDIT_TTL_MS`) clears it. That
+ * is harmless: the override only ever shows what the user just saved.
+ */
+function editMatches(real: RenderableTask, opt: RenderableTask): boolean {
+  if (real.summary !== opt.summary) return false;
+  if ((real.due ?? '') !== (opt.due ?? '')) return false;
+  const a = real.metadata;
+  const b = opt.metadata;
+  return (
+    a.type === b.type &&
+    a.icon === b.icon &&
+    a.recurrence === b.recurrence &&
+    (a.time_of_day ?? 'anytime') === (b.time_of_day ?? 'anytime') &&
+    (a.assignee_slug ?? '') === (b.assignee_slug ?? '') &&
+    (a.current_owner ?? '') === (b.current_owner ?? '') &&
+    JSON.stringify(a.rotation_owners ?? []) === JSON.stringify(b.rotation_owners ?? [])
+  );
+}
+
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards =
   (window as Window & typeof globalThis & { customCards?: object[] }).customCards || [];
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards!.push({
@@ -178,9 +214,19 @@ export class LucarneChoresCard extends LucarneCardBase {
    * stops returning the task (delete confirmed).
    */
   @state() private _deletedUids: Set<string> = new Set();
+  /**
+   * Optimistic edits keyed by task uid. A successful save in the edit popover
+   * replaces the rendered task with the post-edit version immediately — the
+   * update succeeds server-side fast, but the state push carrying the new
+   * summary/icon/recurrence lags on an idle WKWebView kiosk. `_onFamilyState`
+   * drops each entry once the pushed task matches the edit, with a TTL backstop.
+   */
+  @state() private _optimisticEdits: Map<string, RenderableTask> = new Map();
 
   /** Per-uid backstop timers that drop an unreconciled optimistic add. */
   private _addTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Per-uid backstop timers that drop an unreconciled optimistic edit. */
+  private _editTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   private _unsubFamily?: () => void;
   /**
@@ -287,12 +333,19 @@ export class LucarneChoresCard extends LucarneCardBase {
 
   /** Apply a freshly-pushed family state, reconciling optimistic overrides. */
   private _onFamilyState = (state: FamilyState) => {
-    if (this._optimistic.size > 0 || this._optimisticAdds.size > 0 || this._deletedUids.size > 0) {
+    if (
+      this._optimistic.size > 0 ||
+      this._optimisticAdds.size > 0 ||
+      this._deletedUids.size > 0 ||
+      this._optimisticEdits.size > 0
+    ) {
       const presentUids = new Set<string>();
+      const presentByUid = new Map<string, RenderableTask>();
       const nextToggle = new Map(this._optimistic);
       for (const tasks of state.tasksByMember.values()) {
         for (const t of tasks) {
           presentUids.add(t.uid);
+          presentByUid.set(t.uid, t);
           // Server caught up to the optimistic toggle — stop overriding.
           if (nextToggle.get(t.uid) === t.status) nextToggle.delete(t.uid);
         }
@@ -327,9 +380,55 @@ export class LucarneChoresCard extends LucarneCardBase {
         }
         if (changed) this._optimisticAdds = nextAdds;
       }
+      if (this._optimisticEdits.size > 0) {
+        // Drop an edit override once the pushed task reflects the saved values,
+        // or the task is gone (e.g. deleted), so the map can't grow stale.
+        const nextEdits = new Map(this._optimisticEdits);
+        let changed = false;
+        for (const [uid, opt] of nextEdits) {
+          const real = presentByUid.get(uid);
+          if (!real || editMatches(real, opt)) {
+            nextEdits.delete(uid);
+            this._clearEditTimeout(uid);
+            changed = true;
+          }
+        }
+        if (changed) this._optimisticEdits = nextEdits;
+      }
     }
     this._familyState = state;
   };
+
+  private _handleTaskUpdated = (e: Event) => {
+    const { task } = (e as CustomEvent<{ task: RenderableTask }>).detail;
+    if (!task?.uid) return;
+    this._optimisticEdits = new Map(this._optimisticEdits).set(task.uid, task);
+    this._scheduleEditCleanup(task.uid);
+  };
+
+  /** Arm a backstop that drops an optimistic edit if it's never reconciled. */
+  private _scheduleEditCleanup(uid: string) {
+    this._clearEditTimeout(uid);
+    this._editTimers.set(
+      uid,
+      setTimeout(() => {
+        this._editTimers.delete(uid);
+        if (this._optimisticEdits.has(uid)) {
+          const next = new Map(this._optimisticEdits);
+          next.delete(uid);
+          this._optimisticEdits = next;
+        }
+      }, OPTIMISTIC_EDIT_TTL_MS),
+    );
+  }
+
+  private _clearEditTimeout(uid: string) {
+    const timer = this._editTimers.get(uid);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this._editTimers.delete(uid);
+    }
+  }
 
   private _handleTaskDeleted = (e: Event) => {
     const { uid } = (e as CustomEvent<{ uid: string }>).detail;
@@ -394,6 +493,8 @@ export class LucarneChoresCard extends LucarneCardBase {
     }
     for (const timer of this._addTimers.values()) clearTimeout(timer);
     this._addTimers.clear();
+    for (const timer of this._editTimers.values()) clearTimeout(timer);
+    this._editTimers.clear();
   }
 
   private _resolveMembers(): Array<{ member: MemberSummary; tasks: RenderableTask[]; streak: number }> {
@@ -408,12 +509,16 @@ export class LucarneChoresCard extends LucarneCardBase {
     const now = new Date();
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
+    // Replace a real task with its optimistic-edit version (full post-save task).
+    // Applied before filtering so an edited type/due/owner routes correctly.
+    const applyEdit = (t: RenderableTask): RenderableTask => this._optimisticEdits.get(t.uid) ?? t;
+
     // Household bucket is the source for rotating tasks; pulled once and reused.
     // Tombstoned (optimistically-deleted) uids are dropped here so they vanish
     // from both the household column and any owner's rotating list.
-    const householdTasks = (this._familyState.tasksByMember.get('household') ?? []).filter(
-      (t) => !this._deletedUids.has(t.uid),
-    );
+    const householdTasks = (this._familyState.tasksByMember.get('household') ?? [])
+      .filter((t) => !this._deletedUids.has(t.uid))
+      .map(applyEdit);
 
     const applyOptimistic = (t: RenderableTask): RenderableTask => {
       const optimistic = this._optimistic.get(t.uid);
@@ -451,9 +556,9 @@ export class LucarneChoresCard extends LucarneCardBase {
 
       if (!member) continue;
 
-      const allTasks = (this._familyState.tasksByMember.get(slug) ?? []).filter(
-        (t) => !this._deletedUids.has(t.uid),
-      );
+      const allTasks = (this._familyState.tasksByMember.get(slug) ?? [])
+        .filter((t) => !this._deletedUids.has(t.uid))
+        .map(applyEdit);
       const existingUids = new Set(allTasks.map((t) => t.uid));
       const ownTasks = allTasks.filter(passesOwnFilter).map(applyOptimistic);
 
@@ -633,6 +738,7 @@ export class LucarneChoresCard extends LucarneCardBase {
               .hass=${this.hass}
               .task=${this._editTask}
               .members=${allMembers}
+              @task-updated=${this._handleTaskUpdated}
               @task-deleted=${this._handleTaskDeleted}
               @popover-close=${() => { this._editTask = null; }}
             ></lucarne-edit-task-popover>

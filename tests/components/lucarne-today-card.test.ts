@@ -410,6 +410,71 @@ describe('lucarne-today-card — task interaction', () => {
 
     row!.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
   });
+
+  it('optimistically flips a toggled task before the server confirms, then reconciles', async () => {
+    const hass = makeFakeHassWithFamily([
+      { uid: 'household-task-1', summary: 'Take out trash', status: 'needs_action' },
+    ]);
+    const el = await makeCard(
+      { household_tasks_from_integration: true },
+      hass as unknown as HomeAssistant,
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    await el.updateComplete;
+
+    const internals = el as unknown as {
+      _optimistic: Map<string, RenderableTask['status']>;
+      _handleTaskToggle(e: Event): Promise<void>;
+      _familyState: { tasksByMember: Map<string, RenderableTask[]> };
+      _reconcileOptimistic(): void;
+    };
+    const task = (internals._familyState.tasksByMember.get('household') ?? [])[0];
+    assert.ok(task, 'seeded household task present');
+    assert.equal(task.status, 'needs_action');
+
+    await internals._handleTaskToggle(new CustomEvent('task-toggle', { detail: { task } }));
+    await el.updateComplete;
+
+    assert.equal(internals._optimistic.get('household-task-1'), 'completed', 'optimistic flip recorded');
+    const summary = el.shadowRoot!.querySelector('lucarne-tasks-summary') as
+      | (HTMLElement & { renderableTasks: RenderableTask[] })
+      | null;
+    const renderedStatus = summary!.renderableTasks.find((t) => t.uid === 'household-task-1')?.status;
+    assert.equal(renderedStatus, 'completed', 'rendered row reflects the optimistic status');
+
+    // Server catches up: push a family state where the task is now completed.
+    internals._familyState.tasksByMember.set('household', [{ ...task, status: 'completed' }]);
+    internals._reconcileOptimistic();
+    assert.equal(internals._optimistic.size, 0, 'override cleared once the server matches');
+  });
+
+  it('reverts the optimistic flip if the toggle service call fails', async () => {
+    const hass = makeFakeHassWithFamily([
+      { uid: 'household-task-1', summary: 'Take out trash', status: 'needs_action' },
+    ]);
+    hass.callService = async () => {
+      throw new Error('service failed');
+    };
+    const el = await makeCard(
+      { household_tasks_from_integration: true },
+      hass as unknown as HomeAssistant,
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    await el.updateComplete;
+
+    const internals = el as unknown as {
+      _optimistic: Map<string, RenderableTask['status']>;
+      _handleTaskToggle(e: Event): Promise<void>;
+      _familyState: { tasksByMember: Map<string, RenderableTask[]> };
+    };
+    const task = (internals._familyState.tasksByMember.get('household') ?? [])[0];
+
+    await assert.rejects(
+      internals._handleTaskToggle(new CustomEvent('task-toggle', { detail: { task } })),
+      /service failed/,
+    );
+    assert.equal(internals._optimistic.size, 0, 'override reverted after failure');
+  });
 });
 
 describe('lucarne-today-card — raw-mode metadata enrichment', () => {
