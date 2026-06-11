@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.4.0 — 2026-06-10
+
+**Features:**
+-  extend optimistic UI to Today-card toggle and chores-card edit
+
+**Fixes:**
+-  coalesce in-flight family refreshes and back off the poll when no integration
+-  optimistically hide deleted tasks so the kiosk row doesn't linger
+-  auto-refresh family state so kiosk sees changes from other devices
+
+
 ## v1.3.0 — 2026-06-10
 
 **Features:**
