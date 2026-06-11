@@ -465,6 +465,73 @@ describe('subscribeFamilyState fallback refresh', () => {
     await flush();
     assert.equal(counter.getFamily, 2, 'no re-fetch after unsub');
   });
+
+  it('coalesces refresh requests that arrive during an in-flight refresh into one trailing fetch', async () => {
+    // get_family blocks on a gate so the initial refresh stays in flight while we
+    // pile on more requests; releasing it should produce exactly one trailing fetch.
+    let getFamily = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const fakeHass = makeFakeHass();
+    fakeHass.connection.sendMessagePromise = async (payload: Record<string, unknown>) => {
+      if (payload.type === 'lucarne_family/get_family') {
+        getFamily += 1;
+        await gate;
+        return { members: [MEMBER_ANNA], task_metadata: [], reset_time: '07:00', streak_check_time: '22:00', household_entity_id: 'todo.lucarne_household' };
+      }
+      if (payload.type === 'call_service' && payload.domain === 'todo' && payload.service === 'get_items') {
+        return { response: { [(payload.target as { entity_id: string })?.entity_id ?? '']: { items: [] } } };
+      }
+      return undefined;
+    };
+
+    const unsub = subscribeFamilyState(HA(fakeHass), () => {});
+    // The initial refresh is in flight (awaiting the gate).
+    assert.equal(getFamily, 1, 'initial fetch started');
+
+    // Three more requests arrive while the first is still running.
+    document.dispatchEvent(new Event('visibilitychange'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    assert.equal(getFamily, 1, 'no concurrent fetches while one is in flight');
+
+    release();
+    await flush();
+    // Exactly one trailing fetch covers all three queued requests — not three.
+    assert.equal(getFamily, 2, 'one trailing refresh coalesces the queued requests');
+    unsub();
+  });
+
+  it('backs off the poll to 5 minutes while the integration is absent', async () => {
+    let getFamily = 0;
+    const fakeHass = makeFakeHass();
+    fakeHass.connection.sendMessagePromise = async (payload: Record<string, unknown>) => {
+      if (payload.type === 'lucarne_family/get_family') {
+        getFamily += 1;
+        throw new Error('Unknown command'); // integration not installed
+      }
+      return undefined;
+    };
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      const unsub = subscribeFamilyState(HA(fakeHass), () => {});
+      await flush();
+      assert.equal(getFamily, 1, 'initial fetch failed (integration absent)');
+
+      // The normal 20s interval must NOT fire — the poll backed off after the failure.
+      mock.timers.tick(20_000);
+      await flush();
+      assert.equal(getFamily, 1, 'no 20s poll while integration is absent');
+
+      // At the 5-minute backoff interval it retries (so it recovers if installed later).
+      mock.timers.tick(5 * 60 * 1000 - 20_000);
+      await flush();
+      assert.equal(getFamily, 2, 'retries at the backed-off interval');
+      unsub();
+    } finally {
+      mock.timers.reset();
+    }
+  });
 });
 
 describe('SYNTHETIC_HOUSEHOLD', () => {
