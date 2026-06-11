@@ -48,6 +48,15 @@ export const SYNTHETIC_HOUSEHOLD: MemberSummary = {
  */
 const FAMILY_POLL_INTERVAL_MS = 20_000;
 
+/**
+ * Backed-off poll interval used while the integration is absent (the last
+ * `get_family` failed). A raw-only / no-integration client has nothing to catch
+ * up, so polling every 20s would just generate continuous failing WS traffic and
+ * debug logs. Keep polling — but slowly — so a card still recovers if the
+ * integration is installed later.
+ */
+const FAMILY_POLL_BACKOFF_MS = 5 * 60 * 1000;
+
 const TASK_METADATA_EVENTS = [
   'lucarne_family_task_added',
   'lucarne_family_task_completed',
@@ -102,7 +111,8 @@ export function subscribeFamilyState(
 
   let metadataRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
-  let refreshing = false;
+  let refreshInFlight: Promise<void> | null = null;
+  let refreshQueued = false;
   let currentError: Error | null = null;
 
   function emitState() {
@@ -126,13 +136,34 @@ export function subscribeFamilyState(
     });
   }
 
-  async function refreshMetadata() {
-    // Coalesce overlapping refreshes: the event, poll, and visibility paths can
-    // all fire close together, and each call tears down + re-subscribes every
-    // todo entity — concurrent runs would race those re-subscriptions and could
-    // drop a todo update. One in-flight refresh delivers current state for all.
-    if (refreshing) return;
-    refreshing = true;
+  /**
+   * Coalesce overlapping refreshes: the event, poll, and visibility paths can
+   * all fire close together, and each refresh tears down + re-subscribes every
+   * todo entity — concurrent runs would race those re-subscriptions and could
+   * drop a todo update. While one refresh is in flight, additional callers get
+   * the same promise and flag a single trailing refresh, so no request is lost
+   * (the latest state is always captured) and callers that reschedule off the
+   * returned promise (the poll) only do so once the work has actually settled.
+   */
+  function refreshMetadata(): Promise<void> {
+    if (refreshInFlight) {
+      refreshQueued = true;
+      return refreshInFlight;
+    }
+    refreshInFlight = (async () => {
+      try {
+        do {
+          refreshQueued = false;
+          await doRefreshOnce();
+        } while (refreshQueued && !cancelled);
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+    return refreshInFlight;
+  }
+
+  async function doRefreshOnce() {
     try {
       const resp = await hass.connection.sendMessagePromise<GetFamilyResponse>({
         type: 'lucarne_family/get_family',
@@ -222,8 +253,6 @@ export function subscribeFamilyState(
         streakCheckTime = '';
         emitState();
       }
-    } finally {
-      refreshing = false;
     }
   }
 
@@ -241,9 +270,11 @@ export function subscribeFamilyState(
    * kiosks) still catch up. Skips the actual fetch while the page is hidden so
    * background browser tabs don't poll needlessly; the visibility listener below
    * forces an immediate refresh when the page comes back. Reschedules itself
-   * only after the in-flight refresh settles to avoid pile-up on a slow client.
+   * only after the in-flight refresh settles to avoid pile-up on a slow client,
+   * and backs off hard while the integration is absent (`currentError` set).
    */
   function schedulePoll() {
+    const interval = currentError !== null ? FAMILY_POLL_BACKOFF_MS : FAMILY_POLL_INTERVAL_MS;
     pollTimer = setTimeout(() => {
       pollTimer = null;
       const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
@@ -251,7 +282,7 @@ export function subscribeFamilyState(
       done.finally(() => {
         if (!cancelled) schedulePoll();
       });
-    }, FAMILY_POLL_INTERVAL_MS);
+    }, interval);
   }
 
   // Catch up the instant the page becomes visible again (tab refocus, app
@@ -287,8 +318,12 @@ export function subscribeFamilyState(
       });
   }
 
-  refreshMetadata();
-  schedulePoll();
+  // Kick off the initial fetch, then start the self-rescheduling poll once it
+  // settles so the first interval already reflects integration presence (no
+  // 20s burst of failing fetches in a no-integration setup).
+  refreshMetadata().finally(() => {
+    if (!cancelled) schedulePoll();
+  });
 
   return () => {
     cancelled = true;
