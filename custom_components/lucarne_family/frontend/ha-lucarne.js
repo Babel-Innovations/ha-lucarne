@@ -7516,7 +7516,11 @@ var $ = class extends V {
 		if (!this._saving) {
 			this._saving = !0, this._error = "";
 			try {
-				await Fr(this.hass, this.task.uid), this._close();
+				await Fr(this.hass, this.task.uid), this.dispatchEvent(new CustomEvent("task-deleted", {
+					detail: { uid: this.task.uid },
+					bubbles: !0,
+					composed: !0
+				})), this._close();
 			} catch (e) {
 				this._error = e instanceof Error ? e.message : "Failed to delete", this._saving = !1, this._confirmingDelete = !1;
 			}
@@ -7880,10 +7884,15 @@ window.customCards = window.customCards || [], window.customCards.push({
 });
 var Br = class extends tt {
 	constructor(...e) {
-		super(...e), this._familyState = null, this._addTaskMember = null, this._editTask = null, this._optimistic = /* @__PURE__ */ new Map(), this._optimisticAdds = /* @__PURE__ */ new Map(), this._addTimers = /* @__PURE__ */ new Map(), this._onFamilyState = (e) => {
-			if (this._optimistic.size > 0 || this._optimisticAdds.size > 0) {
+		super(...e), this._familyState = null, this._addTaskMember = null, this._editTask = null, this._optimistic = /* @__PURE__ */ new Map(), this._optimisticAdds = /* @__PURE__ */ new Map(), this._deletedUids = /* @__PURE__ */ new Set(), this._addTimers = /* @__PURE__ */ new Map(), this._onFamilyState = (e) => {
+			if (this._optimistic.size > 0 || this._optimisticAdds.size > 0 || this._deletedUids.size > 0) {
 				let t = /* @__PURE__ */ new Set(), n = new Map(this._optimistic);
 				for (let r of e.tasksByMember.values()) for (let e of r) t.add(e.uid), n.get(e.uid) === e.status && n.delete(e.uid);
+				if (this._deletedUids.size > 0) {
+					let e = /* @__PURE__ */ new Set();
+					for (let n of this._deletedUids) t.has(n) && e.add(n);
+					e.size !== this._deletedUids.size && (this._deletedUids = e);
+				}
 				if (this._optimistic.size > 0) {
 					for (let e of n.keys()) t.has(e) || n.delete(e);
 					this._optimistic = n;
@@ -7895,6 +7904,15 @@ var Br = class extends tt {
 				}
 			}
 			this._familyState = e;
+		}, this._handleTaskDeleted = (e) => {
+			let { uid: t } = e.detail;
+			if (t) {
+				if (this._optimisticAdds.has(t)) {
+					let e = new Map(this._optimisticAdds);
+					e.delete(t), this._clearAddTimeout(t), this._optimisticAdds = e;
+				}
+				this._deletedUids = new Set(this._deletedUids).add(t);
+			}
 		}, this._handleTaskAdded = (e) => {
 			let { tasks: t } = e.detail;
 			if (!t?.length) return;
@@ -8057,7 +8075,7 @@ var Br = class extends tt {
 	}
 	_resolveMembers() {
 		if (!this._config || !this._familyState) return [];
-		let { members: e } = this._config, t = new Set(this._config.hidden_members ?? []), n = this._config.show_routines ?? !0, r = this._config.show_tasks ?? !0, i = /* @__PURE__ */ new Date(), a = new Date(i.getFullYear(), i.getMonth(), i.getDate(), 23, 59, 59, 999), o = this._familyState.tasksByMember.get("household") ?? [], s = (e) => {
+		let { members: e } = this._config, t = new Set(this._config.hidden_members ?? []), n = this._config.show_routines ?? !0, r = this._config.show_tasks ?? !0, i = /* @__PURE__ */ new Date(), a = new Date(i.getFullYear(), i.getMonth(), i.getDate(), 23, 59, 59, 999), o = (this._familyState.tasksByMember.get("household") ?? []).filter((e) => !this._deletedUids.has(e.uid)), s = (e) => {
 			let t = this._optimistic.get(e.uid);
 			return t && t !== e.status ? {
 				...e,
@@ -8068,10 +8086,10 @@ var Br = class extends tt {
 			if (t.has(n)) continue;
 			let e = n === "household" ? pt : this._familyState.members.find((e) => e.slug === n) ?? null;
 			if (!e) continue;
-			let i = this._familyState.tasksByMember.get(n) ?? [], a = new Set(i.map((e) => e.uid)), f = i.filter(c).map(s), p = l.filter((e) => e.metadata.member_slug === n && e.metadata.type !== "rotating" && !a.has(e.uid) && c(e)), m;
+			let i = (this._familyState.tasksByMember.get(n) ?? []).filter((e) => !this._deletedUids.has(e.uid)), a = new Set(i.map((e) => e.uid)), f = i.filter(c).map(s), p = l.filter((e) => e.metadata.member_slug === n && e.metadata.type !== "rotating" && !a.has(e.uid) && !this._deletedUids.has(e.uid) && c(e)), m;
 			if (n === "household") m = [...f, ...p];
 			else {
-				let e = r ? o.filter((e) => e.metadata.type === "rotating" && e.metadata.current_owner === n).map(s) : [], t = r ? l.filter((e) => e.metadata.type === "rotating" && e.metadata.current_owner === n && !u.has(e.uid)) : [];
+				let e = r ? o.filter((e) => e.metadata.type === "rotating" && e.metadata.current_owner === n).map(s) : [], t = r ? l.filter((e) => e.metadata.type === "rotating" && e.metadata.current_owner === n && !u.has(e.uid) && !this._deletedUids.has(e.uid)) : [];
 				m = [
 					...f,
 					...e,
@@ -8182,6 +8200,7 @@ var Br = class extends tt {
               .hass=${this.hass}
               .task=${this._editTask}
               .members=${s}
+              @task-deleted=${this._handleTaskDeleted}
               @popover-close=${() => {
 			this._editTask = null;
 		}}
@@ -8190,7 +8209,7 @@ var Br = class extends tt {
     `;
 	}
 };
-J([W({ attribute: !1 })], Br.prototype, "hass", void 0), J([G()], Br.prototype, "_config", void 0), J([G()], Br.prototype, "_familyState", void 0), J([G()], Br.prototype, "_addTaskMember", void 0), J([G()], Br.prototype, "_editTask", void 0), J([G()], Br.prototype, "_optimistic", void 0), J([G()], Br.prototype, "_optimisticAdds", void 0), Br = J([H("lucarne-chores-card")], Br);
+J([W({ attribute: !1 })], Br.prototype, "hass", void 0), J([G()], Br.prototype, "_config", void 0), J([G()], Br.prototype, "_familyState", void 0), J([G()], Br.prototype, "_addTaskMember", void 0), J([G()], Br.prototype, "_editTask", void 0), J([G()], Br.prototype, "_optimistic", void 0), J([G()], Br.prototype, "_optimisticAdds", void 0), J([G()], Br.prototype, "_deletedUids", void 0), Br = J([H("lucarne-chores-card")], Br);
 //#endregion
 //#region src/shared/cropper-styles.ts
 var Vr = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {

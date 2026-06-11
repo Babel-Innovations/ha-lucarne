@@ -216,9 +216,12 @@ describe('lucarne-edit-task-popover', () => {
     assert.ok(errorMsg!.textContent!.toLowerCase().includes('required'));
   });
 
-  it('delete confirmation flow — shows confirm UI then calls delete_task', async () => {
+  it('delete confirmation flow — shows confirm UI, calls delete_task, fires task-deleted', async () => {
     const el = await makeEl();
     const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+
+    const deleted: CustomEvent[] = [];
+    el.addEventListener('task-deleted', (e) => deleted.push(e as CustomEvent));
 
     // Initially no confirmation UI
     let confirmZone = shadow(el, '.confirm-delete');
@@ -246,6 +249,33 @@ describe('lucarne-edit-task-popover', () => {
     );
     assert.ok(deleteCall, 'delete_task was called');
     assert.equal(deleteCall.payload.uid, 'task-uid-1');
+
+    // The card relies on this event to optimistically hide the row.
+    assert.equal(deleted.length, 1, 'task-deleted fired once');
+    assert.equal(deleted[0].detail.uid, 'task-uid-1', 'event carries the deleted uid');
+  });
+
+  it('does not fire task-deleted when the delete service call fails', async () => {
+    const el = await makeEl();
+    const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+    fakeHass.callService = async () => {
+      throw new Error('No task found');
+    };
+
+    const deleted: CustomEvent[] = [];
+    el.addEventListener('task-deleted', (e) => deleted.push(e as CustomEvent));
+
+    (shadow(el, '.btn-delete') as HTMLButtonElement).click();
+    await el.updateComplete;
+    const confirmBtn = Array.from(shadow(el, '.confirm-delete')!.querySelectorAll('button')).find(
+      (b) => b.style.background.includes('f44336') || b.textContent?.includes('Yes'),
+    ) as HTMLButtonElement;
+    confirmBtn.click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(deleted.length, 0, 'no tombstone event on failure');
+    const errorMsg = shadow(el, '.error-msg');
+    assert.ok(errorMsg, 'error surfaced in the popover');
   });
 
   it('fires popover-close on Cancel click', async () => {

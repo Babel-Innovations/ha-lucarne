@@ -169,6 +169,15 @@ export class LucarneChoresCard extends LucarneCardBase {
    * task with the same uid arrives. Self-cleared via `_addTimers` as a backstop.
    */
   @state() private _optimisticAdds: Map<string, RenderableTask> = new Map();
+  /**
+   * Optimistically-deleted task uids (tombstones). A successful delete hides the
+   * row immediately — the delete service call resolves fast (direct
+   * request/response), but the state push that removes the task lags on an idle
+   * WKWebView kiosk, so without this the row lingers and gets re-tapped into an
+   * already-deleted error. `_onFamilyState` drops each tombstone once the server
+   * stops returning the task (delete confirmed).
+   */
+  @state() private _deletedUids: Set<string> = new Set();
 
   /** Per-uid backstop timers that drop an unreconciled optimistic add. */
   private _addTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -278,7 +287,7 @@ export class LucarneChoresCard extends LucarneCardBase {
 
   /** Apply a freshly-pushed family state, reconciling optimistic overrides. */
   private _onFamilyState = (state: FamilyState) => {
-    if (this._optimistic.size > 0 || this._optimisticAdds.size > 0) {
+    if (this._optimistic.size > 0 || this._optimisticAdds.size > 0 || this._deletedUids.size > 0) {
       const presentUids = new Set<string>();
       const nextToggle = new Map(this._optimistic);
       for (const tasks of state.tasksByMember.values()) {
@@ -287,6 +296,15 @@ export class LucarneChoresCard extends LucarneCardBase {
           // Server caught up to the optimistic toggle — stop overriding.
           if (nextToggle.get(t.uid) === t.status) nextToggle.delete(t.uid);
         }
+      }
+      if (this._deletedUids.size > 0) {
+        // Drop a tombstone once the server stops returning the task (delete
+        // confirmed); keep it while the task is still present (delete pending).
+        const nextDeleted = new Set<string>();
+        for (const uid of this._deletedUids) {
+          if (presentUids.has(uid)) nextDeleted.add(uid);
+        }
+        if (nextDeleted.size !== this._deletedUids.size) this._deletedUids = nextDeleted;
       }
       if (this._optimistic.size > 0) {
         // Drop overrides for tasks that no longer exist (e.g. a completed
@@ -311,6 +329,20 @@ export class LucarneChoresCard extends LucarneCardBase {
       }
     }
     this._familyState = state;
+  };
+
+  private _handleTaskDeleted = (e: Event) => {
+    const { uid } = (e as CustomEvent<{ uid: string }>).detail;
+    if (!uid) return;
+    // Also drop any optimistic add for the same uid so a just-added-then-deleted
+    // task can't be re-injected by _resolveMembers before the server confirms.
+    if (this._optimisticAdds.has(uid)) {
+      const nextAdds = new Map(this._optimisticAdds);
+      nextAdds.delete(uid);
+      this._clearAddTimeout(uid);
+      this._optimisticAdds = nextAdds;
+    }
+    this._deletedUids = new Set(this._deletedUids).add(uid);
   };
 
   private _handleTaskAdded = (e: Event) => {
@@ -377,7 +409,11 @@ export class LucarneChoresCard extends LucarneCardBase {
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     // Household bucket is the source for rotating tasks; pulled once and reused.
-    const householdTasks = this._familyState.tasksByMember.get('household') ?? [];
+    // Tombstoned (optimistically-deleted) uids are dropped here so they vanish
+    // from both the household column and any owner's rotating list.
+    const householdTasks = (this._familyState.tasksByMember.get('household') ?? []).filter(
+      (t) => !this._deletedUids.has(t.uid),
+    );
 
     const applyOptimistic = (t: RenderableTask): RenderableTask => {
       const optimistic = this._optimistic.get(t.uid);
@@ -415,7 +451,9 @@ export class LucarneChoresCard extends LucarneCardBase {
 
       if (!member) continue;
 
-      const allTasks = this._familyState.tasksByMember.get(slug) ?? [];
+      const allTasks = (this._familyState.tasksByMember.get(slug) ?? []).filter(
+        (t) => !this._deletedUids.has(t.uid),
+      );
       const existingUids = new Set(allTasks.map((t) => t.uid));
       const ownTasks = allTasks.filter(passesOwnFilter).map(applyOptimistic);
 
@@ -426,6 +464,7 @@ export class LucarneChoresCard extends LucarneCardBase {
           t.metadata.member_slug === slug &&
           t.metadata.type !== 'rotating' &&
           !existingUids.has(t.uid) &&
+          !this._deletedUids.has(t.uid) &&
           passesOwnFilter(t),
       );
 
@@ -447,7 +486,8 @@ export class LucarneChoresCard extends LucarneCardBase {
               (t) =>
                 t.metadata.type === 'rotating' &&
                 t.metadata.current_owner === slug &&
-                !householdUids.has(t.uid),
+                !householdUids.has(t.uid) &&
+                !this._deletedUids.has(t.uid),
             )
           : [];
         tasks = [...ownTasks, ...rotatingForMember, ...optOwn, ...optRotating];
@@ -593,6 +633,7 @@ export class LucarneChoresCard extends LucarneCardBase {
               .hass=${this.hass}
               .task=${this._editTask}
               .members=${allMembers}
+              @task-deleted=${this._handleTaskDeleted}
               @popover-close=${() => { this._editTask = null; }}
             ></lucarne-edit-task-popover>
           `

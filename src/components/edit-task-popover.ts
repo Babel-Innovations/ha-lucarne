@@ -570,6 +570,15 @@ export class LucarneEditTaskPopover extends LitElement {
     this._error = '';
     try {
       await deleteTask(this.hass, this.task.uid);
+      // Tell the card to hide the row immediately. The delete succeeded
+      // server-side (this is a direct request/response, fast even on iPad),
+      // but the state push that actually removes the task can lag badly on
+      // an idle WKWebView kiosk — without this the row lingers and the user
+      // re-taps it, hitting an already-deleted uid (backend raises). The card
+      // tombstones the uid and reconciles once the push/poll catches up.
+      this.dispatchEvent(
+        new CustomEvent('task-deleted', { detail: { uid: this.task.uid }, bubbles: true, composed: true }),
+      );
       this._close();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'Failed to delete';
