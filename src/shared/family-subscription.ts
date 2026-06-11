@@ -57,17 +57,6 @@ const FAMILY_POLL_INTERVAL_MS = 20_000;
  */
 const FAMILY_POLL_BACKOFF_MS = 5 * 60 * 1000;
 
-const TASK_METADATA_EVENTS = [
-  'lucarne_family_task_added',
-  'lucarne_family_task_completed',
-  'lucarne_family_task_deleted',
-  'lucarne_family_task_metadata_updated',
-  'lucarne_family_task_toggled',
-  'lucarne_family_all_routines_done',
-  'lucarne_family_member_updated',
-  'lucarne_family_avatar_uploaded',
-];
-
 function buildRenderableTasks(
   items: TodoItem[],
   memberSlug: string,
@@ -299,24 +288,31 @@ export function subscribeFamilyState(
     window.addEventListener('pageshow', refreshIfVisible);
   }
 
-  // Subscribe to task-metadata events to re-fetch on changes
+  // Subscribe to family changes via the integration's relay command to re-fetch
+  // on changes. We deliberately do NOT use connection.subscribeEvents() on the
+  // raw lucarne_family_* bus events: HA forbids non-admin clients (e.g. the
+  // kiosk tablet) from subscribing to arbitrary bus events, and the cards'
+  // auto-resubscribe-on-reconnect turned each rejection into a steady flood of
+  // server-side Unauthorized errors. The lucarne_family/subscribe command relays
+  // the same events server-side and works for non-admin users.
   const eventUnsubs: (() => void)[] = [];
-  for (const eventType of TASK_METADATA_EVENTS) {
-    hass.connection
-      .subscribeEvents<Record<string, unknown>>(() => {
+  hass.connection
+    .subscribeMessage<{ event_type: string }>(
+      () => {
         scheduleMetadataRefresh();
-      }, eventType)
-      .then((fn) => {
-        if (cancelled) {
-          fn();
-        } else {
-          eventUnsubs.push(fn);
-        }
-      })
-      .catch((err) => {
-        console.debug(`[lucarne] could not subscribe to ${eventType}:`, err);
-      });
-  }
+      },
+      { type: 'lucarne_family/subscribe' },
+    )
+    .then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        eventUnsubs.push(fn);
+      }
+    })
+    .catch((err) => {
+      console.debug('[lucarne] could not subscribe to family updates:', err);
+    });
 
   // Kick off the initial fetch, then start the self-rescheduling poll once it
   // settles so the first interval already reflects integration presence (no

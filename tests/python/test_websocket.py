@@ -154,3 +154,79 @@ async def test_get_family_authenticated_user_succeeds(
     await ws.send_json({"id": 1, "type": "lucarne_family/get_family"})
     msg = await ws.receive_json()
     assert msg["success"] is True
+
+
+async def test_subscribe_relays_family_events(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    tmp_path: Path,
+) -> None:
+    """lucarne_family/subscribe relays lucarne_family_* bus events to the client."""
+    entry = _make_entry(hass)
+    store = await _make_store(hass, entry.entry_id, tmp_path)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store}
+
+    async_register_websocket_commands(hass)
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 5, "type": "lucarne_family/subscribe"})
+    sub = await ws.receive_json()
+    assert sub["success"] is True
+
+    hass.bus.async_fire("lucarne_family_task_toggled", {"uid": "uid-1", "action": "complete"})
+    await hass.async_block_till_done()
+
+    event = await ws.receive_json()
+    assert event["type"] == "event"
+    assert event["event"]["event_type"] == "lucarne_family_task_toggled"
+    # Only the event name is relayed — the bus event's ``data`` is intentionally
+    # not forwarded, since the frontend treats relays purely as a refresh cue.
+    assert "data" not in event["event"]
+
+
+async def test_subscribe_ignores_unrelated_events(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    tmp_path: Path,
+) -> None:
+    """Only lucarne_family_* events in the relay list are forwarded."""
+    entry = _make_entry(hass)
+    store = await _make_store(hass, entry.entry_id, tmp_path)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store}
+
+    async_register_websocket_commands(hass)
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 6, "type": "lucarne_family/subscribe"})
+    assert (await ws.receive_json())["success"] is True
+
+    # An unrelated bus event must not be relayed; a real lucarne event after it must.
+    hass.bus.async_fire("some_other_event", {"nope": True})
+    hass.bus.async_fire("lucarne_family_member_updated", {"member": "anna", "field": "avatar"})
+    await hass.async_block_till_done()
+
+    event = await ws.receive_json()
+    assert event["event"]["event_type"] == "lucarne_family_member_updated"
+
+
+async def test_subscribe_works_for_non_admin(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    hass_read_only_access_token: str,
+    tmp_path: Path,
+) -> None:
+    """A non-admin client (e.g. kiosk tablet) can subscribe — the command is not admin-gated.
+
+    This is the whole point of the relay: non-admin users are forbidden from
+    subscribe_events on arbitrary bus events, so cards must go through this command.
+    """
+    entry = _make_entry(hass)
+    store = await _make_store(hass, entry.entry_id, tmp_path)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store}
+
+    async_register_websocket_commands(hass)
+
+    ws = await hass_ws_client(hass, hass_read_only_access_token)
+    await ws.send_json({"id": 7, "type": "lucarne_family/subscribe"})
+    msg = await ws.receive_json()
+    assert msg["success"] is True

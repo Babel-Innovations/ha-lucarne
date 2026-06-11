@@ -5,6 +5,32 @@
 The `lucarne_family` integration fires the following HA bus events. Subscribe to them in
 automations via `trigger: event`.
 
+### Frontend consumption — the `lucarne_family/subscribe` relay
+
+The cards do **not** subscribe to these bus events directly. HA's WebSocket API forbids
+**non-admin** clients (e.g. the always-on kiosk tablet, a read-only user) from
+`subscribe_events` on arbitrary bus events — every attempt is rejected with `Unauthorized`,
+and because the cards auto-resubscribe on each WebSocket reconnect, this produced a steady
+flood of server-side errors (`Refusing to allow <user> to subscribe to event lucarne_family_*`).
+
+Instead, the integration exposes a WebSocket command — `lucarne_family/subscribe` (registered in
+`websocket_api.py`, **not** admin-gated) — that runs the bus listeners server-side and relays
+each event in `LUCARNE_FRONTEND_EVENTS` to the subscribing client as `{ event_type }`. Only the
+event name is relayed: the cards treat any relayed event purely as a refresh cue and never read a
+payload, so the bus event's `data` is intentionally **not** forwarded to (potentially non-admin)
+clients. The frontend (`src/shared/family-subscription.ts`) subscribes once — note
+`subscribeMessage` takes the message handler as its **first** argument and the command as its
+second:
+
+```ts
+connection.subscribeMessage(
+  () => { /* re-fetch on any relayed event */ },
+  { type: 'lucarne_family/subscribe' },
+);
+```
+
+To relay a newly-added event to the cards, add its name to `LUCARNE_FRONTEND_EVENTS`.
+
 ---
 
 ### lucarne_family_task_completed
