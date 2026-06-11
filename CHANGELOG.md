@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.2 — 2026-06-11
+
+**Fixes:**
+-  honor RRULE for routine visibility and reset household routines
+
+
 ## v1.4.1 — 2026-06-11
 
 **Fixes:**
