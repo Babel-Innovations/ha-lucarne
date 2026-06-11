@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../../src/shared/family-subscription.js';
 import { makeFakeHass } from '../setup/ha-mock.mjs';
@@ -379,6 +379,91 @@ describe('subscribeFamilyState', () => {
     const householdTasks = last.tasksByMember.get('household') ?? [];
     assert.equal(householdTasks.length, 1);
     assert.equal(householdTasks[0].summary, 'Feed dog');
+  });
+});
+
+describe('subscribeFamilyState fallback refresh', () => {
+  const HA = (h: unknown) => h as unknown as import('../../src/shared/types.js').HomeAssistant;
+
+  /** Build a hass mock that counts `lucarne_family/get_family` round-trips. */
+  function makeCountingHass() {
+    const counter = { getFamily: 0 };
+    const fakeHass = makeFakeHass();
+    fakeHass.connection.sendMessagePromise = async (payload: Record<string, unknown>) => {
+      if (payload.type === 'lucarne_family/get_family') {
+        counter.getFamily += 1;
+        return {
+          members: [MEMBER_ANNA],
+          task_metadata: [],
+          reset_time: '07:00',
+          streak_check_time: '22:00',
+          household_entity_id: 'todo.lucarne_household',
+        };
+      }
+      if (payload.type === 'call_service' && payload.domain === 'todo' && payload.service === 'get_items') {
+        const entityId = (payload.target as { entity_id: string })?.entity_id ?? '';
+        return { response: { [entityId]: { items: [] } } };
+      }
+      return undefined;
+    };
+    return { fakeHass, counter };
+  }
+
+  /** Flush pending microtasks so an in-flight async refresh settles. */
+  const flush = async () => {
+    for (let i = 0; i < 5; i++) await new Promise((r) => process.nextTick(r));
+  };
+
+  it('re-fetches on the poll interval, then stops after unsub', async () => {
+    const { fakeHass, counter } = makeCountingHass();
+    try {
+      // Enable mock timers before subscribing so the poll's setTimeout is captured.
+      // Promises still resolve on the real microtask queue, so `flush` works.
+      mock.timers.enable({ apis: ['setTimeout'] });
+
+      const unsub = subscribeFamilyState(HA(fakeHass), () => {});
+      await flush();
+      assert.equal(counter.getFamily, 1, 'initial fetch');
+
+      // One poll interval elapses → an unsolicited re-fetch, no pushed event.
+      mock.timers.tick(20_000);
+      await flush();
+      assert.equal(counter.getFamily, 2, 'poll re-fetched after the interval');
+
+      // A second interval → another re-fetch (self-rescheduling).
+      mock.timers.tick(20_000);
+      await flush();
+      assert.equal(counter.getFamily, 3, 'poll reschedules itself');
+
+      // After teardown the timer is cleared — no further fetches.
+      unsub();
+      mock.timers.tick(20_000);
+      await flush();
+      assert.equal(counter.getFamily, 3, 'poll stops after unsub');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('re-fetches immediately when the page becomes visible, and stops after unsub', async () => {
+    const { fakeHass, counter } = makeCountingHass();
+    const unsub = subscribeFamilyState(HA(fakeHass), () => {});
+
+    // Let the initial fetch settle (real timers; the 20s poll won't fire here).
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(counter.getFamily, 1, 'initial fetch');
+
+    // visibilityState defaults to 'visible' in happy-dom, so a visibilitychange
+    // forces an immediate catch-up refresh (the manual "switch tabs" automated).
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    assert.equal(counter.getFamily, 2, 'visibilitychange triggered an immediate re-fetch');
+
+    // Listener is removed on teardown.
+    unsub();
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    assert.equal(counter.getFamily, 2, 'no re-fetch after unsub');
   });
 });
 

@@ -34,6 +34,20 @@ export const SYNTHETIC_HOUSEHOLD: MemberSummary = {
   streak_counter_id: '',
 };
 
+/**
+ * How often an open card re-fetches family + todo state as a fallback, in ms.
+ *
+ * The live-update path relies entirely on server→client WebSocket pushes
+ * (`lucarne_family_*` events + per-todo state triggers). On an idle iOS WKWebView
+ * — e.g. the always-on Companion-app kiosk parked on the chores tab — those
+ * *inbound* frames stall and aren't delivered to JS until a user interaction
+ * wakes the runloop, so a change made on another device never appears on its own.
+ * Outbound request/response calls keep working though, so this timer issues a
+ * periodic `get_family` + `todo.get_items` whose *responses* carry current state,
+ * independent of push delivery. ~20s balances freshness against re-fetch load.
+ */
+const FAMILY_POLL_INTERVAL_MS = 20_000;
+
 const TASK_METADATA_EVENTS = [
   'lucarne_family_task_added',
   'lucarne_family_task_completed',
@@ -87,6 +101,8 @@ export function subscribeFamilyState(
   let streakCheckTime = '';
 
   let metadataRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let refreshing = false;
   let currentError: Error | null = null;
 
   function emitState() {
@@ -111,6 +127,12 @@ export function subscribeFamilyState(
   }
 
   async function refreshMetadata() {
+    // Coalesce overlapping refreshes: the event, poll, and visibility paths can
+    // all fire close together, and each call tears down + re-subscribes every
+    // todo entity — concurrent runs would race those re-subscriptions and could
+    // drop a todo update. One in-flight refresh delivers current state for all.
+    if (refreshing) return;
+    refreshing = true;
     try {
       const resp = await hass.connection.sendMessagePromise<GetFamilyResponse>({
         type: 'lucarne_family/get_family',
@@ -200,6 +222,8 @@ export function subscribeFamilyState(
         streakCheckTime = '';
         emitState();
       }
+    } finally {
+      refreshing = false;
     }
   }
 
@@ -209,6 +233,39 @@ export function subscribeFamilyState(
       metadataRefreshTimer = null;
       refreshMetadata();
     }, 1000);
+  }
+
+  /**
+   * Self-rescheduling fallback poll. Re-fetches current state on a timer so
+   * clients that don't deliver inbound WebSocket pushes (idle iOS WKWebView
+   * kiosks) still catch up. Skips the actual fetch while the page is hidden so
+   * background browser tabs don't poll needlessly; the visibility listener below
+   * forces an immediate refresh when the page comes back. Reschedules itself
+   * only after the in-flight refresh settles to avoid pile-up on a slow client.
+   */
+  function schedulePoll() {
+    pollTimer = setTimeout(() => {
+      pollTimer = null;
+      const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      const done = hidden ? Promise.resolve() : refreshMetadata();
+      done.finally(() => {
+        if (!cancelled) schedulePoll();
+      });
+    }, FAMILY_POLL_INTERVAL_MS);
+  }
+
+  // Catch up the instant the page becomes visible again (tab refocus, app
+  // foreground, bfcache restore) — faster than waiting for the next poll tick.
+  const refreshIfVisible = () => {
+    if (cancelled) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    refreshMetadata();
+  };
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', refreshIfVisible);
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pageshow', refreshIfVisible);
   }
 
   // Subscribe to task-metadata events to re-fetch on changes
@@ -231,11 +288,21 @@ export function subscribeFamilyState(
   }
 
   refreshMetadata();
+  schedulePoll();
 
   return () => {
     cancelled = true;
     if (metadataRefreshTimer !== null) {
       clearTimeout(metadataRefreshTimer);
+    }
+    if (pollTimer !== null) {
+      clearTimeout(pollTimer);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pageshow', refreshIfVisible);
     }
     unsubFns.forEach((fn) => fn());
     eventUnsubs.forEach((fn) => fn());
