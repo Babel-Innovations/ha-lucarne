@@ -540,6 +540,107 @@ describe('lucarne-chores-card', () => {
     }
   });
 
+  // --- Routine visibility honors the RRULE: a routine is only active on days
+  // its recurrence fires (mirrors family-ready-pill + the streak engine).
+  // Previously every routine rendered every day regardless of recurrence, so a
+  // completed biweekly household routine lingered crossed-out on off-days. ---
+
+  function makeRoutine(
+    recurrence: string,
+    status: RenderableTask['status'] = 'needs_action',
+  ): RenderableTask {
+    return {
+      uid: 'rt-1',
+      summary: 'Take out Ridwell',
+      status,
+      due: null,
+      description: '',
+      metadata: {
+        item_uid: 'rt-1',
+        member_slug: 'anna',
+        assignee_slug: '',
+        type: 'routine',
+        recurrence,
+        icon: '',
+        source: 'manual',
+        time_of_day: 'anytime',
+      },
+    };
+  }
+
+  /** Freeze the clock at `when`, cancelling the real lifecycle timers first so the
+   *  fake clearTimeout can't leak a real handle (see the rollover test). */
+  function freezeClock(el: LucarneChoresCard, when: Date) {
+    const internals = el as unknown as {
+      _midnightTimer?: ReturnType<typeof setTimeout>;
+      _scrollTimer?: ReturnType<typeof setTimeout>;
+    };
+    clearTimeout(internals._midnightTimer);
+    internals._midnightTimer = undefined;
+    clearTimeout(internals._scrollTimer);
+    internals._scrollTimer = undefined;
+    mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+    mock.timers.setTime(when.getTime());
+  }
+
+  it('hides a routine on a day its RRULE does not fire', async () => {
+    const el = await makeCard(['anna']);
+    try {
+      // Thursday 2026-06-11 — a weekly-Wednesday routine is not due.
+      freezeClock(el, new Date(2026, 5, 11, 9, 0, 0, 0));
+      seedAnnaTask(el, makeRoutine('FREQ=WEEKLY;BYDAY=WE', 'completed'));
+      await el.updateComplete;
+      assert.equal(annaTaskRow(el), null, 'off-day routine hidden regardless of status');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('shows a routine on a day its RRULE fires', async () => {
+    const el = await makeCard(['anna']);
+    try {
+      // Wednesday 2026-06-10 — a weekly-Wednesday routine is due.
+      freezeClock(el, new Date(2026, 5, 10, 9, 0, 0, 0));
+      seedAnnaTask(el, makeRoutine('FREQ=WEEKLY;BYDAY=WE', 'needs_action'));
+      await el.updateComplete;
+      const row = annaTaskRow(el);
+      assert.ok(row, 'due-day routine rendered');
+      assert.equal(row!.task.uid, 'rt-1');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('always shows a routine with no recurrence (unscheduled)', async () => {
+    const el = await makeCard(['anna']);
+    try {
+      // Thursday 2026-06-11 — an empty-recurrence routine has no schedule and
+      // keeps the legacy "every day" behavior so it is never hidden.
+      freezeClock(el, new Date(2026, 5, 11, 9, 0, 0, 0));
+      seedAnnaTask(el, makeRoutine('', 'needs_action'));
+      await el.updateComplete;
+      assert.ok(annaTaskRow(el), 'unscheduled routine stays visible');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('always shows a routine whose RRULE is valid server-side but unparseable here', async () => {
+    const el = await makeCard(['anna']);
+    try {
+      // BYDAY=5MO is accepted by recurrence.py (is_valid_rrule) but parses to
+      // mode 'unknown' in the card (the JS parser caps MONTHLY-NTH at
+      // {1,2,3,4,-1}). The card can't place it on the calendar, so it must stay
+      // visible rather than vanish permanently. Thursday 2026-06-11.
+      freezeClock(el, new Date(2026, 5, 11, 9, 0, 0, 0));
+      seedAnnaTask(el, makeRoutine('FREQ=MONTHLY;BYDAY=5MO', 'needs_action'));
+      await el.updateComplete;
+      assert.ok(annaTaskRow(el), 'unparseable-but-valid routine stays visible');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
   // --- Optimistic add (the family-state subscription is too slow to feel live
   // on some clients — e.g. iPad Safari — so a successful add injects the new
   // task immediately, then reconciles once the real task arrives). ---

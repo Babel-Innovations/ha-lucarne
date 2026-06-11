@@ -5,6 +5,7 @@ import { LucarneCardBase } from '../shared/card-base.js';
 import type { HomeAssistant, MemberSummary, RenderableTask } from '../shared/types.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
+import { parseRRule, isRoutineDueToday } from '../shared/recurrence.js';
 import {
   msUntilNextLocalMidnight,
   currentScrollBucket,
@@ -529,7 +530,24 @@ export class LucarneChoresCard extends LucarneCardBase {
     // showRoutines; chores gate on showTasks and the due-today window. Applied to
     // both real and optimistically-added tasks so they're treated identically.
     const passesOwnFilter = (t: RenderableTask): boolean => {
-      if (t.metadata.type === 'routine') return showRoutines;
+      if (t.metadata.type === 'routine') {
+        if (!showRoutines) return false;
+        // A scheduled routine is only active on days its RRULE fires — the
+        // isRoutineDueToday gate below mirrors the family-ready-pill and the
+        // streak engine, both of which treat a routine as "scheduled today" only
+        // when its recurrence is due. (The none/unknown fallback just below
+        // intentionally diverges — see there.)
+        const parsed = parseRRule(t.metadata.recurrence);
+        // Two modes have no card-evaluable schedule: 'none' (empty/absent
+        // recurrence — an unscheduled, legacy "every day" routine) and 'unknown'
+        // (a recurrence valid server-side but outside the card's editable set,
+        // e.g. MONTHLY-NTH BYDAY=5MO/-2MO which recurrence.py accepts but the JS
+        // parser caps at {1,2,3,4,-1}). Keep both visible every day rather than
+        // hiding an actionable task the card simply can't place on the calendar;
+        // the integration's reset + streak math still evaluate the real RRULE.
+        if (parsed.mode === 'none' || parsed.mode === 'unknown') return true;
+        return isRoutineDueToday(parsed, now);
+      }
       if (t.metadata.type === 'chore') {
         if (!showTasks) return false;
         if (t.due === null) return true;

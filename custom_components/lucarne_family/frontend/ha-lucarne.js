@@ -8155,7 +8155,14 @@ var Hr = class extends tt {
 				...e,
 				status: t
 			} : e;
-		}, l = (e) => e.metadata.type === "routine" ? n : e.metadata.type === "chore" && r ? e.due === null ? !0 : (e.due.includes("T") ? new Date(e.due) : /* @__PURE__ */ new Date(e.due + "T00:00:00")) <= a : !1, u = [...this._optimisticAdds.values()], d = new Set(s.map((e) => e.uid)), f = [];
+		}, l = (e) => {
+			if (e.metadata.type === "routine") {
+				if (!n) return !1;
+				let t = Zt(e.metadata.recurrence);
+				return t.mode === "none" || t.mode === "unknown" ? !0 : sn(t, i);
+			}
+			return e.metadata.type === "chore" && r ? e.due === null ? !0 : (e.due.includes("T") ? new Date(e.due) : /* @__PURE__ */ new Date(e.due + "T00:00:00")) <= a : !1;
+		}, u = [...this._optimisticAdds.values()], d = new Set(s.map((e) => e.uid)), f = [];
 		for (let n of e) {
 			if (t.has(n)) continue;
 			let e = n === "household" ? pt : this._familyState.members.find((e) => e.slug === n) ?? null;
