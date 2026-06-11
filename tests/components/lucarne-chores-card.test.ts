@@ -664,4 +664,95 @@ describe('lucarne-chores-card', () => {
       mock.timers.reset();
     }
   });
+
+  // --- Optimistic delete (tombstones). A successful delete hides the row
+  // immediately; the row otherwise lingers until the slow state push arrives,
+  // and a re-tap deletes an already-gone uid (backend raises). ---
+
+  function dispatchTaskDeleted(el: LucarneChoresCard, uid: string) {
+    (el as unknown as { _handleTaskDeleted(e: Event): void })._handleTaskDeleted(
+      new CustomEvent('task-deleted', { detail: { uid } }),
+    );
+  }
+
+  it('optimistically hides a deleted task before any family-state push', async () => {
+    const el = await makeCard(['anna']);
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+    assert.ok(annaTaskRow(el), 'task row rendered before delete');
+
+    dispatchTaskDeleted(el, 'c-1');
+    await el.updateComplete;
+
+    assert.equal(annaTaskRow(el), null, 'row hidden immediately after delete');
+    const internals = el as unknown as { _deletedUids: Set<string> };
+    assert.ok(internals._deletedUids.has('c-1'), 'tombstone recorded');
+  });
+
+  it('keeps the row hidden while the server still returns the task (delete pending)', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _deletedUids: Set<string>;
+      _onFamilyState: (s: FamilyState) => void;
+    };
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+    dispatchTaskDeleted(el, 'c-1');
+    await el.updateComplete;
+
+    // A push arrives that still carries the task (the delete hasn't propagated).
+    internals._onFamilyState({
+      members: [
+        { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+      ],
+      tasksByMember: new Map([['anna', [makeChore('needs_action')]]]),
+      streakByMember: new Map([['anna', 0]]),
+      taskMetadataByUid: new Map(),
+      resetTime: '03:00',
+      streakCheckTime: '02:00',
+      integrationError: null,
+    });
+    await el.updateComplete;
+
+    assert.ok(internals._deletedUids.has('c-1'), 'tombstone kept while task still present');
+    assert.equal(annaTaskRow(el), null, 'row stays hidden');
+  });
+
+  it('prunes the tombstone once the server stops returning the task (delete confirmed)', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _deletedUids: Set<string>;
+      _onFamilyState: (s: FamilyState) => void;
+    };
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+    dispatchTaskDeleted(el, 'c-1');
+    await el.updateComplete;
+    assert.ok(internals._deletedUids.has('c-1'), 'tombstone present');
+
+    // The delete propagated: the task is gone from the pushed state.
+    internals._onFamilyState({
+      members: [
+        { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+      ],
+      tasksByMember: new Map([['anna', []]]),
+      streakByMember: new Map([['anna', 0]]),
+      taskMetadataByUid: new Map(),
+      resetTime: '03:00',
+      streakCheckTime: '02:00',
+      integrationError: null,
+    });
+    await el.updateComplete;
+
+    assert.equal(internals._deletedUids.size, 0, 'tombstone pruned after confirmation');
+    assert.equal(annaTaskRow(el), null, 'row remains gone');
+  });
+
+  it('ignores a task-deleted event with no uid', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as { _deletedUids: Set<string> };
+    dispatchTaskDeleted(el, '');
+    await el.updateComplete;
+    assert.equal(internals._deletedUids.size, 0, 'no tombstone recorded');
+  });
 });
