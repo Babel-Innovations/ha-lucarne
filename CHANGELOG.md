@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.1 — 2026-06-11
+
+**Fixes:**
+-  relay family events via WS command for non-admin clients
+
+
 ## v1.4.0 — 2026-06-10
 
 **Features:**

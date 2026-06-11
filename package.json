@@ -1,6 +1,6 @@
 {
   "name": "ha-lucarne",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": false,
   "type": "module",
   "main": "custom_components/lucarne_family/frontend/ha-lucarne.js",
