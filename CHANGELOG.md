@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.3 — 2026-06-12
+
+**Fixes:**
+-  honor RRULE for routine visibility
+
+
 ## v1.4.2 — 2026-06-11
 
 **Fixes:**
