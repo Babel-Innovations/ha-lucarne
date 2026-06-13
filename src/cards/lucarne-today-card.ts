@@ -6,6 +6,7 @@ import { fetchCalendarEvents, subscribeTodoItems } from '../shared/ha-subscripti
 import { installPreviewColumnOverride, type PreviewOverrideHandle } from '../shared/grid-preview-override.js';
 import { subscribeFamilyState } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
+import { parseRRule, isRoutineDueToday } from '../shared/recurrence.js';
 import { STRINGS } from '../shared/strings.js';
 import type { HomeAssistant, CalendarConfig, CalendarEvent, TodoItem, RenderableTask, MemberSummary, TaskMetadata } from '../shared/types.js';
 
@@ -528,8 +529,22 @@ export class LucarneTodayCard extends LucarneCardBase {
     // Rotating tasks belong to the chores card (they surface in the current
     // owner's column and advance at the daily-reset window) — they may not be
     // relevant on any given day, so they never appear in the Today card.
+    const now = new Date();
     const tasks = (showIntegrationTasks ? this._householdTasks : this._enrichedRawTasks)
-      .filter((t) => t.metadata.type !== 'rotating')
+      .filter((t) => {
+        if (t.metadata.type === 'rotating') return false;
+        if (t.metadata.type === 'routine') {
+          // Mirror the chores card (commit 844647978fad): a scheduled routine is
+          // only active on days its RRULE fires. 'none' (empty/legacy "every day")
+          // and 'unknown' (valid server-side but outside the JS parser's editable
+          // set) have no card-evaluable schedule — keep them visible every day;
+          // the integration's reset + streak math still evaluate the real RRULE.
+          const parsed = parseRRule(t.metadata.recurrence);
+          if (parsed.mode === 'none' || parsed.mode === 'unknown') return true;
+          return isRoutineDueToday(parsed, now);
+        }
+        return true;
+      })
       .map(this._applyOptimistic);
     const entityId = showIntegrationTasks ? 'todo.lucarne_household' : this._config?.tasks;
     return html`

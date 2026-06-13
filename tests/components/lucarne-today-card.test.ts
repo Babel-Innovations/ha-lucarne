@@ -1,4 +1,4 @@
-import { describe, it, afterEach } from 'node:test';
+import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LucarneTodayCard, LucarneTodayCardConfig } from '../../src/cards/lucarne-today-card.js';
 import { normalizeSectionOrder } from '../../src/cards/lucarne-today-card.js';
@@ -674,5 +674,139 @@ describe('lucarne-today-card — fill height', () => {
       /[^-]height:\s*var\(--lucarne-card-fill-height\)/,
       'card uses the shared fill-height variable on ha-card',
     );
+  });
+});
+
+// --- Routine visibility honors the RRULE (mirrors the chores card fix in
+// commit 844647978fad and the family-ready-pill + streak engine). Previously
+// the Today card showed every household routine every day regardless of
+// recurrence, so a completed biweekly routine lingered crossed-out on off-days.
+// A routine with no card-evaluable schedule ('none' = empty, 'unknown' = valid
+// server-side but outside the JS parser's editable set) stays visible daily. ---
+describe('lucarne-today-card — routine RRULE visibility', () => {
+  function makeHouseholdRoutineHass(
+    recurrence: string,
+    status: 'needs_action' | 'completed' = 'needs_action',
+  ) {
+    const familyResponse = {
+      members: [],
+      task_metadata: [
+        {
+          item_uid: 'rt-1',
+          member_slug: 'household',
+          assignee_slug: '',
+          type: 'routine',
+          recurrence,
+          icon: '🔁',
+          source: 'manual',
+        },
+      ],
+      reset_time: '04:00',
+      streak_check_time: '21:00',
+      household_entity_id: 'todo.lucarne_household',
+    };
+    const householdItems = [{ uid: 'rt-1', summary: 'Take out Ridwell', status }];
+    const base = makeFakeHass();
+    return {
+      ...base,
+      connection: {
+        ...base.connection,
+        async sendMessagePromise(payload: Record<string, unknown>) {
+          if (payload['type'] === 'lucarne_family/get_family') return familyResponse;
+          if (payload['type'] === 'call_service') {
+            const target = (payload['target'] as { entity_id?: string } | undefined)?.entity_id;
+            const service = payload['service'];
+            if (service === 'get_items' && target === 'todo.lucarne_household') {
+              return { response: { 'todo.lucarne_household': { items: householdItems } } };
+            }
+            return { response: {} };
+          }
+          return undefined;
+        },
+      },
+    };
+  }
+
+  /**
+   * Load the card with a single household routine, wait for it to land in
+   * `_familyState` (date-independent so off-day cases don't hang waiting for a
+   * row that the filter would hide), then freeze the clock to `when`, re-render,
+   * and return the uids the Today tasks section actually renders. Reading
+   * `renderableTasks` off the (always-mounted) summary captures the post-filter
+   * list even when it's empty.
+   */
+  async function renderedRoutineUids(
+    recurrence: string,
+    when: Date,
+    status: 'needs_action' | 'completed' = 'needs_action',
+  ): Promise<string[]> {
+    const hass = makeHouseholdRoutineHass(recurrence, status);
+    const el = await makeCard(
+      { household_tasks_from_integration: true },
+      hass as unknown as HomeAssistant,
+    );
+    const internals = el as unknown as {
+      _familyState?: { tasksByMember: Map<string, RenderableTask[]> };
+      requestUpdate(): void;
+    };
+    const start = Date.now();
+    while (Date.now() - start < 2000) {
+      if ((internals._familyState?.tasksByMember.get('household') ?? []).some((t) => t.uid === 'rt-1')) {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    // Fail loudly if the integration data never arrived — otherwise the off-day
+    // case would pass vacuously (empty renderableTasks trivially excludes rt-1),
+    // masking a real load failure instead of exercising the RRULE gate.
+    assert.ok(
+      (internals._familyState?.tasksByMember.get('household') ?? []).some((t) => t.uid === 'rt-1'),
+      'household routine loaded into _familyState before freezing the clock',
+    );
+    mock.timers.enable({ apis: ['Date'] });
+    try {
+      mock.timers.setTime(when.getTime());
+      internals.requestUpdate();
+      await el.updateComplete;
+      const summary = el.shadowRoot!.querySelector('lucarne-tasks-summary') as
+        | (HTMLElement & { renderableTasks: RenderableTask[]; updateComplete: Promise<unknown> })
+        | null;
+      assert.ok(summary, 'tasks-summary mounted');
+      await summary!.updateComplete;
+      return summary!.renderableTasks.map((t) => t.uid);
+    } finally {
+      mock.timers.reset();
+    }
+  }
+
+  it('hides a household routine on a day its RRULE does not fire', async () => {
+    // Thursday 2026-06-11 — a weekly-Wednesday routine is not due.
+    const uids = await renderedRoutineUids(
+      'FREQ=WEEKLY;BYDAY=WE',
+      new Date(2026, 5, 11, 9, 0, 0, 0),
+      'completed',
+    );
+    assert.equal(uids.includes('rt-1'), false, 'off-day routine excluded regardless of status');
+  });
+
+  it('shows a household routine on a day its RRULE fires', async () => {
+    // Wednesday 2026-06-10 — a weekly-Wednesday routine is due.
+    const uids = await renderedRoutineUids('FREQ=WEEKLY;BYDAY=WE', new Date(2026, 5, 10, 9, 0, 0, 0));
+    assert.ok(uids.includes('rt-1'), 'due-day routine rendered');
+  });
+
+  it('always shows a routine with no recurrence (unscheduled)', async () => {
+    // Thursday 2026-06-11 — empty recurrence has no schedule; keep the legacy
+    // always-visible behavior rather than hiding an actionable task.
+    const uids = await renderedRoutineUids('', new Date(2026, 5, 11, 9, 0, 0, 0));
+    assert.ok(uids.includes('rt-1'), 'unscheduled routine stays visible');
+  });
+
+  it('always shows a routine whose RRULE is valid server-side but unparseable here', async () => {
+    // BYDAY=5MO parses to mode 'unknown' in the card (the JS parser caps
+    // MONTHLY-NTH at {1,2,3,4,-1}); the card can't place it on the calendar, so
+    // it must stay visible rather than vanish permanently. Thursday 2026-06-11.
+    const uids = await renderedRoutineUids('FREQ=MONTHLY;BYDAY=5MO', new Date(2026, 5, 11, 9, 0, 0, 0));
+    assert.ok(uids.includes('rt-1'), 'unparseable-but-valid routine stays visible');
   });
 });
