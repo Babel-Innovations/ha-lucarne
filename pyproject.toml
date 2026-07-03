@@ -15,10 +15,10 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "pytest-cov>=7.1.0",
-    "pytest-homeassistant-custom-component>=0.13.338",
-    "ruff>=0.15.17",
+    "pytest-homeassistant-custom-component>=0.13.344",
+    "ruff>=0.15.20",
     "mypy>=2.1.0",
-    "ical==13.2.5",
+    "ical==13.3.0",
 ]
 
 [tool.setuptools.packages.find]
