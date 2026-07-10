@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=82.0.1"]
+requires = ["setuptools>=83.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -15,10 +15,10 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "pytest-cov>=7.1.0",
-    "pytest-homeassistant-custom-component>=0.13.338",
-    "ruff>=0.15.17",
-    "mypy>=2.1.0",
-    "ical==13.2.5",
+    "pytest-homeassistant-custom-component>=0.13.345",
+    "ruff>=0.15.21",
+    "mypy>=2.2.0",
+    "ical==14.0.0",
 ]
 
 [tool.setuptools.packages.find]
