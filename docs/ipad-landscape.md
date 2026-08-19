@@ -125,7 +125,15 @@ limitation. Avoid Personal Automations that require HA Companion interaction on 
 wrap entity tiles, so this is unlikely — but if you add standard entity cards alongside them on the
 same view, be aware of this behavior.
 
-**Safari cache stale after resource URL change**: After switching the Lovelace resource URL from
-`/local/lucarne/ha-lucarne.js` to `/hacsfiles/ha-lucarne/ha-lucarne.js`, a hard refresh
-(Cmd+Shift+R on Mac, or clear Safari website data on iPad) is required to purge the old module from
-the browser module cache. A soft refresh is not sufficient.
+**Card bundle cache**: The integration serves the bundle at a content-hashed
+`/lucarne_family_frontend/ha-lucarne.js?v=<version>.<digest>` URL (`_bundle_digest` in
+`custom_components/lucarne_family/__init__.py`), so changed bundle bytes produce a new URL and a
+normal reload picks them up — no hard refresh needed. That URL is registered in `async_setup`, so HA
+must be **restarted** for a new bundle to be served; reloading the config entry only runs
+`async_setup_entry` and will not recompute the digest. On iPad, force-quit the Companion app if the
+app shell itself looks stale — the shell is service-worker cached. Clearing Safari website data is a
+last resort, since it signs the device out of Home Assistant.
+
+(This replaces an older note about hard-refreshing after switching the Lovelace resource URL from
+`/local/lucarne/...` to `/hacsfiles/...`; the integration now serves and registers the bundle
+itself, so there is no manual Lovelace resource to switch.)
