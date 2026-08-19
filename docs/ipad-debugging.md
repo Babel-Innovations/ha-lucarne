@@ -24,8 +24,105 @@ Two tells distinguish it from a Lucarne error state:
 "Reopen fixes it" fits an exception exactly: reopening rebuilds the cards fresh,
 and HA leaves an errored card dead until the whole dashboard is rebuilt.
 
-Because it is a thrown exception, the fix is always: **find the throw, guard the
-input that triggered it.** Everything below is about capturing that throw.
+Once you have confirmed the bundle actually loaded (next section), the fix is
+always: **find the throw, guard the input that triggered it.** Everything after
+that is about capturing the throw.
+
+## First, rule out a parse-time bundle failure
+
+Everything below assumes the bundle *loaded* and one card threw. There is a
+second, very different failure that looks similar and that none of the capture
+paths below can see, because none of our code ever runs.
+
+**Signature — all four together:**
+
+- **Every** Lucarne card on the dashboard is a red box, not just one.
+- Non-Lucarne cards on the same view (markdown, entities) render fine.
+- `debug: true` produces **no** notification, ever, on any card.
+- A deliberately minimal *but valid* config fails too — `members: []` for the
+  chores card, `calendars: [{entity: calendar.<anything>, color: '#888'}]` for the
+  today and calendar cards. Those two **require** a non-empty `calendars`, so
+  stripping it throws `LucarneConfigError` and yields the same red box for an
+  entirely different reason. If you tap the box and see a `lucarne-*:`-prefixed
+  message, that is config validation working, not a load failure.
+
+That is the bundle failing to **load**, in one of two ways:
+
+- **Parse / link error.** Nothing runs at all, so no `customElements.define()`
+  executes and HA can't find any of the elements.
+- **Throw during module evaluation.** Execution stops at the throwing statement,
+  so cards registered *before* it survive and everything after it is missing —
+  which is why the "every card is red" symptom points at the parse case.
+
+Either way no in-bundle try/catch and no reporter can catch it: `src/index.ts`
+imports every card, and ESM hoists those imports above
+`installGlobalErrorReporter()`, so no handler is installed yet.
+
+Confirm which of the two it is before acting — a `SyntaxError` on `ha-lucarne.js`
+in Safari Web Inspector's console (with no Lucarne logs before it) means the build
+target regressed; any other exception there means a module-evaluation bug. The
+repo check covers only the first:
+
+```bash
+node --import tsx --test tests/build/bundle-syntax.test.ts
+```
+
+(No `TZ` or `dom-globals.mjs` here, unlike every other test in this repo — this
+one only reads a file and parses it. `build.yml` and `create-release.sh` invoke it
+exactly this way.)
+
+This is what issue #101 was: a Vite 5 → 8 bump silently raised the default build
+target, and the bundle started shipping ES2022 class static blocks that iPadOS 15
+and Tizen 6.5 cannot parse. See **Browser support floor** below.
+
+## Browser support floor
+
+The shipped bundle must parse on every display this project is deployed to. The
+floor is pinned in `vite.config.ts`:
+
+```ts
+target: ["es2020", "safari15", "ios15", "chrome85"]
+```
+
+| Device | Engine | Why it sets the floor |
+|---|---|---|
+| iPad Air 2 (iPadOS 15.8) | WebKit 15.6 | Oldest wall/Companion-app tablet in use |
+| Samsung Frame TV (2022) | Tizen 6.5 / Chromium 85 | Dashboard on the TV |
+
+Three rules:
+
+- **Never remove or raise `build.target`.** Vite's default
+  (`baseline-widely-available`) is `safari16.4` / `ios16.4` / `chrome111` — well
+  above this floor. The pin is what actually fixes the output; with it in place a
+  Vite major bump is safe. `tests/build/bundle-syntax.test.ts` is defence in depth:
+  it emits nothing itself, it just fails if the pin is ever removed, raised, or
+  stops being honoured. Losing the pin breaks the devices; losing the test only
+  removes the alarm.
+- **The guard parses whichever bundle is on disk, so CI deliberately runs it
+  twice.** Once *before* `npm run build` — those are the committed bytes, the exact
+  artifact HACS ships — and once *after*, inside `npm run test:coverage`, which
+  proves the pin still holds in freshly emitted output. Neither run alone covers
+  both directions: the first misses a target raised without rebuilding, the second
+  misses a stale or hand-edited commit. `scripts/create-release.sh` re-runs it after
+  its own build too, because the release path commits and pushes those bytes. Don't
+  drop either CI step or move `test:coverage` above the build.
+- **es2020 is a chosen floor, not a tool limit.** Safari 15 and Chromium 85 both
+  implement ES2020 in full, so going lower only grows the bundle without reaching
+  anything we ship to. If an older display does turn up, Vite 8 (Rolldown) builds
+  lower targets happily — `es2019` produces a working bundle about 5 kB larger.
+  Lower the floor deliberately; don't assume it can't move.
+
+`tests/build/bundle-syntax.test.ts` parses the bundle on disk with acorn at ES2020
+and fails if anything newer slips in — see the two-runs rule above for which bundle
+that is in each context.
+
+Two things it deliberately does **not** prove. It does not prove the committed
+bundle is *current*: a PR that edits `src/` without rebuilding still ships a stale
+artifact that parses perfectly, so rebuilding on card-source changes stays a human
+step (see CLAUDE.md). And it validates **syntax** only: a runtime API newer than
+the floor
+(`structuredClone`, `Object.hasOwn`, `Array.prototype.at`, …) still needs a
+`typeof` guard, as `ResizeObserver` and `matchMedia` already have.
 
 ## Why it can be iPad-only
 
@@ -119,10 +216,24 @@ For a full stack trace and the ability to set breakpoints:
 
 ## Resilience already in place
 
-`src/shared/card-base.ts` wraps each top-level card's `renderContent()` in a
-try/catch: a synchronous throw in a card's own render now degrades to a small
-"this card hit an error and will recover on the next update" notice and reports
-itself, instead of bricking until the app is reopened. Throws inside child
-components still surface through the global handlers in `error-reporter.ts`.
+`src/shared/card-base.ts` owns two boundaries. Subclasses implement
+`renderContent()` and `applyConfig()`; the base wraps both.
+
+- **Render.** A synchronous throw in a card's own render degrades to a small
+  "this card hit an error and will recover on the next update" notice and reports
+  itself, instead of bricking until the app is reopened. Throws inside child
+  components still surface through the global handlers in `error-reporter.ts`.
+- **Config.** A throw out of `applyConfig()` is contained the same way, showing
+  "this card could not read its configuration: …". The one exception is
+  `LucarneConfigError`, which the cards throw for genuinely invalid YAML — that is
+  re-thrown on purpose so Home Assistant shows the user the message they need
+  ("lucarne-chores-card: members must be an array"). Don't "harden" that away.
+
+`setConfig` runs long before `hass` is assigned, so `error-reporter.ts` keeps a
+small bounded backlog: a report raised with no `hass` yet is queued and delivered
+as soon as a card supplies one. That is what makes `debug: true` work for a
+failure during config, not just during render.
+
 This makes the wall display self-heal, but it does **not** replace fixing the
-underlying throw — always chase the captured stack to its source.
+underlying throw — always chase the captured stack to its source. And none of it
+applies if the bundle never parsed; see the first section.

@@ -1,7 +1,7 @@
 import { html, css, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
-import { LucarneCardBase } from '../shared/card-base.js';
+import { LucarneCardBase, LucarneConfigError } from '../shared/card-base.js';
 import type { HomeAssistant, MemberSummary, RenderableTask } from '../shared/types.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
@@ -95,7 +95,7 @@ function editMatches(real: RenderableTask, opt: RenderableTask): boolean {
 });
 
 @customElement('lucarne-chores-card')
-export class LucarneChoresCard extends LucarneCardBase {
+export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> {
   static styles = [
     lucarneStyles,
     css`
@@ -249,14 +249,15 @@ export class LucarneChoresCard extends LucarneCardBase {
    */
   private _scrollTimer?: ReturnType<typeof setTimeout>;
 
-  setConfig(config: LucarneChoresCardConfig) {
+  /** Invoked by LucarneCardBase.setConfig(), which owns the error boundary. */
+  protected applyConfig(config: LucarneChoresCardConfig) {
     // Legacy shape — pass through so render() can show the upgrade banner
     if ('kids' in config) {
       this._config = config;
       return;
     }
     if (!Array.isArray(config.members)) {
-      throw new Error('lucarne-chores-card: members must be an array');
+      throw new LucarneConfigError('lucarne-chores-card: members must be an array');
     }
     this._config = config;
     // Editing the auto-scroll thresholds on an already-connected card must re-arm

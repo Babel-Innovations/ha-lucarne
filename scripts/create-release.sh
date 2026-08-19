@@ -278,13 +278,29 @@ if [ ! -f "$BUNDLE" ]; then
 fi
 
 BUNDLE_SIZE=$(wc -c < "$BUNDLE")
-BUNDLE_SIZE_KB=$((BUNDLE_SIZE / 1024))
-# Budget is on the raw bundle (~338 KB / ~78 KB gzipped since cropperjs landed).
-if [ "$BUNDLE_SIZE_KB" -gt 400 ]; then
-    log_error "Bundle size ${BUNDLE_SIZE_KB} KB exceeds 400 KB limit"
+BUNDLE_SIZE_KIB=$((BUNDLE_SIZE / 1024))
+# Budget is on the raw bundle, measured in KiB like BUNDLE_SIZE_KIB above:
+# ~367 KiB / ~83 KiB gzipped since build.target was pinned to the ES2020 browser
+# floor in #101 (the pin costs ~7 KiB). That leaves ~33 KiB against the 400 limit.
+if [ "$BUNDLE_SIZE_KIB" -gt 400 ]; then
+    log_error "Bundle size ${BUNDLE_SIZE_KIB} KiB exceeds 400 KiB limit"
     exit 1
 fi
-log_success "Build complete (${BUNDLE_SIZE_KB} KB)"
+log_success "Build complete (${BUNDLE_SIZE_KIB} KiB)"
+
+# The release path commits and pushes these exact bytes, so it needs the same
+# browser-floor gate CI applies — a bundle that parses only as ES2022 bricks every
+# card on iPadOS 15 / Tizen 6.5 with no recoverable error (issue #101).
+log_info "Verifying bundle parses at the supported browser floor..."
+if ! GUARD_OUTPUT=$(node --import tsx --test tests/build/bundle-syntax.test.ts 2>&1); then
+    log_error "Bundle syntax floor check failed:"
+    # Surface acorn's line/column and the offending construct — without this the
+    # operator only sees a generic failure and has to re-run the test by hand.
+    echo "$GUARD_OUTPUT" >&2
+    log_error "Check that build.target is still set in vite.config.ts, then rebuild."
+    exit 1
+fi
+log_success "Bundle syntax floor verified"
 
 # ============================================================================
 # 6. COMMIT AND PUSH
