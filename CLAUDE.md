@@ -47,6 +47,9 @@ tests/                        Node test suites (components + shared), pytest sui
   setup/ha-mock.mjs           Shared HA stub for Lit component tests
 scripts/
   deploy-integration.sh       build cards + rsync custom_components/lucarne_family/ to ha-vm
+  create-release.sh           bump version + changelog + commit + tag + GitHub release
+  create-prerelease.sh        tag an already-pushed commit as a pre-release (no bump)
+  delete-prerelease.sh        remove pre-releases + their tags (stable releases untouched)
 ```
 
 ## Build & test
@@ -113,8 +116,59 @@ One script bypasses HACS for fast iteration. HACS is the install path for end us
 ```
 
 Set env vars in `.env` at the project root (see `.env.example`). A card-only change still requires an
-HA restart (or at least a re-setup) for the new bundle to be served, plus a hard browser refresh —
-the cards no longer hot-reload from a standalone `/www/lucarne` path.
+HA **restart** for the new bundle to be served — a config-entry reload is not enough, because
+`async_setup` (not `async_setup_entry`) registers the versioned URL, and the cards no longer
+hot-reload from a standalone `/www/lucarne` path. A normal browser reload then picks the new bundle
+up: that URL is content-hashed (`?v=<version>.<digest>`), so changed bytes bust their own cache.
+Force-quit the iPad Companion app if the app shell itself looks stale.
+
+## Releases
+
+Two release paths, and they are not interchangeable.
+
+```bash
+./scripts/create-release.sh                        # stable: bump + changelog + commit + tag
+./scripts/create-prerelease.sh -m "what to test"   # pre-release: tag only, no bump
+./scripts/delete-prerelease.sh --dry-run           # list what a delete would remove
+./scripts/delete-prerelease.sh                     # delete every pre-release + tag
+```
+
+`create-release.sh` derives the next version from conventional commits since the
+last `bump:` commit, syncs `package.json` + `manifest.json`, prepends a
+`CHANGELOG.md` entry, commits, tags, and publishes. It briefly lifts required
+status checks to push, restoring them via an EXIT trap.
+
+`create-prerelease.sh` exists for device verification before a stable cut. It
+bumps **nothing** — no version edit, no changelog, no commit, no branch push. The
+only ref it creates is the release tag. It tags an
+already-pushed commit as `v<version>-pre-<YYYYmmdd-HHMM>` and marks the GitHub
+release `prerelease=true`, which is what puts it behind HACS's "show beta
+versions" toggle. Testers restart HA and reload — `async_setup` serves the
+bundle at a content-hashed `?v=<version>.<digest>` URL (`_bundle_digest` in
+`custom_components/lucarne_family/__init__.py`), so changed bundle bytes bust
+their own cache even though a pre-release bumps no version. On iPad, force-quit
+the Companion app too (the app shell is service-worker cached). Clearing Safari
+website data is a last-resort fallback, not a routine step — it signs the kiosk
+device out of HA.
+
+**Never write a pre-release string into `package.json` / `manifest.json`.**
+`create-release.sh` parses the stored version with
+`IFS='.' read -r MAJOR MINOR PATCH`. Against `1.5.0-beta.1` a patch bump dies
+with `bash: 0-beta.1: syntax error: invalid arithmetic operator`, and a minor
+bump *silently* yields `1.6.0`, skipping `1.5.0` entirely. Keeping the suffix on
+the tag alone is the reason `create-prerelease.sh` bumps nothing.
+
+Consequence to expect: with no bump, HACS shows the pre-release tag while HA's
+integration page reads `manifest.json` and still shows the stable version. That
+mismatch is harmless and is called out in the generated release notes.
+
+Neither script uploads assets — `hacs.json` sets no `zip_release`, so HACS pulls
+repo source at the tag and the card bundle ships committed inside the
+integration. `create-prerelease.sh` therefore aborts if a fresh `npm run build`
+changes any tracked file: that means the committed bundle is stale and the
+tester would receive the old cards while every local check passed. It also
+re-runs the bundle-syntax floor guard, which matters most here — a beta could
+otherwise ship the exact parse bug it was cut to verify (#101).
 
 ## Test runner conventions
 
