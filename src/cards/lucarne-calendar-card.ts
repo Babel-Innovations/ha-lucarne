@@ -1,7 +1,7 @@
 import { html, css } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
-import { LucarneCardBase } from '../shared/card-base.js';
+import { LucarneCardBase, LucarneConfigError } from '../shared/card-base.js';
 import { installPreviewColumnOverride, type PreviewOverrideHandle } from '../shared/grid-preview-override.js';
 import { resolveCalendars, resolveCalendarLabel } from '../shared/calendar-helpers.js';
 import { layoutEvents, isoDateKey } from '../shared/calendar-layout.js';
@@ -67,7 +67,7 @@ const MAX_INITIAL_SCROLL_FRAMES = 60;
 });
 
 @customElement('lucarne-calendar-card')
-export class LucarneCalendarCard extends LucarneCardBase {
+export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConfig> {
   static styles = [
     lucarneStyles,
     css`
@@ -164,6 +164,13 @@ export class LucarneCalendarCard extends LucarneCardBase {
   private _previewOverrideRaf?: number;
   private _pendingEvents: CalendarEvent[] = [];
   private _resizeObserver?: ResizeObserver;
+  /**
+   * The `.grid-area` element currently being observed. Tracked by identity rather
+   * than a "measured" boolean because Lit destroys and rebuilds the grid whenever
+   * the top-level template swaps (e.g. into the card-base error notice and back) —
+   * a boolean would leave the observer bound to the discarded node.
+   */
+  private _observedGridEl?: HTMLElement;
   private _resizeFrame?: number;
   private _lastVisibleCount = 3;
 
@@ -176,13 +183,19 @@ export class LucarneCalendarCard extends LucarneCardBase {
   private _autoFollow = true;
   private _lastAutoScrollTop: number | null = null;
 
-  setConfig(config: LucarneCalendarCardConfig) {
+  /** Invoked by LucarneCardBase.setConfig(), which owns the error boundary. */
+  protected applyConfig(config: LucarneCalendarCardConfig) {
     if (!config.calendars || !Array.isArray(config.calendars) || config.calendars.length === 0) {
-      throw new Error('lucarne-calendar-card: "calendars" must be a non-empty array');
+      throw new LucarneConfigError('lucarne-calendar-card: "calendars" must be a non-empty array');
     }
     for (const cal of config.calendars) {
-      if (!cal.entity || !cal.color) {
-        throw new Error('lucarne-calendar-card: each calendar requires "entity" and "color"');
+      // `cal` can be null: a bare `-` under `calendars:` is a common hand-edit slip,
+      // and YAML makes that a null list item. Guard before dereferencing so this
+      // stays a LucarneConfigError the user can read, rather than a TypeError the
+      // base boundary would contain as an internal bug (leaving HA to accept the
+      // broken config).
+      if (!cal || typeof cal !== 'object' || !cal.entity || !cal.color) {
+        throw new LucarneConfigError('lucarne-calendar-card: each calendar requires "entity" and "color"');
       }
     }
     // Normalize visible_hours to whole-hour boundaries
@@ -190,12 +203,12 @@ export class LucarneCalendarCard extends LucarneCardBase {
     if (config.visible_hours) {
       const hhmmRe = /^\d{1,2}:\d{2}$/;
       if (!hhmmRe.test(config.visible_hours.start) || !hhmmRe.test(config.visible_hours.end)) {
-        throw new Error('lucarne-calendar-card: "visible_hours" start and end must be in HH:MM format');
+        throw new LucarneConfigError('lucarne-calendar-card: "visible_hours" start and end must be in HH:MM format');
       }
       const startH = parseInt(config.visible_hours.start.split(':')[0], 10);
       const endH = parseInt(config.visible_hours.end.split(':')[0], 10);
       if (startH < 0 || endH > 24 || startH >= endH) {
-        throw new Error('lucarne-calendar-card: "visible_hours" must satisfy 0 <= start < end <= 24');
+        throw new LucarneConfigError('lucarne-calendar-card: "visible_hours" must satisfy 0 <= start < end <= 24');
       }
       normalizedConfig = {
         ...config,
@@ -284,6 +297,10 @@ export class LucarneCalendarCard extends LucarneCardBase {
     });
     // Follow "now" as time advances while the user is viewing today.
     this._followTimer = setInterval(() => this._followNow(), FOLLOW_INTERVAL_MS);
+    // Re-arm immediately rather than waiting for the next render: Lit keeps the
+    // shadow tree across a detach, so `.grid-area` is already queryable here. A
+    // no-op on the very first connect, where nothing has rendered yet.
+    this._ensureGridMeasured();
   }
 
   disconnectedCallback() {
@@ -297,32 +314,96 @@ export class LucarneCalendarCard extends LucarneCardBase {
       clearInterval(this._followTimer);
       this._followTimer = undefined;
     }
-    if (this._initialScrollRaf !== undefined) {
-      cancelAnimationFrame(this._initialScrollRaf);
-      this._initialScrollRaf = undefined;
-    }
     // Re-scroll to now and resume following on the next attach.
-    this._didInitialScroll = false;
-    this._initialScrollScheduled = false;
-    this._initialScrollAttempts = 0;
+    this._resetInitialScroll();
     this._autoFollow = true;
     this._lastAutoScrollTop = null;
-    this._resizeObserver?.disconnect();
+    // Forget the target, don't just disconnect: firstUpdated() never runs again, so
+    // a re-attach can only re-observe if _ensureGridMeasured() sees a clean slate.
+    // Re-seeding also matters because the container may have been resized while
+    // this card was detached (issue #105).
+    this._teardownGridObserver();
     this._previewOverride?.uninstall();
     this._previewOverride = undefined;
   }
 
   firstUpdated() {
-    if (!this._resizeObserver && this._gridAreaEl) {
-      this._resizeObserver = new ResizeObserver(() => this._onResize());
-      this._resizeObserver.observe(this._gridAreaEl);
-      // Seed _lastVisibleCount / _dayWidthPx from the initial container width
-      this._onResize();
+    this._ensureGridMeasured();
+  }
+
+  /**
+   * Observe `.grid-area` and take the initial measurement. Idempotent, and called
+   * from `updated()` as well as `firstUpdated()` because the grid is not always
+   * present on the first render:
+   *
+   * - the card-base config boundary can swap the whole template to an error notice
+   *   — before the first measurement or after it — and Lit fires `firstUpdated`
+   *   only once per element. Without a later call the card would render the grid
+   *   again after recovery but never measure it, leaving `_dayWidthPx` at 0 (which
+   *   also blocks the initial scroll-to-now). Recovery builds a *new* `.grid-area`,
+   *   which is why the guard compares element identity, not a "done" flag;
+   * - `disconnectedCallback` tears the observer down, and a re-attach likewise
+   *   gets no second `firstUpdated` (issue #105).
+   *
+   * Seeding via `_onResize()` happens independently of observing, so the grid
+   * still lays out on a browser without ResizeObserver — it just won't re-measure
+   * on resize. Matches the guard in components/member-column.ts.
+   */
+  private _ensureGridMeasured() {
+    const area = this._gridAreaEl;
+    if (!area) {
+      if (this._observedGridEl !== undefined) {
+        // The template swapped to the error notice, so the grid we were watching is
+        // detached. Tear down instead of just returning: for a failure that never
+        // recovers, an early return would keep a dead subtree observed and retained
+        // for the life of the card. Whatever grid replaces it will be a fresh
+        // element scrolled to the top, so re-arm the one-time scroll here too —
+        // teardown clears `_observedGridEl`, so the recovery path can no longer
+        // recognise it as a replacement on its own.
+        this._teardownGridObserver();
+        this._resetInitialScroll();
+      }
+      return;
     }
+    if (area === this._observedGridEl) return;
+
+    // Replacing a grid we had already measured (recovery after a contained config
+    // failure) hands us a brand-new element scrolled to the top, exactly like a
+    // re-attach — so the one-time scroll-to-now has to be armed again.
+    const isReplacement = this._observedGridEl !== undefined;
+    this._teardownGridObserver();
+    this._observedGridEl = area;
+    if (typeof ResizeObserver !== 'undefined') {
+      this._resizeObserver = new ResizeObserver(() => this._onResize());
+      this._resizeObserver.observe(area);
+    }
+    if (isReplacement) this._resetInitialScroll();
+    this._onResize();
+  }
+
+  /** Stop observing and forget the target, so the next call re-arms from scratch. */
+  private _teardownGridObserver() {
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = undefined;
+    this._observedGridEl = undefined;
+  }
+
+  /** Re-arm the one-time scroll-to-now. Shared by disconnect and grid replacement. */
+  private _resetInitialScroll() {
+    if (this._initialScrollRaf !== undefined) {
+      cancelAnimationFrame(this._initialScrollRaf);
+      this._initialScrollRaf = undefined;
+    }
+    this._didInitialScroll = false;
+    this._initialScrollScheduled = false;
+    this._initialScrollAttempts = 0;
   }
 
   updated(changedProps: Map<string, unknown>) {
     super.updated(changedProps);
+    // The grid may have appeared only on this render (post-config-failure recovery)
+    // or been torn down by a detach; both need a re-arm that firstUpdated can't give.
+    this._ensureGridMeasured();
     // Once the layout and real column width have landed, scroll to "now" once.
     // Instant (not smooth) on first paint so the view simply opens in place.
     if (!this._didInitialScroll && !this._initialScrollScheduled && this._layout && this._dayWidthPx > 0) {

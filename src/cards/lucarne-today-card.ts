@@ -1,7 +1,7 @@
 import { html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
-import { LucarneCardBase } from '../shared/card-base.js';
+import { LucarneCardBase, LucarneConfigError } from '../shared/card-base.js';
 import { fetchCalendarEvents, subscribeTodoItems } from '../shared/ha-subscriptions.js';
 import { installPreviewColumnOverride, type PreviewOverrideHandle } from '../shared/grid-preview-override.js';
 import { subscribeFamilyState } from '../shared/family-subscription.js';
@@ -72,7 +72,7 @@ export interface LucarneTodayCardConfig {
 });
 
 @customElement('lucarne-today-card')
-export class LucarneTodayCard extends LucarneCardBase {
+export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
   static styles = [
     lucarneStyles,
     css`
@@ -156,13 +156,19 @@ export class LucarneTodayCard extends LucarneCardBase {
   private _previewOverride?: PreviewOverrideHandle | null;
   private _previewOverrideRaf?: number;
 
-  setConfig(config: LucarneTodayCardConfig) {
+  /** Invoked by LucarneCardBase.setConfig(), which owns the error boundary. */
+  protected applyConfig(config: LucarneTodayCardConfig) {
     if (!config.calendars || !Array.isArray(config.calendars) || config.calendars.length === 0) {
-      throw new Error('lucarne-today-card: "calendars" must be a non-empty array');
+      throw new LucarneConfigError('lucarne-today-card: "calendars" must be a non-empty array');
     }
     for (const cal of config.calendars) {
-      if (!cal.entity || !cal.color) {
-        throw new Error('lucarne-today-card: each calendar entry requires "entity" and "color"');
+      // `cal` can be null: a bare `-` under `calendars:` is a common hand-edit slip,
+      // and YAML makes that a null list item. Guard before dereferencing so this
+      // stays a LucarneConfigError the user can read, rather than a TypeError the
+      // base boundary would contain as an internal bug (leaving HA to accept the
+      // broken config).
+      if (!cal || typeof cal !== 'object' || !cal.entity || !cal.color) {
+        throw new LucarneConfigError('lucarne-today-card: each calendar entry requires "entity" and "color"');
       }
     }
     this._config = config;

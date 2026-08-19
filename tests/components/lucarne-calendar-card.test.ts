@@ -275,3 +275,175 @@ describe('LucarneCalendarCard — _onFetchComplete pruning', () => {
     assert.equal(priv(card)._pendingEvents.length, 0);
   });
 });
+
+describe('lucarne-calendar-card — config validation', () => {
+  function setConfigOn(config: unknown): void {
+    const el = document.createElement('lucarne-calendar-card') as LucarneCalendarCard;
+    (el as unknown as { setConfig(c: unknown): void }).setConfig(config);
+  }
+
+  it('rejects a missing or empty calendars list', () => {
+    assert.throws(() => setConfigOn({}), /"calendars" must be a non-empty array/);
+    assert.throws(() => setConfigOn({ calendars: [] }), /"calendars" must be a non-empty array/);
+  });
+
+  it('rejects a null calendar entry with a readable message, not a TypeError', () => {
+    // `calendars:` followed by a bare `-` is a common hand-edit slip and YAML makes
+    // that entry null. Dereferencing it would raise a TypeError, which the card-base
+    // boundary contains as an internal bug — leaving HA to accept the broken config.
+    assert.throws(
+      () => setConfigOn({ calendars: [null] }),
+      (err: Error) => {
+        assert.equal(err.name, 'LucarneConfigError');
+        assert.match(err.message, /each calendar requires "entity" and "color"/);
+        return true;
+      },
+    );
+  });
+
+  it('rejects an entry missing entity or color', () => {
+    assert.throws(
+      () => setConfigOn({ calendars: [{ entity: 'calendar.family' }] }),
+      /each calendar requires "entity" and "color"/,
+    );
+  });
+});
+
+describe('lucarne-calendar-card — grid measurement re-arms', () => {
+  const VALID_CONFIG = { calendars: [{ entity: 'calendar.family', color: '#a8d8b9' }] };
+  const realResizeObserver = globalThis.ResizeObserver;
+  let log: string[] = [];
+  /** Elements currently under observation — cleared on disconnect, like the real API. */
+  let observed: Element[] = [];
+
+  function installRecorder() {
+    log = [];
+    observed = [];
+    globalThis.ResizeObserver = class {
+      constructor(private cb: () => void) {
+        log.push('construct');
+      }
+      observe(el: Element) {
+        log.push('observe');
+        observed.push(el);
+      }
+      unobserve(el: Element) {
+        observed = observed.filter((e) => e !== el);
+      }
+      disconnect() {
+        log.push('disconnect');
+        observed = [];
+      }
+    } as unknown as typeof ResizeObserver;
+  }
+
+  /** Observations recorded after the most recent teardown. */
+  function observedSinceLastDisconnect(): boolean {
+    return log.slice(log.lastIndexOf('disconnect') + 1).includes('observe');
+  }
+
+  afterEach(() => {
+    globalThis.ResizeObserver = realResizeObserver;
+    document.body.innerHTML = '';
+  });
+
+  it('re-observes the grid after a detach + re-attach (issue #105)', async () => {
+    // firstUpdated() fires once per element, so a card that HA detaches on a view
+    // switch and re-attaches would otherwise never re-measure — the grid would stay
+    // frozen at the pre-detach width.
+    installRecorder();
+    const card = document.createElement('lucarne-calendar-card') as LucarneCalendarCard;
+    card.setConfig(VALID_CONFIG);
+    document.body.appendChild(card);
+    await card.updateComplete;
+    assert.deepEqual(log, ['construct', 'observe']);
+
+    card.remove();
+    assert.ok(log.includes('disconnect'), 'teardown ran on detach');
+
+    document.body.appendChild(card);
+    await card.updateComplete;
+    assert.ok(observedSinceLastDisconnect(), 're-attached card observes its grid again');
+  });
+
+  it('measures the grid after recovering from a contained config failure', async () => {
+    // card-base renders its error notice instead of the grid when applyConfig throws
+    // something that is not a LucarneConfigError, so `.grid-area` is absent on the
+    // first render. firstUpdated() alone would never see the grid that appears later.
+    installRecorder();
+    const card = document.createElement('lucarne-calendar-card') as LucarneCalendarCard;
+    const inner = card as unknown as { _configFailure?: string; _dayWidthPx: number };
+    card.setConfig(VALID_CONFIG);
+    inner._configFailure = 'simulated internal failure';
+    document.body.appendChild(card);
+    await card.updateComplete;
+    assert.equal(card.shadowRoot?.querySelector('.grid-area'), null, 'notice, not grid');
+    assert.deepEqual(log, [], 'nothing to observe yet');
+
+    // HA re-invokes setConfig on the same element when the config is edited.
+    card.setConfig(VALID_CONFIG);
+    await card.updateComplete;
+    assert.ok(card.shadowRoot?.querySelector('.grid-area'), 'grid renders after recovery');
+    assert.deepEqual(log, ['construct', 'observe'], 'and is measured');
+  });
+
+  it('re-targets the observer when a config failure replaces an already-measured grid', async () => {
+    // Failure *after* a successful render is the harder case: Lit destroys the
+    // measured `.grid-area` and recovery builds a brand new one. Tracking "have we
+    // measured?" as a boolean would leave the observer bound to the discarded node,
+    // so responsive sizing would be dead for the life of the card.
+    installRecorder();
+    const card = document.createElement('lucarne-calendar-card') as LucarneCalendarCard;
+    const inner = card as unknown as { _configFailure?: string };
+    card.setConfig(VALID_CONFIG);
+    document.body.appendChild(card);
+    await card.updateComplete;
+    const firstGrid = card.shadowRoot?.querySelector('.grid-area');
+    assert.ok(firstGrid && observed.includes(firstGrid), 'healthy card observes its grid');
+
+    // Pretend the one-time scroll-to-now already ran against the original grid.
+    const scroll = card as unknown as { _didInitialScroll: boolean; _initialScrollScheduled: boolean };
+    scroll._didInitialScroll = true;
+
+    inner._configFailure = 'late internal failure';
+    card.requestUpdate();
+    await card.updateComplete;
+    assert.equal(card.shadowRoot?.querySelector('.grid-area'), null, 'grid torn down');
+    // Must not keep watching the detached subtree for as long as the failure lasts.
+    assert.ok(log.includes('disconnect'), 'observer torn down while the notice shows');
+    assert.deepEqual(observed, [], 'nothing observed while the notice shows');
+
+    card.setConfig(VALID_CONFIG);
+    await card.updateComplete;
+    const newGrid = card.shadowRoot?.querySelector('.grid-area');
+    assert.ok(newGrid, 'grid rebuilt after recovery');
+    assert.notEqual(newGrid, firstGrid, 'Lit built a new element, not the old one');
+    assert.deepEqual(observed, [newGrid], 'observer targets the live grid and only that');
+    assert.equal(
+      scroll._didInitialScroll,
+      false,
+      'rebuilt grid starts at scrollTop 0, so scroll-to-now must be re-armed',
+    );
+  });
+
+  it('seeds the measurement even when the browser has no ResizeObserver', async () => {
+    // The iPadOS 15 / Tizen floor is about syntax, but a missing runtime API has to
+    // degrade rather than break: the grid should still get one measurement, it just
+    // won't re-measure on resize. Asserting _dayWidthPx (not the observer call log)
+    // is what makes this fail if the direct _onResize() seed is ever dropped.
+    const saved = globalThis.ResizeObserver;
+    (globalThis as { ResizeObserver?: unknown }).ResizeObserver = undefined;
+    try {
+      const card = document.createElement('lucarne-calendar-card') as LucarneCalendarCard;
+      card.setConfig(VALID_CONFIG);
+      document.body.appendChild(card);
+      await card.updateComplete;
+      // _onResize defers the measurement to an animation frame.
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+      const measured = (card as unknown as { _dayWidthPx: number })._dayWidthPx;
+      assert.ok(measured > 0, `expected a seeded column width, got ${measured}`);
+    } finally {
+      globalThis.ResizeObserver = saved as typeof ResizeObserver;
+    }
+  });
+});

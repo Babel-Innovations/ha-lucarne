@@ -151,7 +151,11 @@ export class LucarneCalendarDayPan extends LitElement {
     this._cancelPendingSnap();
 
     const baseline = this._baselinePx();
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // matchMedia is absent in some embedded WebViews (and in the test DOM);
+    // treat a missing implementation as "motion is fine" and keep the animation.
+    const reduced =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduced) {
       // Snap to baseline immediately. Dispatch first so new days render before
       // we clear inline transform; rAF guarantees ordering relative to Lit's

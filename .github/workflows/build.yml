@@ -25,9 +25,18 @@ jobs:
 
       - run: npm run typecheck
 
-      - run: npm run test:coverage
+      # Two runs of the same guard, covering opposite directions (issue #101).
+      # This one parses the COMMITTED bundle — the exact bytes HACS ships, which
+      # `npm run build` is about to overwrite.
+      - name: Bundle syntax floor (committed artifact)
+        run: node --import tsx --test tests/build/bundle-syntax.test.ts
 
       - run: npm run build
+
+      # test:coverage re-runs the guard, now against freshly emitted output, so a
+      # PR that raised or removed `build.target` without rebuilding still fails.
+      # Don't move this above the build step.
+      - run: npm run test:coverage
 
   python:
     runs-on: ubuntu-latest

@@ -67,6 +67,10 @@ pass. `npm test` stays coverage-free for fast local iteration.
 
 The built bundle is **committed** — HACS ships repo files for an integration and does not run a build. Rebuild and commit `frontend/ha-lucarne.js` whenever card sources change.
 
+`vite.config.ts` pins `build.target` to `["es2020", "safari15", "ios15", "chrome85"]` —
+the floor for the iPadOS 15 wall tablet and the Tizen 6.5 TV. `tests/build/bundle-syntax.test.ts`
+parses the committed bundle at ES2020 and fails the build if anything newer ships.
+
 ### Python (integration)
 
 ```bash
@@ -87,9 +91,12 @@ pip install -e ".[dev]"
 ### Both (baseline gate before any commit)
 
 ```bash
-npm run test:coverage && npm run lint && npm run typecheck && npm run build
+npm run build && npm run test:coverage && npm run lint && npm run typecheck
 pytest tests/python/
 ```
+
+`build` runs **first** so `tests/build/bundle-syntax.test.ts` parses the bundle you
+are about to commit rather than the previous one — same reason CI orders it this way.
 
 Use `test:coverage` here (not `test`) so the local gate matches CI's coverage
 floors. Bare `pytest` already enforces the Python floor via `addopts`.
@@ -132,6 +139,24 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **No blocking I/O in async HA code**: Use `hass.async_add_executor_job(...)` for blocking calls (heavy SQLite migrations, file I/O). Never block the event loop.
 - **Entity rename has downstream impact**: Slug-changing renames go through `rename.py` which shows an impact preview before proceeding; never rename entities outside that flow.
 - **Integration uses `lucarne_family.*` services and `lucarne_family_*` events**: The older `ha_lucarne_chores_all_done` event is a deprecated compat shim still fired by `completion_listener.py` in v0.x alongside `lucarne_family_all_routines_done`. Migrate consumers to the new event; see `docs/events.md`.
+- **Browser floor is pinned in `vite.config.ts`**: never remove or raise `build.target`. Vite's
+  default (`baseline-widely-available` = safari16.4/chrome111) emits ES2022 class static blocks,
+  which iPadOS 15 WebKit and Tizen 6.5 (Chromium 85) cannot **parse** — the whole module dies, no
+  card registers, and every card becomes HA's generic red "Configuration error" panel with
+  `debug: true` unable to report anything (issue #101). The pin is the fix; with it in place a Vite
+  bump is safe. `tests/build/bundle-syntax.test.ts` is the alarm that fails if the pin is ever
+  removed, raised, or stops being honoured — keep both. The guard parses whichever bundle is on
+  disk, so CI runs it twice: once before `npm run build` (the committed bytes HACS ships) and again
+  inside `test:coverage` after it (proof the pin holds in fresh output). `create-release.sh` re-runs
+  it after its own build. Don't drop either CI step or move `test:coverage` above the build.
+  Note it proves the committed bundle *parses*, not that it is *current* — rebuilding after card
+  source changes is still on you. es2020 is a chosen floor, not a tool limit — Vite 8 (Rolldown) builds lower targets
+  fine, it just buys nothing below Chromium 85. Runtime APIs newer than the floor still need a
+  `typeof` guard — syntax lowering does not polyfill them.
+- **Cards implement `applyConfig()` / `renderContent()`, never `setConfig()` / `render()`**:
+  `LucarneCardBase` owns both error boundaries. Throw `LucarneConfigError` for invalid user config
+  (it is deliberately re-thrown so HA shows the message); any other throw is contained and
+  reported. See `src/shared/card-base.ts` and `docs/ipad-debugging.md`.
 - **RRULE math**: Use `dateutil.rrule` via `recurrence.py` (Python) and `parseRRule`/`isRoutineDueToday` from `src/shared/recurrence.ts` (JS). Never hand-roll date arithmetic.
 - **Avatar writes**: Only permitted write path under `<config>/www/` is `/local/lucarne/avatars/`. `avatar_service.py` enforces this; tests must cover path-traversal cases.
 - **SQLite file in `<config>/` root**: Name pattern: `lucarne_family_<entry_id>.db`. Never hardcode the entry ID.
@@ -149,6 +174,8 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Don't** write files to `<config>/www/` outside `/local/lucarne/avatars/`.
 - **Don't** add `contributing.md`, `code_of_conduct.md`, or other meta docs unless asked.
 - **Don't** generate vitest imports in test files.
+- **Don't** remove `build.target` from `vite.config.ts` or delete `tests/build/bundle-syntax.test.ts`.
+- **Don't** override `setConfig()` or `render()` in a card — use `applyConfig()` / `renderContent()`.
 - **Don't** split the ESM bundle or re-introduce a separate HACS `plugin` distribution — the integration serves and registers the single bundle itself.
 - **Don't** implement the round-trip webhook POST without a spec — only the HA event is fired in v0.2.
 - **Don't** add server-side center-square crop to `avatar_service.py` without a spec — the deferred design is documented in CLAUDE.md and the phase-6 spec.

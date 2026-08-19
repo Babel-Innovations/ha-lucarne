@@ -810,3 +810,28 @@ describe('lucarne-today-card — routine RRULE visibility', () => {
     assert.ok(uids.includes('rt-1'), 'unparseable-but-valid routine stays visible');
   });
 });
+
+describe('lucarne-today-card — config validation', () => {
+  function setConfigOn(config: unknown): void {
+    const el = document.createElement('lucarne-today-card') as LucarneTodayCard;
+    (el as unknown as { setConfig(c: unknown): void }).setConfig(config);
+  }
+
+  it('rejects a missing or empty calendars list', () => {
+    assert.throws(() => setConfigOn({}), /"calendars" must be a non-empty array/);
+    assert.throws(() => setConfigOn({ calendars: [] }), /"calendars" must be a non-empty array/);
+  });
+
+  it('rejects a null calendar entry with a readable message, not a TypeError', () => {
+    // See the matching case in lucarne-calendar-card.test.ts — a bare `-` under
+    // `calendars:` must stay a user-facing config error, not a contained TypeError.
+    assert.throws(
+      () => setConfigOn({ calendars: [null] }),
+      (err: Error) => {
+        assert.equal(err.name, 'LucarneConfigError');
+        assert.match(err.message, /each calendar entry requires "entity" and "color"/);
+        return true;
+      },
+    );
+  });
+});
