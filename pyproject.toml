@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=83.0.0"]
+requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -26,8 +26,8 @@ dev = [
     # To bump: pick the new phccc, read the HA version it pins, then copy that
     # HA's local_todo ical pin here.
     "pytest-homeassistant-custom-component==0.13.356",
-    "ruff>=0.15.21",
-    "mypy>=2.2.0",
+    "ruff>=0.16.3",
+    "mypy>=2.3.1",
     "ical==14.1.0",
 ]
 
