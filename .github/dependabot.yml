@@ -31,9 +31,16 @@ updates:
     # so they update transitively whenever phccc is bumped. Bumping either
     # directly raises the pyproject floor above phccc's pin and makes pip
     # resolution impossible (see PR #45).
+    # ical must mirror homeassistant/components/local_todo/manifest.json for the
+    # HA version phccc pins — not the latest release on PyPI. Dependabot cannot
+    # see that constraint and bumped it to a version no HA ships (PR #96), so it
+    # is ignored here. phccc is deliberately NOT ignored: its bumps are the
+    # signal that HA moved, and whoever takes one must update the ical pin in
+    # pyproject.toml in the same commit (see the comment on that pin).
     ignore:
       - dependency-name: "pytest"
       - dependency-name: "pytest-asyncio"
+      - dependency-name: "ical"
 
   # CI workflows under .github/workflows
   - package-ecosystem: github-actions

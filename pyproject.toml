@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=82.0.1"]
+requires = ["setuptools>=83.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -15,10 +15,20 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "pytest-cov>=7.1.0",
-    "pytest-homeassistant-custom-component>=0.13.338",
-    "ruff>=0.15.17",
-    "mypy>=2.1.0",
-    "ical==13.2.5",
+    # phccc and ical are pinned exactly and move as a UNIT — never bump one alone.
+    # phccc pins homeassistant exactly (0.13.356 -> HA 2026.8.2), and ical must
+    # equal that HA's homeassistant/components/local_todo/manifest.json pin
+    # (2026.8.2 -> ical==14.1.0). The integration drives local_todo, and phccc
+    # does not install integration requirements, so a mismatch raises no resolver
+    # error — it silently tests .ics parsing against a version production HA
+    # never ships. A >= floor on phccc would let HA drift away from the ical pin
+    # with no diff to review, which is exactly how PR #96 went wrong.
+    # To bump: pick the new phccc, read the HA version it pins, then copy that
+    # HA's local_todo ical pin here.
+    "pytest-homeassistant-custom-component==0.13.356",
+    "ruff>=0.15.21",
+    "mypy>=2.2.0",
+    "ical==14.1.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -42,6 +52,12 @@ strict = true
 [[tool.mypy.overrides]]
 module = ["homeassistant.*", "pytest_homeassistant_custom_component.*", "dateutil.*", "yaml"]
 ignore_missing_imports = true
+
+# HA re-exports StaticPathConfig from .server via __init__ without __all__,
+# which mypy strict rejects. Scope the relaxation to that one module.
+[[tool.mypy.overrides]]
+module = ["homeassistant.components.http"]
+no_implicit_reexport = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
