@@ -7,18 +7,44 @@
 # manifest.json edit, no CHANGELOG entry, no commit, and no branch push. The
 # only ref it creates is the release tag, pinned to an already-pushed commit.
 #
-# That is deliberate. The pre-release suffix lives on the *tag* alone
-# (v<version>-pre-<YYYYmmdd-HHMM>) so create-release.sh's semver parser never
-# sees it. That parser is `IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"`;
-# against a stored version of "1.5.0-beta.1" a patch bump dies with
-# "0-beta.1: syntax error: invalid arithmetic operator" and a minor bump
-# silently produces 1.6.0, skipping 1.5.0 entirely. Writing a pre-release
-# string into package.json/manifest.json is therefore never safe here.
+# The tag (v<next-version>-pre-<YYYYmmdd-HHMM>) names the version this build is
+# currently heading *for*, derived from the conventional commits behind it by
+# scripts/lib/version.sh — the same code create-release.sh uses. Tagging the
+# version already in package.json would be wrong twice over: it labels the build
+# a pre-release of something that already shipped, and semver ranks
+# "1.4.3-pre-..." *below* the stable 1.4.3 a tester already has installed.
+# "1.5.0-pre-..." sorts where it belongs — above 1.4.3, below the eventual 1.5.0.
+#
+# It is a moving target, not a promise: a later feat: raises the base from 1.4.4
+# to 1.5.0, and on a docs-only tree the patch fallback derives a version
+# create-release.sh will decline to cut at all. What normally holds is the
+# ordering — above the installed stable, below the stable release that
+# supersedes it — and that holds only while the commits behind the tag stay in
+# history. Drop a breaking: commit out of history (rebase, reset, force-push)
+# after cutting v2.0.0-pre-... and the next stable is 1.5.0, which the stale tag
+# now outranks; delete-prerelease.sh clears it. A `git revert` does NOT do this:
+# it appends a "Revert ..." commit while leaving the original in range, so the
+# derivation still sees the breaking: and still says major.
+#
+# The suffix still lives on the *tag* alone, so no semver parser working on the
+# stored version ever sees it. That parse is now next_version() in
+# scripts/lib/version.sh; it used to sit inline in create-release.sh, where
+# `IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"` against a stored
+# "1.5.0-beta.1" made a patch bump die with "0-beta.1: syntax error: invalid
+# arithmetic operator" and a minor bump *silently* produce 1.6.0, skipping 1.5.0
+# entirely. next_version() now rejects any non-bare X.Y.Z before that parse runs,
+# but writing a pre-release string into package.json/manifest.json is still never
+# right here.
 
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
+
+# Conventional-commit version derivation, shared with create-release.sh so this
+# tag and the stable release that follows it agree on which version is next.
+# shellcheck source=scripts/lib/version.sh
+. "${REPO_DIR}/scripts/lib/version.sh"
 
 # The card bundle ships committed inside the integration and HACS pulls repo
 # source at the tag (hacs.json sets no zip_release), so — exactly as in
@@ -161,7 +187,7 @@ fi
 log_success "All validation checks passed"
 
 # ============================================================================
-# 2. DERIVE TAG (no version bump — tag suffix only)
+# 2. DERIVE TAG (version derived, but written nowhere but the tag)
 # ============================================================================
 
 VERSION=$(node -p "require('./package.json').version")
@@ -172,8 +198,20 @@ if [ "$VERSION" != "$MANIFEST_VERSION" ]; then
     exit 1
 fi
 
+# The tag names the version this build is heading *for*, not the one it was cut
+# from. derive_bump_type falls back to "patch" when nothing release-worthy has
+# landed, so a docs- or refactor-only tree still gets a tag that outranks the
+# installed stable — cutting one for device testing is a legitimate reason to
+# run this script, unlike create-release.sh which stops there.
+# Assigned on separate lines so `set -e` sees each exit status: nested inside
+# one substitution, a git failure in commits_since_last_bump would be discarded
+# and silently derive a patch bump.
+RELEASE_COMMITS=$(commits_since_last_bump)
+BUMP_TYPE=$(derive_bump_type "$RELEASE_COMMITS")
+NEXT_VERSION=$(next_version "$VERSION" "$BUMP_TYPE")
+
 DATE_TIME=$(date +"%Y%m%d-%H%M")
-TAG_NAME="v${VERSION}-pre-${DATE_TIME}"
+TAG_NAME="v${NEXT_VERSION}-pre-${DATE_TIME}"
 
 if gh release view "$TAG_NAME" --repo "$REPO" &> /dev/null; then
     log_error "Release ${TAG_NAME} already exists. Wait a minute and re-run (tags are minute-stamped)."
@@ -285,11 +323,18 @@ ${WHAT_TO_TEST}
 If the cards still look unchanged after that, clear Safari website data for the
 HA host as a last resort — it signs the device out of Home Assistant.
 
-### The version number will still read ${VERSION}
+### Home Assistant will still report ${VERSION}
 
-This pre-release deliberately does not bump \`manifest.json\`, so Home
-Assistant's integration page keeps showing **${VERSION}** while HACS shows the
-tag \`${TAG_NAME}\`. That mismatch is expected — the tag identifies the build.
+The tag names the version this build is heading for (**${NEXT_VERSION}**), but a
+pre-release bumps nothing on disk. So Home Assistant's integration page reads
+**${VERSION}** out of \`manifest.json\` while HACS shows the tag
+\`${TAG_NAME}\`. That mismatch is expected — the tag identifies the build.
+
+**${NEXT_VERSION} is where this build is currently headed, not a commitment.**
+It is derived from the commits behind this tag, and more commits can raise it
+before a stable release is cut. What it buys you is the sort order: this tag
+ranks above the ${VERSION} you have installed, so HACS offers it as an upgrade,
+and below the stable release that eventually supersedes it.
 
 Delete with \`scripts/delete-prerelease.sh\` once a stable release supersedes it."
 
@@ -305,7 +350,8 @@ echo "Repo:     ${REPO}"
 echo "Tag:      ${TAG_NAME}"
 echo "Target:   ${BRANCH} @ ${COMMIT_SHORT}"
 echo "Subject:  ${COMMIT_SUBJECT}"
-echo "Version:  ${VERSION} (unchanged — no bump, no commit, no branch push)"
+echo "Tag ver:  ${NEXT_VERSION} (derived from commits since last bump: ${BUMP_TYPE})"
+echo "Stored:   ${VERSION} in package.json + manifest.json (unchanged — no bump, no commit, no branch push)"
 echo "Assets:   none (HACS pulls repo source at the tag)"
 echo ""
 
