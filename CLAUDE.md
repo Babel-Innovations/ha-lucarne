@@ -46,6 +46,7 @@ docs/                         Architecture, integration, services, events docs
 tests/                        Node test suites (components + shared), pytest suites (Python)
   setup/ha-mock.mjs           Shared HA stub for Lit component tests
 scripts/
+  lib/version.sh              shared conventional-commit version derivation (both release scripts)
   deploy-integration.sh       build cards + rsync custom_components/lucarne_family/ to ha-vm
   create-release.sh           bump version + changelog + commit + tag + GitHub release
   create-prerelease.sh        tag an already-pushed commit as a pre-release (no bump)
@@ -133,18 +134,26 @@ Two release paths, and they are not interchangeable.
 ./scripts/delete-prerelease.sh                     # delete every pre-release + tag
 ```
 
+Both derive the next version the same way, through `scripts/lib/version.sh`
+(`commits_since_last_bump` / `derive_bump_type` / `next_version`). Keep that
+derivation in the lib — if the two scripts forked, a pre-release could sort
+*above* the stable release meant to supersede it.
+
 `create-release.sh` derives the next version from conventional commits since the
-last `bump:` commit, syncs `package.json` + `manifest.json`, prepends a
+last `bump:` commit — or, in a repo that has none, since the newest **stable**
+tag; `-pre-` tags are skipped so a pre-release can't shrink the range — syncs
+`package.json` + `manifest.json`, prepends a
 `CHANGELOG.md` entry, commits, tags, and publishes. It briefly lifts required
 status checks to push, restoring them via an EXIT trap.
 
 `create-prerelease.sh` exists for device verification before a stable cut. It
 bumps **nothing** — no version edit, no changelog, no commit, no branch push. The
-only ref it creates is the release tag. It tags an
-already-pushed commit as `v<version>-pre-<YYYYmmdd-HHMM>` and marks the GitHub
-release `prerelease=true`, which is what puts it behind HACS's "show beta
-versions" toggle. Testers restart HA and reload — `async_setup` serves the
-bundle at a content-hashed `?v=<version>.<digest>` URL (`_bundle_digest` in
+only ref it creates is the release tag. It tags an already-pushed commit as
+`v<next-version>-pre-<YYYYmmdd-HHMM>` — where `<next-version>` is the version
+this build is **currently heading for**, not the one sitting in `package.json` —
+and marks the GitHub release `prerelease=true`, which is what puts it behind
+HACS's "show beta versions" toggle. Testers restart HA and reload —
+`async_setup` serves the bundle at a content-hashed `?v=<version>.<digest>` URL (`_bundle_digest` in
 `custom_components/lucarne_family/__init__.py`), so changed bundle bytes bust
 their own cache even though a pre-release bumps no version. On iPad, force-quit
 the Companion app too (the app shell is service-worker cached). Clearing Safari
@@ -152,15 +161,43 @@ website data is a last-resort fallback, not a routine step — it signs the kios
 device out of HA.
 
 **Never write a pre-release string into `package.json` / `manifest.json`.**
-`create-release.sh` parses the stored version with
-`IFS='.' read -r MAJOR MINOR PATCH`. Against `1.5.0-beta.1` a patch bump dies
-with `bash: 0-beta.1: syntax error: invalid arithmetic operator`, and a minor
-bump *silently* yields `1.6.0`, skipping `1.5.0` entirely. Keeping the suffix on
-the tag alone is the reason `create-prerelease.sh` bumps nothing.
+The bump parses the stored version with `IFS='.' read -r MAJOR MINOR PATCH` —
+now inside `next_version` (`scripts/lib/version.sh`), formerly inline in
+`create-release.sh`. Against `1.5.0-beta.1` that parse made a patch bump die with
+`bash: 0-beta.1: syntax error: invalid arithmetic operator` and a minor bump
+*silently* yield `1.6.0`, skipping `1.5.0` entirely. `next_version` now rejects
+any non-bare `X.Y.Z` before the parse runs, so a stray suffix fails loudly — but
+keeping the suffix on the tag alone is still why `create-prerelease.sh` bumps
+nothing.
 
-Consequence to expect: with no bump, HACS shows the pre-release tag while HA's
-integration page reads `manifest.json` and still shows the stable version. That
-mismatch is harmless and is called out in the generated release notes.
+Why the tag carries the *next* version rather than the stored one: a tag like
+`v1.4.3-pre-…` cut while `package.json` reads `1.4.3` claims to be a pre-release
+of a version that already shipped, and semver ranks it **below** the stable
+`1.4.3` the tester already has installed. `v1.5.0-pre-…` sorts correctly — above
+`1.4.3`, below the eventual `1.5.0`. With nothing release-worthy since the last
+bump, `derive_bump_type` falls back to `patch`, so a docs-only device build still
+outranks the installed stable.
+
+The derived base is a moving target, not a promise — say "heading for", never
+"will be", in anything user-facing. A later `feat:` raises it from `1.4.4` to
+`1.5.0`, and on a docs-only tree it names a version `create-release.sh` will
+decline to cut at all (that script stops at its "nothing release-worthy" gate;
+`create-prerelease.sh` deliberately does not, since a device-test build of a
+refactor is a legitimate thing to want). Ordinarily the *ordering* still holds —
+above the installed stable, below the release that supersedes it — but only
+while the commits behind the tag stay in history. Cut `v2.0.0-pre-…` from a
+`breaking:` commit, then drop that commit out of history (rebase, reset,
+force-push), and the next stable is `1.5.0`, which the published `2.0.0-pre-…`
+now outranks — so HACS keeps offering the stale tag. Run `delete-prerelease.sh`
+on the orphan. Note a `git revert` does **not** cause this: it appends a
+`Revert "…"` commit and leaves the original `breaking:` in range, so
+`derive_bump_type` still returns `major`. The script header says the same; keep
+the two in step, and don't let either claim ordering unconditionally.
+
+Consequence to expect: with no bump, HACS shows the pre-release tag (`1.5.0-pre-…`)
+while HA's integration page reads `manifest.json` and still shows the stored
+stable version (`1.4.3`). That mismatch is harmless and is called out in the
+generated release notes.
 
 Neither script uploads assets — `hacs.json` sets no `zip_release`, so HACS pulls
 repo source at the tag and the card bundle ships committed inside the

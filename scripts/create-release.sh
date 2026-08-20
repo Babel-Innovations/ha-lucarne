@@ -1,12 +1,19 @@
 #!/bin/bash
 
 # Creates a GitHub release for ha-lucarne with automatic semantic versioning
-# based on conventional commits since the last bump commit.
+# based on conventional commits since the last `bump:` commit — or, in a repo
+# that has none, since the newest stable tag. See scripts/lib/version.sh.
 
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
+
+# Conventional-commit version derivation, shared with create-prerelease.sh so a
+# pre-release tag and the stable release that follows it can never disagree
+# about which version is next.
+# shellcheck source=scripts/lib/version.sh
+. "${REPO_DIR}/scripts/lib/version.sh"
 
 # The card bundle ships inside the integration (HACS pulls the repo at the tag),
 # so it is committed, not uploaded as a release asset.
@@ -145,42 +152,20 @@ log_info "Calculating version bump..."
 
 CURRENT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "0.1.0")
 
-# Prefer the latest bump: commit as the lower bound; fall back to the latest
-# vX.Y.Z tag (covers the v0.1.0 "Release v0.1.0" commit that isn't bump:-prefixed).
-LAST_BUMP_COMMIT=$(git log --grep="^bump:" --format="%H" -n 1 2>/dev/null || echo "")
-if [ -z "$LAST_BUMP_COMMIT" ]; then
-    LAST_TAG_COMMIT=$(git rev-list --tags --max-count=1 2>/dev/null || echo "")
-    if [ -n "$LAST_TAG_COMMIT" ]; then
-        LAST_BUMP_COMMIT="$LAST_TAG_COMMIT"
-    fi
-fi
-if [ -z "$LAST_BUMP_COMMIT" ]; then
-    COMMIT_RANGE="HEAD"
-else
-    COMMIT_RANGE="${LAST_BUMP_COMMIT}..HEAD"
-fi
+# The subjects are needed twice over: to pick the bump type here, and to build
+# the changelog entry in step 3 below.
+FILTERED_COMMITS=$(commits_since_last_bump)
 
-COMMITS=$(git log "$COMMIT_RANGE" --format="%s" --no-merges 2>/dev/null || echo "")
-FILTERED_COMMITS=$(echo "$COMMITS" | grep -vE "^(bump|misc)(\([^)]*\))?:" || echo "")
-
+# Unlike create-prerelease.sh — which tags a build for device testing and so has
+# to produce a version even for a docs-only tree — a stable release with nothing
+# release-worthy behind it is a no-op.
 if [ -z "$FILTERED_COMMITS" ]; then
     log_info "Nothing to release (no commits since last version)"
     exit 0
 fi
 
-BUMP_TYPE="patch"
-if echo "$FILTERED_COMMITS" | grep -qE "^(breaking|BREAKING CHANGE)(\([^)]*\))?:"; then
-    BUMP_TYPE="major"
-elif echo "$FILTERED_COMMITS" | grep -qE "^(feat|feature)(\([^)]*\))?:"; then
-    BUMP_TYPE="minor"
-fi
-
-IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-case $BUMP_TYPE in
-    major) NEW_VERSION="$((MAJOR + 1)).0.0" ;;
-    minor) NEW_VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
-    patch) NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
-esac
+BUMP_TYPE=$(derive_bump_type "$FILTERED_COMMITS")
+NEW_VERSION=$(next_version "$CURRENT_VERSION" "$BUMP_TYPE")
 
 log_success "Version: $CURRENT_VERSION → $NEW_VERSION (bump type: $BUMP_TYPE)"
 
