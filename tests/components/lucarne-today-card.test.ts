@@ -4,6 +4,13 @@ import type { LucarneTodayCard, LucarneTodayCardConfig } from '../../src/cards/l
 import { normalizeSectionOrder } from '../../src/cards/lucarne-today-card.js';
 import type { HomeAssistant, RenderableTask } from '../../src/shared/types.js';
 import { makeFakeHass } from '../setup/ha-mock.mjs';
+import {
+  admit,
+  getWindow,
+  markCompleted,
+  resetWindows,
+  sinkCompleted,
+} from '../../src/shared/completed-window.js';
 
 await import('../../src/cards/lucarne-today-card.js');
 
@@ -128,6 +135,148 @@ async function makeCard(
 
 afterEach(() => {
   document.querySelectorAll('lucarne-today-card').forEach((el) => el.remove());
+  // The completed-row window is module-global by design, so clear it between
+  // cases or crossed rows leak from one test into the next.
+  resetWindows();
+});
+
+describe('lucarne-today-card — sinking crossed rows', () => {
+  // Evaluated per use, not once at describe time: _resolveVisible calls
+  // new Date() per render, so a run straddling local midnight would key the
+  // seeded window to yesterday and fail spuriously.
+  const now = () => new Date();
+
+  it('sinks crossed rows when the card is removed (a Lovelace view switch)', async () => {
+    const el = await makeCard({ tasks: 'todo.family' });
+    const w = getWindow('todo.family', 5, false, now());
+    markCompleted(w, 'uid-1', 0);
+    assert.equal(w.completed.get('uid-1')!.sunk, false);
+
+    el.remove();
+
+    assert.equal(w.completed.get('uid-1')!.sunk, true, 'sunk on disconnect');
+  });
+
+  function goHidden() {
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+    } finally {
+      // Own property only — deleting it falls back to the prototype getter. Left
+      // in place it would read 'hidden' for every later test, and
+      // family-subscription skips its poll while hidden.
+      delete (document as unknown as Record<string, unknown>).visibilityState;
+    }
+  }
+
+  it('sinks crossed rows when the display goes to sleep', async () => {
+    // The kiosk backgrounding the Companion app never unmounts the card, so
+    // disconnectedCallback alone would miss it.
+    const el = await makeCard({ tasks: 'todo.family' });
+    const w = getWindow('todo.family', 5, false, now());
+    markCompleted(w, 'uid-1', 0);
+
+    goHidden();
+
+    assert.equal(w.completed.get('uid-1')!.sunk, true, 'sunk while hidden');
+    el.remove();
+  });
+
+  it('repaints on sleep so the rows are actually reordered, not just flagged', async () => {
+    // Regression: sinkCompleted only mutates module state. The kiosk never
+    // unmounts the card, so without an explicit re-render the rows kept their
+    // old positions until a later push reordered them *while the user watched*.
+    const el = await makeCard(
+      { tasks: 'todo.family' },
+      // Items arrive via connection.sendMessagePromise, not hass.callService.
+      makeFakeHassWithFamily([], {
+        'todo.family': [
+          { uid: 'a', summary: 'Task A', status: 'needs_action' },
+          { uid: 'b', summary: 'Task B', status: 'completed' },
+          { uid: 'c', summary: 'Task C', status: 'needs_action' },
+        ],
+      }),
+    );
+    const summary = await waitForShadow<HTMLElement & { updateComplete: Promise<unknown> }>(
+      el.shadowRoot!,
+      'lucarne-tasks-summary',
+    );
+    const summaries = () =>
+      [...summary.shadowRoot!.querySelectorAll('lucarne-task-row')].map(
+        (r) => r.shadowRoot!.querySelector('.label')!.textContent!.trim(),
+      );
+    const repaint = async () => {
+      el.requestUpdate();
+      await el.updateComplete;
+      await summary.updateComplete;
+    };
+
+    for (let i = 0; i < 50 && summaries().length < 2; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+      await summary.updateComplete;
+    }
+    // B was completed before the card ever saw it active, so it does not qualify.
+    assert.deepEqual(summaries(), ['Task A', 'Task C'], 'completed-before-seen stays hidden');
+
+    // Seed the window as if B had been completed while the card was watched.
+    const w = getWindow('todo.family', 5, false, now());
+    for (const uid of ['a', 'b', 'c']) admit(w, uid);
+    w.lastOrder = ['a', 'b', 'c'];
+    markCompleted(w, 'b', 1);
+    await repaint();
+    assert.deepEqual(summaries(), ['Task A', 'Task B', 'Task C'], 'crossed row sits in place');
+
+    goHidden();
+    await el.updateComplete;
+    await summary.updateComplete;
+
+    assert.deepEqual(summaries(), ['Task A', 'Task C', 'Task B'], 'repainted with B sunk');
+  });
+
+  it('ends the away span when the user toggles a task', async () => {
+    // Otherwise the first tap after the display wakes is mistaken for the
+    // catch-up burst and sinks under the user's finger.
+    const el = await makeCard({ tasks: 'todo.family' });
+    const w = getWindow('todo.family', 5, false, now());
+    sinkCompleted('todo.family');
+    assert.equal(w.away, true);
+
+    const task = {
+      uid: 'uid-1',
+      summary: 'Task',
+      status: 'needs_action' as const,
+      due: null,
+      description: '',
+      metadata: {
+        item_uid: 'uid-1',
+        member_slug: '',
+        assignee_slug: '',
+        type: 'chore' as const,
+        recurrence: '',
+        icon: '',
+        source: 'manual' as const,
+      },
+    };
+    await (
+      el as unknown as { _handleTaskToggle(e: Event): Promise<void> }
+    )._handleTaskToggle(new CustomEvent('task-toggle', { detail: { task } }));
+
+    assert.equal(w.away, false, 'a tap proves the user is looking');
+    el.remove();
+  });
+
+  it('keys the window by the household entity in integration mode', async () => {
+    const el = await makeCard(
+      { household_tasks_from_integration: true, tasks: undefined },
+      makeFakeHassWithFamily(),
+    );
+    const w = getWindow('todo.lucarne_household', 5, false, now());
+    markCompleted(w, 'uid-1', 0);
+
+    el.remove();
+
+    assert.equal(w.completed.get('uid-1')!.sunk, true);
+  });
 });
 
 describe('lucarne-today-card — flag combinations', () => {
@@ -513,7 +662,8 @@ describe('lucarne-today-card — raw-mode metadata enrichment', () => {
       el.shadowRoot!,
       'lucarne-tasks-summary',
     );
-    const avatar = await waitForShadow<HTMLElement>(summary.shadowRoot!, '.owner-avatar');
+    const row = await waitForShadow<HTMLElement>(summary.shadowRoot!, 'lucarne-task-row');
+    const avatar = await waitForShadow<HTMLElement>(row.shadowRoot!, '.owner-avatar');
     assert.equal(avatar.getAttribute('title'), 'Anna');
     assert.ok((avatar.textContent ?? '').includes('🦊'), 'avatar emoji rendered');
   });
@@ -532,7 +682,8 @@ describe('lucarne-today-card — raw-mode metadata enrichment', () => {
       el.shadowRoot!,
       'lucarne-tasks-summary',
     );
-    const avatar = await waitForShadow<HTMLElement>(summary.shadowRoot!, '.owner-avatar');
+    const row = await waitForShadow<HTMLElement>(summary.shadowRoot!, 'lucarne-task-row');
+    const avatar = await waitForShadow<HTMLElement>(row.shadowRoot!, '.owner-avatar');
     assert.equal(avatar.getAttribute('title'), 'Anna');
   });
 

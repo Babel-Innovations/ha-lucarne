@@ -3,6 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
 import { LucarneCardBase, LucarneConfigError } from '../shared/card-base.js';
 import { fetchCalendarEvents, subscribeTodoItems } from '../shared/ha-subscriptions.js';
+import { clearAway, sinkCompleted } from '../shared/completed-window.js';
 import { installPreviewColumnOverride, type PreviewOverrideHandle } from '../shared/grid-preview-override.js';
 import { subscribeFamilyState } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
@@ -215,6 +216,9 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
   connectedCallback() {
     super.connectedCallback();
     this._setupSubscriptions();
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this._onVisibilityChange);
+    }
     this._previewOverrideRaf = requestAnimationFrame(() => {
       this._previewOverrideRaf = undefined;
       if (!this.isConnected) return;
@@ -225,12 +229,50 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._teardownSubscriptions();
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this._onVisibilityChange);
+    }
+    // The card is going away — a Lovelace view switch destroys card DOM. Send
+    // the crossed-out rows to the bottom now so they are already there on
+    // return, and never reorder while the user is looking at them.
+    sinkCompleted(this._tasksEntityId);
     if (this._previewOverrideRaf !== undefined) {
       cancelAnimationFrame(this._previewOverrideRaf);
       this._previewOverrideRaf = undefined;
     }
     this._previewOverride?.uninstall();
     this._previewOverride = undefined;
+  }
+
+  /**
+   * Sink crossed rows when the kiosk display sleeps or the Companion app is
+   * backgrounded — those never unmount the card, so `disconnectedCallback`
+   * alone would miss them.
+   */
+  private _onVisibilityChange = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      sinkCompleted(this._tasksEntityId);
+      // sinkCompleted only mutates module state. Unlike the disconnect path —
+      // where Lit re-renders on remount — the kiosk never unmounts this card, so
+      // without an explicit re-render the rows would keep their old positions
+      // until some later subscription push reordered them *while the user was
+      // looking*, the exact thing sinking exists to prevent.
+      // `_renderTasksSection` rebuilds the task array on every render, so the
+      // summary sees a new `renderableTasks` identity and re-resolves.
+      this.requestUpdate();
+    }
+  };
+
+  /**
+   * The todo entity backing the tasks section — the key the completed-row window
+   * is stored under. Mirrors the entity passed to `lucarne-tasks-summary` in
+   * `_renderTasksSection`; the two must agree or the window is looked up under
+   * the wrong key.
+   */
+  private get _tasksEntityId(): string {
+    return this._config?.household_tasks_from_integration
+      ? 'todo.lucarne_household'
+      : (this._config?.tasks ?? '');
   }
 
   private _setupSubscriptions() {
@@ -413,6 +455,11 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
     const ownerEntityId = this._resolveTaskEntityId(task);
     if (!ownerEntityId) return;
 
+    // The user is demonstrably looking at this list, so end any away span before
+    // the completion is observed — otherwise a tap right after the display wakes
+    // is mistaken for the catch-up burst and sinks under their finger.
+    clearAway(this._tasksEntityId);
+
     // Flip the row immediately; `_reconcileOptimistic` clears the override once
     // the server confirms. Revert if the service call fails so the UI stays true.
     this._optimistic = new Map(this._optimistic).set(task.uid, newStatus);
@@ -552,7 +599,7 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
         return true;
       })
       .map(this._applyOptimistic);
-    const entityId = showIntegrationTasks ? 'todo.lucarne_household' : this._config?.tasks;
+    const entityId = this._tasksEntityId;
     return html`
       <div
         class="section section-tasks"

@@ -4,7 +4,13 @@ import { lucarneStyles } from '../shared/design-tokens.js';
 import { iconCheck } from '../shared/icons.js';
 import { STRINGS } from '../shared/strings.js';
 import type { MemberSummary, TodoItem, RenderableTask } from '../shared/types.js';
-import { EMOJI_RE } from './member-avatar.js';
+import {
+  admit,
+  getWindow,
+  markCompleted,
+  unmarkCompleted,
+  type CompletedEntry,
+} from '../shared/completed-window.js';
 
 import './task-row.js';
 
@@ -106,17 +112,18 @@ export class LucarneTasksSummary extends LitElement {
       .task-list {
         display: flex;
         flex-direction: column;
-        /* Only up to "limit" rows are rendered (backlog beyond it is
-           intentionally not shown). This is a safety cap: if the host card sets
-           --lucarne-tasks-max-height and those rendered rows exceed it, they
-           scroll rather than overflow. Uncapped (none) by default. */
+        /* Up to "limit" ACTIVE rows are rendered (backlog beyond it is
+           intentionally not shown), plus crossed-out completions — which reuse
+           their own slot in no-refill mode, but are extra rows in refill mode,
+           themselves capped at "limit". This is a safety cap: if the host card
+           sets --lucarne-tasks-max-height and those rows exceed it, they scroll
+           rather than overflow. Uncapped (none) by default. */
         max-height: var(--lucarne-tasks-max-height, none);
         overflow-y: auto;
       }
       .task-line {
         display: flex;
         align-items: center;
-        gap: var(--lucarne-spacing-sm);
       }
       .task-line + .task-line {
         border-top: 1px solid rgba(0, 0, 0, 0.05);
@@ -124,30 +131,6 @@ export class LucarneTasksSummary extends LitElement {
       .task-line lucarne-task-row {
         flex: 1;
         min-width: 0;
-      }
-      .owner-avatar {
-        flex-shrink: 0;
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        font-size: 13px;
-        line-height: 1;
-        color: rgba(0, 0, 0, 0.75);
-      }
-      .owner-avatar img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-      .owner-avatar .initial {
-        font-weight: 700;
-        text-transform: uppercase;
-        font-family: var(--primary-font-family, sans-serif);
-        font-size: 11px;
       }
       .empty-state {
         display: flex;
@@ -164,6 +147,17 @@ export class LucarneTasksSummary extends LitElement {
         height: 28px;
         color: #4caf50;
       }
+      /* Everything is done but the crossed-out rows are still on screen — keep
+         the celebration without the full-height empty state. */
+      .done-banner {
+        flex-direction: row;
+        padding: 0 0 var(--lucarne-spacing-sm);
+        font-size: var(--lucarne-fs-sm);
+      }
+      .done-banner .empty-icon {
+        width: 18px;
+        height: 18px;
+      }
     `,
   ];
 
@@ -174,36 +168,32 @@ export class LucarneTasksSummary extends LitElement {
   @property({ attribute: false }) renderableTasks: RenderableTask[] = [];
   /** Members from the family subscription — used to resolve owner avatars in integration mode. */
   @property({ attribute: false }) members: MemberSummary[] = [];
-  /** Max number of tasks to display; the rest scroll within the list. */
+  /**
+   * Max number of ACTIVE tasks to display. Backlog beyond it is hidden, not
+   * scrollable. Crossed-out completions occupy the slots they burned in
+   * no-refill mode, so the row count is unchanged there; in refill mode they
+   * render as extras below, themselves capped at `limit`.
+   */
   @property({ type: Number }) limit = 5;
   /**
    * When true, completing a visible task pulls the next backlog task up to refill
-   * the slot (rolling list). When false (default), a completed task disappears and
-   * its slot stays empty — no backlog item is promoted to replace it.
+   * the slot (rolling list). When false (default), the completed task keeps its
+   * slot — rendered crossed out — and no backlog item is promoted to replace it.
    */
   @property({ type: Boolean }) refillOnComplete = false;
 
-  /** Uids ever admitted to the visible window (no-refill mode session state). */
-  private _admitted = new Set<string>();
   /**
-   * Admitted uids that have left the active set (completed or removed) — i.e. the
-   * slots they occupied are burned and must not be refilled. Tracked here rather
-   * than re-derived from `source` each render so the burn survives even when the
-   * todo provider drops completed items from the fetched list. A uid is un-burned
-   * if it returns to the active set (e.g. a completion is undone).
-   */
-  private _burned = new Set<string>();
-  /** Identity of the current window; changing entity/limit re-seeds _admitted. */
-  private _windowKey = '';
-
-  /**
-   * Resolve which active tasks to show. In refill mode the window is just the
-   * first `limit` by priority. In no-refill mode each completion permanently
-   * burns a slot (never refilled); new tasks only fill slots that were never
-   * occupied. Mutates _admitted/_burned, so call once per render.
+   * Resolve the rows to render: the active tasks in the visible window, plus the
+   * tasks completed in this session rendered crossed out rather than vanishing.
+   *
+   * Window state lives in `shared/completed-window.ts`, not on this element —
+   * Lovelace destroys card DOM on a view switch, so element fields cannot
+   * survive the very event that is supposed to sink crossed rows to the bottom.
+   *
+   * Mutates the shared window, so call it once per render.
    */
   private _resolveVisible(source: RenderableTask[]): {
-    visible: RenderableTask[];
+    rows: RenderableTask[];
     totalActive: number;
   } {
     const now = new Date();
@@ -213,62 +203,115 @@ export class LucarneTasksSummary extends LitElement {
     );
     const totalActive = active.length;
 
-    if (this.refillOnComplete) {
-      this._admitted.clear();
-      this._burned.clear();
-      this._windowKey = '';
-      return { visible: active.slice(0, this.limit), totalActive };
-    }
-
-    const key = `${this.todoEntityId ?? ''}#${this.limit}`;
-    if (key !== this._windowKey) {
-      this._windowKey = key;
-      this._admitted = new Set();
-      this._burned = new Set();
-    }
-
+    const w = getWindow(this.todoEntityId ?? '', this.limit, this.refillOnComplete, now);
+    // Completions we only learn about while the user is not looking — the
+    // document is hidden, or the card was unmounted by a view switch and is
+    // still catching up — are already "from before they looked", so they belong
+    // at the bottom rather than spliced into a slot as the user starts tapping.
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    const startSunk = hidden || w.away;
+    const byUid = new Map(source.map((t) => [t.uid, t]));
     const activeUids = new Set(active.map((t) => t.uid));
-    // An admitted task that is no longer active has had its slot burned — whether
-    // it was completed, or completed-then-dropped by the provider. If it comes
-    // back to the active set (completion undone), un-burn it so it shows again.
-    for (const uid of this._admitted) {
-      if (activeUids.has(uid)) this._burned.delete(uid);
-      else this._burned.add(uid);
-    }
-    const target = Math.max(0, this.limit - this._burned.size);
-    const activeAdmitted = active.filter((t) => this._admitted.has(t.uid));
-    let openSlots = target - activeAdmitted.length;
-    for (const t of active) {
-      if (openSlots <= 0) break;
-      if (!this._admitted.has(t.uid)) {
-        this._admitted.add(t.uid);
-        openSlots--;
+
+    // Reconcile against the authoritative statuses. An admitted task that left
+    // the active set has burned its slot: still present and completed → it
+    // renders crossed out in that slot; gone entirely → the slot stays empty,
+    // as before. Returning to the active set un-crosses it (completion undone).
+    for (const uid of w.order) {
+      if (activeUids.has(uid)) {
+        unmarkCompleted(w, uid);
+        continue;
+      }
+      if (byUid.get(uid)?.status === 'completed') {
+        const idx = w.lastOrder.indexOf(uid);
+        markCompleted(w, uid, idx === -1 ? w.lastOrder.length : idx, startSunk);
       }
     }
-    const visible = active.filter((t) => this._admitted.has(t.uid));
-    return { visible, totalActive };
+
+    let visibleActive: RenderableTask[];
+    if (this.refillOnComplete) {
+      // Rolling list: `limit` applies to active tasks and the backlog still
+      // slides up, so a crossed row is an extra row rather than a held slot.
+      // It still renders in the slot it occupied until it is sunk.
+      visibleActive = active.slice(0, this.limit);
+      for (const t of visibleActive) admit(w, t.uid);
+    } else {
+      // Each completion permanently burns a slot; new tasks only fill slots that
+      // were never occupied. The crossed row now occupies the slot it burned, so
+      // the row count still never exceeds `limit`.
+      const burned = w.order.filter((uid) => !activeUids.has(uid)).length;
+      const target = Math.max(0, this.limit - burned);
+      const admittedActive = active.filter((t) => w.admitted.has(t.uid));
+      let openSlots = target - admittedActive.length;
+      for (const t of active) {
+        if (openSlots <= 0) break;
+        if (!w.admitted.has(t.uid)) {
+          admit(w, t.uid);
+          openSlots--;
+        }
+      }
+      // Defensive slice: the invariant |admitted| <= limit holds only while the
+      // window was built under these exact rules. Keying the window by
+      // limit + mode should guarantee that, but a stale admitted set must never
+      // be able to render more rows than the card is configured for.
+      visibleActive = active.filter((t) => w.admitted.has(t.uid)).slice(0, target);
+    }
+
+    // Un-sunk crossed rows go back into the slot they held; sunk ones go last.
+    // Both groups are capped so a long day cannot unbound the section — and both
+    // cap by dropping the OLDEST completion (`seq`), never the newest. Capping by
+    // slot index would discard the most recent tap, which is exactly the mistap
+    // the crossed row exists to keep visible and undoable.
+    const entries = [...w.completed.entries()].filter(([uid]) => byUid.has(uid));
+    const newestFirst = (a: [string, CompletedEntry], b: [string, CompletedEntry]) =>
+      b[1].seq - a[1].seq;
+    const rows = [...visibleActive];
+
+    const pending = entries
+      .filter(([, e]) => !e.sunk)
+      .sort(newestFirst)
+      .slice(0, this.limit)
+      .sort((a, b) => a[1].index - b[1].index);
+    for (const [uid, entry] of pending) {
+      rows.splice(Math.min(entry.index, rows.length), 0, byUid.get(uid)!);
+    }
+
+    const sunkRoom = Math.max(0, this.limit - pending.length);
+    const sunk = entries
+      .filter(([, e]) => e.sunk)
+      .sort(newestFirst)
+      .slice(0, sunkRoom)
+      .sort((a, b) => a[1].seq - b[1].seq); // oldest first, reads as history
+    for (const [uid] of sunk) rows.push(byUid.get(uid)!);
+
+    // Only a render that actually carries tasks is a real snapshot. The card
+    // renders once with an empty list while the subscription is still loading
+    // (raw mode does not gate on it), and clobbering lastOrder there would make
+    // every later completion resolve to index 0 — pinning crossed rows above
+    // the active ones.
+    if (source.length > 0) {
+      w.lastOrder = rows.map((t) => t.uid);
+      // Only a render the user can actually see ends the away span. The card's
+      // own visibilitychange handler calls requestUpdate(), which renders while
+      // visibilityState is still 'hidden' — clearing here would retire `away`
+      // before the wake burst it exists to catch ever arrives.
+      if (!hidden) w.away = false;
+    }
+    return { rows, totalActive };
   }
 
   render() {
     const source = this.integrationMode ? this.renderableTasks : this.items.map(toRenderable);
-    const { visible, totalActive } = this._resolveVisible(source);
+    const { rows, totalActive } = this._resolveVisible(source);
 
-    if (totalActive === 0) {
+    if (rows.length === 0) {
+      // Nothing left to render at all. "All done for now!" is the no-refill case
+      // where the session window is cleared but backlog remains — reward the
+      // cleared slate rather than shoving the backlog back into view.
       return html`
         <div class="empty-state">
           <span class="empty-icon">${iconCheck}</span>
-          ${STRINGS.allDone}
-        </div>
-      `;
-    }
-
-    if (visible.length === 0) {
-      // No-refill mode: the session window is cleared but backlog remains. Reward
-      // the cleared slate rather than shoving the backlog back into view.
-      return html`
-        <div class="empty-state">
-          <span class="empty-icon">${iconCheck}</span>
-          ${STRINGS.allDoneForNow}
+          ${totalActive === 0 ? STRINGS.allDone : STRINGS.allDoneForNow}
         </div>
       `;
     }
@@ -278,7 +321,15 @@ export class LucarneTasksSummary extends LitElement {
         ${STRINGS.tasksTitle}
         <span class="count-badge">${totalActive}</span>
       </div>
-      <div class="task-list">${visible.map((task) => this._renderTaskLine(task))}</div>
+      ${totalActive === 0
+        ? html`
+            <div class="empty-state done-banner">
+              <span class="empty-icon">${iconCheck}</span>
+              ${STRINGS.allDone}
+            </div>
+          `
+        : ''}
+      <div class="task-list">${rows.map((task) => this._renderTaskLine(task))}</div>
     `;
   }
 
@@ -286,39 +337,13 @@ export class LucarneTasksSummary extends LitElement {
     const owner = this._ownerFor(task);
     return html`
       <div class="task-line">
-        ${owner ? this._renderOwnerAvatar(owner) : ''}
         <lucarne-task-row
           compact
+          show-notes
           .task=${task}
+          .owner=${owner}
           .memberColor=${owner?.color ?? 'var(--primary-color)'}
         ></lucarne-task-row>
-      </div>
-    `;
-  }
-
-  private _renderOwnerAvatar(member: MemberSummary) {
-    // Mirror lucarne-member-avatar's branching so non-emoji strings (URL,
-    // plain text, accidentally-stored markup) don't end up rendered verbatim
-    // in the tiny pill — fall back to the initial instead.
-    const av = member.avatar;
-    if (av && av.startsWith('/local/')) {
-      return html`
-        <div class="owner-avatar" style="background:${member.color}" title="${member.name}">
-          <img src="${av}" alt="${member.name}" />
-        </div>
-      `;
-    }
-    if (av && EMOJI_RE.test(av)) {
-      return html`
-        <div class="owner-avatar" style="background:${member.color}" title="${member.name}">
-          <span>${av}</span>
-        </div>
-      `;
-    }
-    const initial = member.name.trim().charAt(0) || '?';
-    return html`
-      <div class="owner-avatar" style="background:${member.color}" title="${member.name}">
-        <span class="initial">${initial}</span>
       </div>
     `;
   }
