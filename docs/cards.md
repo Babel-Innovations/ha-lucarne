@@ -26,11 +26,19 @@ presence:                           # optional; shows home/away pills in header
     name: I
 agenda_show_tomorrow: false         # optional, default false; agenda shows today only,
                                     #   set true to also include tomorrow (scrolls if long)
-max_tasks: 5                        # optional, default 5; max tasks shown — extra tasks
-                                    #   stay hidden (not scrollable)
+max_tasks: 5                        # optional, default 5; max ACTIVE tasks shown — extra
+                                    #   tasks stay hidden (not scrollable). Crossed-out
+                                    #   completions reuse their own slot when
+                                    #   refill_tasks_on_complete is false, so the row count is
+                                    #   unchanged; when it is true they are extra rows ON TOP
+                                    #   of the active ones, capped at max_tasks. Either way a
+                                    #   crossed row stays in the slot it occupied until the
+                                    #   card goes away and comes back.
 refill_tasks_on_complete: false     # optional, default false; when false a completed task
-                                    #   disappears and its slot is NOT refilled from the
-                                    #   backlog. Set true for a rolling list.
+                                    #   keeps its slot (crossed out) and it is NOT refilled
+                                    #   from the backlog. Set true for a rolling list, where
+                                    #   the backlog slides up and the crossed row becomes an
+                                    #   extra row rather than holding a slot.
 section_order:                      # optional; drag to reorder in the visual editor
   - calendar
   - weather
@@ -43,6 +51,43 @@ show_family_ready_pill: false             # if true, shows N/M ready pill in hea
 
 > **Backward compat**: `tasks: todo.ingrid_tasks` (raw entity mode) continues to work. Setting
 > `household_tasks_from_integration: true` replaces it with the integration-backed household list.
+
+### Task notes
+
+A task whose todo item has a description shows it as a muted one-line note under the
+summary; tapping that line expands it to the full text and tapping again collapses it. The
+expand and collapse are animated (skipped when the system asks for reduced motion).
+Tapping the row itself still completes the task — the note stops its own taps from reaching
+the row.
+
+Screen readers announce the note as the row's description, so they get the full text
+whether or not it is expanded. Notes are read-only here: Lucarne has no way to author one,
+so they come from HA's own todo UI or the Apple Reminders bridge. A description containing
+only the bridge's `[apple:UUID]` sentinel counts as no note and renders nothing.
+
+Links inside a note are live: any `http`/`https` URL — or a bare `www.` host, which is
+opened over `https` — renders as a link that opens in a new tab, reachable by tap or by
+tabbing to it and pressing Enter. Following a link neither expands the note nor completes
+the task. Nothing else is linkified, so a note carrying a `javascript:` or `data:` URL
+stays inert text.
+
+### Crossed-out completions
+
+Completing a task no longer makes it vanish. It stays on screen struck through, in the slot
+it occupied, so an accidental tap is obvious and can be undone by tapping it again. Crossed
+rows move to the bottom of the list once the card goes away and comes back — a dashboard
+view switch, or the kiosk display sleeping — so they never reorder under your finger. The
+count badge keeps showing only the work remaining.
+
+A crossed row does require the todo entity to keep returning the completed item. Every entity
+Lucarne is used with does today — `todo.get_items` is called with no `status` filter and HA
+returns completed items when it is absent — but a provider that dropped them would leave the
+slot burned and empty instead, exactly as it behaved before this feature.
+
+They clear at local midnight. Note they also clear on a **full dashboard reload** or an HA
+frontend update: the record is per-browser session state, deliberately not persisted, and the
+cards cannot date a completion they did not witness — their `TodoItem` type does not read the
+`completed` field that HA and `local_todo` do in fact provide.
 
 ## `lucarne-calendar-card`
 

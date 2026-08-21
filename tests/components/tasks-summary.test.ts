@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { LucarneTasksSummary } from '../../src/components/tasks-summary.js';
 import { sortByPriority } from '../../src/components/tasks-summary.js';
 import type { MemberSummary, RenderableTask, TodoItem } from '../../src/shared/types.js';
+import { clearAway, resetWindows, sinkCompleted } from '../../src/shared/completed-window.js';
 
 await import('../../src/components/tasks-summary.js');
 
@@ -61,8 +62,25 @@ async function makeEl(props: Partial<LucarneTasksSummary> = {}): Promise<Lucarne
   return el;
 }
 
+/** Rendered row summaries, in visual order. */
+function rowSummaries(el: LucarneTasksSummary): string[] {
+  return [...el.shadowRoot!.querySelectorAll('lucarne-task-row')].map(
+    (r) => r.shadowRoot!.querySelector('.label')!.textContent!.trim(),
+  );
+}
+
+/** Per-row crossed-out flag, in visual order. */
+function rowCrossed(el: LucarneTasksSummary): boolean[] {
+  return [...el.shadowRoot!.querySelectorAll('lucarne-task-row')].map((r) =>
+    r.shadowRoot!.querySelector('.label')!.classList.contains('done'),
+  );
+}
+
 afterEach(() => {
   document.querySelectorAll('lucarne-tasks-summary').forEach((el) => el.remove());
+  // The completed-row window is module-global (it has to outlive card DOM), so
+  // it leaks between cases unless it is cleared here.
+  resetWindows();
 });
 
 describe('lucarne-tasks-summary', () => {
@@ -95,7 +113,9 @@ describe('lucarne-tasks-summary', () => {
       renderableTasks: tasks,
       members: [ANNA, HOUSEHOLD_MEMBER],
     });
-    const avatar = el.shadowRoot!.querySelector('.owner-avatar');
+    const avatar = el.shadowRoot!
+      .querySelector('lucarne-task-row')!
+      .shadowRoot!.querySelector('.owner-avatar');
     assert.equal(avatar, null, 'no avatar for household-owned task');
   });
 
@@ -112,7 +132,9 @@ describe('lucarne-tasks-summary', () => {
       renderableTasks: tasks,
       members: [ANNA],
     });
-    const avatar = el.shadowRoot!.querySelector('.owner-avatar') as HTMLElement | null;
+    const avatar = el.shadowRoot!
+      .querySelector('lucarne-task-row')!
+      .shadowRoot!.querySelector('.owner-avatar') as HTMLElement | null;
     assert.ok(avatar, 'owner avatar rendered for member-owned task');
     assert.equal(avatar!.getAttribute('title'), 'Anna');
     // Emoji avatar string is rendered inside.
@@ -186,8 +208,11 @@ describe('lucarne-tasks-summary', () => {
     ];
     await el.updateComplete;
 
-    const rows = el.shadowRoot!.querySelectorAll('lucarne-task-row');
-    assert.equal(rows.length, 1, 'completed slot is not refilled — only Task 1 remains');
+    // The completed task now stays on screen crossed out in the slot it burned,
+    // so the row count is unchanged — but Task 2 is still NOT promoted, which is
+    // what no-refill mode means.
+    assert.deepEqual(rowSummaries(el), ['Task 0', 'Task 1']);
+    assert.deepEqual(rowCrossed(el), [true, false]);
   });
 
   it('no-refill mode keeps the slot burned even if the completed task is dropped from source', async () => {
@@ -238,11 +263,13 @@ describe('lucarne-tasks-summary', () => {
     ];
     await el.updateComplete;
 
-    const rows = el.shadowRoot!.querySelectorAll('lucarne-task-row');
-    assert.equal(rows.length, 2, 'backlog task slides up to refill the slot');
+    // The backlog task still slides up; the crossed-out row is an extra on top
+    // of the `limit` active rows.
+    assert.deepEqual(rowSummaries(el), ['Task 0', 'Task 1', 'Task 2']);
+    assert.deepEqual(rowCrossed(el), [true, false, false]);
   });
 
-  it('no-refill mode shows the "all done for now" state when the window is cleared but backlog remains', async () => {
+  it('no-refill mode keeps the last completed task crossed out instead of the "for now" state', async () => {
     const el = await makeEl({
       integrationMode: true,
       renderableTasks: [
@@ -258,9 +285,316 @@ describe('lucarne-tasks-summary', () => {
     ];
     await el.updateComplete;
 
+    assert.equal(el.shadowRoot!.querySelector('.empty-state'), null, 'no empty state');
+    assert.deepEqual(rowSummaries(el), ['Task 0']);
+    assert.deepEqual(rowCrossed(el), [true]);
+  });
+
+  it('still shows the "all done for now" state when the burned task is gone entirely', async () => {
+    // The encouraging state is now reached only when there is nothing left to
+    // render — e.g. a provider that drops completed items, so no crossed row
+    // exists to fill the burned slot.
+    const el = await makeEl({
+      integrationMode: true,
+      renderableTasks: [
+        makeRenderable({ uid: 't0', summary: 'Task 0' }),
+        makeRenderable({ uid: 't1', summary: 'Task 1' }),
+      ],
+      limit: 1,
+      refillOnComplete: false,
+    });
+    el.renderableTasks = [makeRenderable({ uid: 't1', summary: 'Task 1' })];
+    await el.updateComplete;
+
     const empty = el.shadowRoot!.querySelector('.empty-state');
     assert.ok(empty, 'encouraging empty state shown');
     assert.match(empty!.textContent ?? '', /for now/i);
+  });
+});
+
+describe('lucarne-tasks-summary crossed-out completions', () => {
+  const ENTITY = 'todo.test';
+
+  const mkStatus = (uid: string, status: RenderableTask['status']) =>
+    makeRenderable({ uid, summary: uid, status });
+
+  async function completeFirstOfThree() {
+    const el = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      limit: 3,
+      renderableTasks: [
+        makeRenderable({ uid: 't0', summary: 'Task 0' }),
+        makeRenderable({ uid: 't1', summary: 'Task 1' }),
+        makeRenderable({ uid: 't2', summary: 'Task 2' }),
+      ],
+    });
+    el.renderableTasks = [
+      makeRenderable({ uid: 't0', summary: 'Task 0' }),
+      makeRenderable({ uid: 't1', summary: 'Task 1', status: 'completed' }),
+      makeRenderable({ uid: 't2', summary: 'Task 2' }),
+    ];
+    await el.updateComplete;
+    return el;
+  }
+
+  it('keeps a completed task in place, crossed out', async () => {
+    const el = await completeFirstOfThree();
+    assert.deepEqual(rowSummaries(el), ['Task 0', 'Task 1', 'Task 2']);
+    assert.deepEqual(rowCrossed(el), [false, true, false]);
+  });
+
+  it('sinks crossed rows to the bottom once the card has gone away', async () => {
+    const el = await completeFirstOfThree();
+    assert.deepEqual(rowCrossed(el), [false, true, false], 'in place while watching');
+
+    sinkCompleted(ENTITY);
+    el.requestUpdate();
+    await el.updateComplete;
+
+    assert.deepEqual(rowSummaries(el), ['Task 0', 'Task 2', 'Task 1']);
+    assert.deepEqual(rowCrossed(el), [false, false, true]);
+  });
+
+  it('un-crosses a task whose completion is undone', async () => {
+    const el = await completeFirstOfThree();
+    el.renderableTasks = [
+      makeRenderable({ uid: 't0', summary: 'Task 0' }),
+      makeRenderable({ uid: 't1', summary: 'Task 1' }),
+      makeRenderable({ uid: 't2', summary: 'Task 2' }),
+    ];
+    await el.updateComplete;
+
+    assert.deepEqual(rowSummaries(el), ['Task 0', 'Task 1', 'Task 2']);
+    assert.deepEqual(rowCrossed(el), [false, false, false]);
+  });
+
+  it('still bubbles task-toggle from a crossed row so a mistap can be undone', async () => {
+    const el = await completeFirstOfThree();
+    const events: CustomEvent[] = [];
+    el.addEventListener('task-toggle', (e) => events.push(e as CustomEvent));
+
+    const crossed = [...el.shadowRoot!.querySelectorAll('lucarne-task-row')][1];
+    (crossed.shadowRoot!.querySelector('.row') as HTMLElement).click();
+
+    assert.equal(events.length, 1);
+    assert.equal(events[0].detail.task.uid, 't1');
+  });
+
+  it('celebrates above the crossed rows when nothing is left to do', async () => {
+    const el = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      limit: 2,
+      renderableTasks: [
+        makeRenderable({ uid: 't0', summary: 'Task 0' }),
+        makeRenderable({ uid: 't1', summary: 'Task 1' }),
+      ],
+    });
+    el.renderableTasks = [
+      makeRenderable({ uid: 't0', summary: 'Task 0', status: 'completed' }),
+      makeRenderable({ uid: 't1', summary: 'Task 1', status: 'completed' }),
+    ];
+    await el.updateComplete;
+
+    const banner = el.shadowRoot!.querySelector('.done-banner');
+    assert.ok(banner, 'celebration banner shown alongside the crossed rows');
+    assert.equal(el.shadowRoot!.querySelector('.count-badge')!.textContent, '0');
+    assert.deepEqual(rowCrossed(el), [true, true]);
+  });
+
+  it('keeps the NEWEST completions when the crossed-row cap binds', async () => {
+    // Regression: capping by remembered slot index dropped the highest-index
+    // entries — i.e. the most recent taps — so the mistap the feature exists to
+    // surface was the one that silently vanished.
+    const all = (done: string[]) =>
+      ['t0', 't1', 't2', 't3'].map((u) =>
+        mkStatus(u, done.includes(u) ? 'completed' : 'needs_action'),
+      );
+    const el = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      limit: 2,
+      refillOnComplete: true,
+      renderableTasks: all([]),
+    });
+
+    for (const done of [['t0'], ['t0', 't1'], ['t0', 't1', 't2']]) {
+      el.renderableTasks = all(done);
+      await el.updateComplete;
+    }
+
+    const crossed = rowCrossed(el);
+    const crossedOut = rowSummaries(el).filter((_, i) => crossed[i]);
+    assert.equal(crossedOut.length, 2, 'crossed group capped at limit');
+    assert.ok(crossedOut.includes('t2'), 'the most recent completion is kept');
+    assert.ok(!crossedOut.includes('t0'), 'the oldest completion is evicted');
+  });
+
+  it('never exceeds the limit after refill mode is toggled off', async () => {
+    // The admitted set is built under different rules per mode; reusing one
+    // across the switch could render more rows than max_tasks.
+    const ids = ['t0', 't1', 't2', 't3', 't4'];
+    const all = (done: string[]) =>
+      ids.map((u) => mkStatus(u, done.includes(u) ? 'completed' : 'needs_action'));
+    const el = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      limit: 2,
+      refillOnComplete: true,
+      renderableTasks: all([]),
+    });
+    // Complete a couple in refill mode so the admitted set grows past `limit`
+    // (each render admits the top two actives). That is what made a shared
+    // window overflow once the no-refill branch, which admits differently,
+    // started reading it.
+    for (const done of [['t0'], ['t0', 't1']]) {
+      el.renderableTasks = all(done);
+      await el.updateComplete;
+    }
+
+    el.refillOnComplete = false;
+    el.renderableTasks = all(['t0', 't1']);
+    await el.updateComplete;
+
+    assert.ok(
+      rowSummaries(el).length <= 2,
+      `got ${rowSummaries(el).length} rows: ${rowSummaries(el).join(',')}`,
+    );
+  });
+
+  it('starts a completion observed while hidden already sunk', async () => {
+    // The WKWebView kiosk delivers stalled WS frames in a burst as it wakes. An
+    // entry created un-sunk would splice into its old slot just as the user
+    // starts looking — and sinkCompleted cannot help, it only flips entries
+    // that already exist.
+    const all = (done: string[]) =>
+      ['t0', 't1', 't2'].map((u) => mkStatus(u, done.includes(u) ? 'completed' : 'needs_action'));
+    const el = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      limit: 3,
+      renderableTasks: all([]),
+    });
+    assert.deepEqual(rowSummaries(el), ['t0', 't1', 't2']);
+
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      el.renderableTasks = all(['t0']);
+      await el.updateComplete;
+    } finally {
+      delete (document as unknown as Record<string, unknown>).visibilityState;
+    }
+
+    assert.deepEqual(rowSummaries(el), ['t1', 't2', 't0'], 'sunk without ever sitting in place');
+    assert.deepEqual(rowCrossed(el), [false, false, true]);
+  });
+
+  it('sinks a completion made while the card was away, instead of pinning it on top', async () => {
+    // Regression: a Lovelace view switch unmounts the card without ever hiding
+    // the document, so `hidden` is false on remount and the completion looked
+    // brand new. Worse, raw mode renders once with an empty list while the
+    // subscription loads; clobbering lastOrder there resolved the index to 0,
+    // splicing the crossed row ABOVE every active task.
+    const all = (done: string[]) =>
+      ['t0', 't1', 't2'].map((u) => mkStatus(u, done.includes(u) ? 'completed' : 'needs_action'));
+    const first = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      limit: 3,
+      renderableTasks: all([]),
+    });
+    assert.deepEqual(rowSummaries(first), ['t0', 't1', 't2']);
+
+    // View switch: the card unmounts and sinks; the window outlives it.
+    sinkCompleted(ENTITY);
+    first.remove();
+
+    // Remount. Raw mode's first render carries no items yet.
+    const el = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      limit: 3,
+      renderableTasks: [],
+    });
+    // t1 was completed elsewhere while we were away.
+    el.renderableTasks = all(['t1']);
+    await el.updateComplete;
+
+    assert.deepEqual(rowSummaries(el), ['t0', 't2', 't1'], 'sunk to the bottom, not pinned on top');
+    assert.deepEqual(rowCrossed(el), [false, false, true]);
+  });
+
+  it('keeps a completion sunk when the wake burst arrives after the screen is back', async () => {
+    // Regression: the card's own visibilitychange handler calls requestUpdate(),
+    // which renders WHILE visibilityState is still 'hidden'. Clearing the away
+    // flag on that render retired it before the WKWebView delivered its stalled
+    // frames on wake — so the completion spliced in at the top, in full view.
+    const all = (done: string[]) =>
+      ['t0', 't1', 't2'].map((u) => mkStatus(u, done.includes(u) ? 'completed' : 'needs_action'));
+    const el = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      limit: 3,
+      renderableTasks: all([]),
+    });
+    assert.deepEqual(rowSummaries(el), ['t0', 't1', 't2']);
+
+    // Display sleeps. The card stays mounted; it sinks and repaints — and that
+    // repaint must be awaited while still hidden, which is what makes this test
+    // see the path at all.
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      sinkCompleted(ENTITY);
+      el.renderableTasks = all([]);
+      await el.updateComplete;
+    } finally {
+      delete (document as unknown as Record<string, unknown>).visibilityState;
+    }
+
+    // Wake: the burst delivers t0's completion now that the screen is back.
+    el.renderableTasks = all(['t0']);
+    await el.updateComplete;
+
+    assert.deepEqual(rowSummaries(el), ['t1', 't2', 't0'], 'stays sunk, not spliced in on top');
+    assert.deepEqual(rowCrossed(el), [false, false, true]);
+  });
+
+  it('keeps the slot for a completion the user made right after wake', async () => {
+    // The counterpart to the wake-burst case: nothing forces a render on wake,
+    // so the away span can still be open when the user taps. Their own tap ends
+    // it (the card calls clearAway before the optimistic flip), and that row
+    // must stay put rather than sliding out from under their finger.
+    const all = (done: string[]) =>
+      ['t0', 't1', 't2'].map((u) => mkStatus(u, done.includes(u) ? 'completed' : 'needs_action'));
+    const el = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      limit: 3,
+      renderableTasks: all([]),
+    });
+    sinkCompleted(ENTITY); // display slept; no render happened on wake
+
+    clearAway(ENTITY); // the user taps — this is what the card does first
+    el.renderableTasks = all(['t1']);
+    await el.updateComplete;
+
+    assert.deepEqual(rowSummaries(el), ['t0', 't1', 't2'], 'stays in place under the finger');
+    assert.deepEqual(rowCrossed(el), [false, true, false]);
+  });
+
+  it('opts its rows into the note line', async () => {
+    const el = await makeEl({
+      integrationMode: true,
+      todoEntityId: ENTITY,
+      renderableTasks: [makeRenderable({ uid: 'n1', description: 'Fold into the top drawer' })],
+    });
+    const row = el.shadowRoot!.querySelector('lucarne-task-row')!;
+    assert.ok(row.hasAttribute('show-notes'), 'show-notes forwarded to the row');
+    assert.equal(
+      row.shadowRoot!.querySelector('.note')!.textContent!.trim(),
+      'Fold into the top drawer',
+    );
   });
 });
 

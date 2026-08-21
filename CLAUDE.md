@@ -255,6 +255,42 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Round-trip event vs POST**: `completion_listener.py` fires `lucarne_family_apple_writeback_requested` when `round_trip.enabled == true` but does **not** POST to the webhook. The POST is deferred to a future spec. Future subscribers **must** call `get_round_trip_config(hass)` from `__init__.py` — never read `entry.data["round_trip"]` directly, to survive storage layout changes.
 - **`set_member_avatar` emoji validation**: Uses explicit Unicode block ranges (U+1F000–U+1FAFF, U+2300–U+27FF, U+2B00–U+2BFF, U+1F1E0–U+1F1FF). Requires at least one base-emoji codepoint; allows ZWJ-joined compound emoji (e.g., family/profession glyphs); rejects ASCII text, invisible-only strings, and unjoined back-to-back emoji.
 - **Rotating tasks** live in the household list (`member_slug = "household"`) with two extra metadata columns: `rotation_owners` (JSON array of slugs) and `current_owner` (whose turn it is). Ownership **advances at the daily-reset window**, not at the moment of completion — do not advance it manually. Rotating tasks are **excluded from streaks** (the recurrence evaluator filters by `type == "routine"`). Completions are **attributed to `current_owner`**, not `"household"`. All rotation math lives in `rotation.py`; never import or hand-roll it elsewhere.
+- **Today-card completed-row state is module-global on purpose**: `src/shared/completed-window.ts`
+  keeps crossed-out completions keyed by entity + local day at *module* scope, not on
+  `lucarne-tasks-summary`. Lovelace destroys card DOM on a view switch, so element fields reset on
+  the very event that is meant to sink crossed rows to the bottom. Consequence for tests: call
+  `resetWindows()` in `afterEach` or the window leaks between cases and rows appear in unrelated
+  assertions. `lucarne-today-card` sinks via `disconnectedCallback` + `visibilitychange → hidden`.
+- **Task notes are read-only and sentinel-stripped**: the note line under a Today-card row renders
+  `taskNote(task.description)` (`src/shared/task-notes.ts`), which strips the Reminders bridge's
+  `[apple:UUID]` sentinels — mirror of `APPLE_SENTINEL_RE` in `apple_sentinel_backfill.py`; keep the
+  two in step. A description that is only a sentinel is *no note*. Nothing in Lucarne authors a
+  description (no field in the add/edit popovers, no service field, no `task_metadata` column), so
+  don't add writing without a spec. The note renders **inside `.middle`**, next to `.label`, so its
+  indent tracks whatever leads the row (check circle, emoji icon, owner avatar) with no hand-computed
+  margin — an earlier version sat outside `.row` with a hard-coded one and broke the moment the
+  avatar moved in. Being inside `.row` means it is a descendant of the `role="checkbox"`, so its
+  `click` and `pointerdown` handlers **must** keep calling `stopPropagation()` (reading a note would
+  otherwise complete the task), and it is deliberately **not** focusable and has no `role` — ARIA
+  treats checkbox children as presentational. Screen readers get the note through the row's
+  `aria-describedby` instead; expanding is a pointer affordance only. Expand/collapse animates an
+  explicit px height (`_startNoteAnimation`) because the collapsed/expanded difference is a
+  `white-space` flip, which is not animatable — the `.animating` class holds the wrapped, clipped
+  layout for the run in **both** directions, and the animation is started from the toggle handler,
+  never from `updated()`, so nothing sets reactive state inside an update cycle. An in-flight
+  animation is cancelled *before* the two shapes are measured: `fill: forwards` outranks inline
+  style, so measuring first returns the animating height for both shapes and a re-toggle inside the
+  window would silently do nothing while the note spills unclipped.
+  URLs in a note are linkified by `noteSegments()` (same module): **only** `http`/`https` (and bare
+  `www.`, promoted to `https://`) ever become an anchor — a note is user content off the bridge, so
+  `javascript:`/`data:` must stay text. Concatenating the segments must reproduce the note exactly;
+  the row's accessible description and the collapsed ellipsis both read the rendered text. A press
+  that starts on a link deliberately skips the note's `setPointerCapture` (capture retargets the
+  click and the link would never open) and skips the toggle, while still stopping propagation — and
+  the row's own `keydown` skips link events too, or Enter on a focused link would `preventDefault()`
+  the anchor and complete the task instead. The anchors are the one focusable thing inside the
+  presentational subtree; that is accepted rather than `tabindex="-1"`, which would take the URL
+  away from keyboard users entirely.
 - **Optimistic UI is mandatory for every user-initiated mutation**: cards live-update only via WebSocket pushes, which stall on the always-on iOS WKWebView kiosk while it's idle — so a mutation that waits for the server round-trip + push leaves the acting device's screen stale until the user interacts. Update the UI locally on the spot and reconcile when the authoritative push/poll arrives. Toggles flip-then-revert-on-error; add/delete/edit dispatch the optimistic change only *after* the service call succeeds. See **Optimistic UI** in `docs/architecture.md` for the four mechanisms (`_optimistic`, `_optimisticAdds`/`_pendingEvents`, `_deletedUids`, `_optimisticEdits`) and reconcile/TTL discipline. Avatar editing is the one documented exception (editor-only, interactive surface).
 
 ## Don'ts
