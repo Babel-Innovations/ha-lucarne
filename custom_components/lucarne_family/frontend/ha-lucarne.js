@@ -3956,13 +3956,13 @@ var Ar = class {
 //#endregion
 //#region src/shared/calendar-scroll.ts
 function jr(e) {
-	let { now: t, bandStartH: n, bandEndH: r, timeGridTopPx: i, timeGridHeightPx: a, paddingPx: o, maxScrollTop: s } = e, c = r - n;
-	if (c <= 0) return 0;
-	let l = t.getHours() + t.getMinutes() / 60 + t.getSeconds() / 3600;
-	if (l <= n) return 0;
-	if (l >= r) return Math.max(0, s);
-	let u = i + (l - n) / c * a - o;
-	return Math.max(0, Math.min(s, u));
+	let { now: t, bandStartH: n, bandEndH: r, timeGridTopPx: i, timeGridHeightPx: a, paddingPx: o, stickyHeadPx: s = 0, maxScrollTop: c } = e, l = r - n;
+	if (l <= 0) return 0;
+	let u = t.getHours() + t.getMinutes() / 60 + t.getSeconds() / 3600;
+	if (u <= n) return 0;
+	if (u >= r) return Math.max(0, c);
+	let d = i + (u - n) / l * a - o - s;
+	return Math.max(0, Math.min(c, d));
 }
 //#endregion
 //#region src/components/visibility-pills.ts
@@ -4494,50 +4494,43 @@ var Zr = (Yr = class extends H {
 		let e = /* @__PURE__ */ new Date(), t = yt(this.bandStart, this.bandEnd), n = (t.length - 1) * this.hourHeightPx, r = new Intl.DateTimeFormat("en-US", { weekday: "short" }), i = { "--lucarne-day-render-count": String(this.layout.days.length) };
 		return this.dayWidthPx > 0 && (i["--lucarne-day-width-px"] = `${this.dayWidthPx}px`, i["--lucarne-day-baseline-px"] = `${-this.bufferDays * this.dayWidthPx}px`), L`
       <div class="grid-wrapper" style=${zr(i)}>
-        <!-- Time-column gutter cells (col 1): stay fixed during pan -->
-        <div class="header-spacer" style="grid-row:1; grid-column:1"></div>
-        <div class="allday-spacer" style="grid-row:2; grid-column:1">all-day</div>
-        <div class="time-col" style="height:${n}px; grid-row:3; grid-column:1">
-          ${t.map((e, n) => L`
-              <div
-                class="hour-label"
-                style="top: ${n / (t.length - 1) * 100}%"
-              >
-                ${e === 0 || e === 24 ? "12 AM" : e < 12 ? `${e} AM` : e === 12 ? "12 PM" : `${e - 12} PM`}
-              </div>
-            `)}
-        </div>
+        <!-- Sticky head: day names + all-day rows stay pinned while the time band scrolls -->
+        <div class="grid-head">
+          <!-- Time-column gutter cells (col 1): stay fixed during pan -->
+          <div class="header-spacer"></div>
 
-        <!-- Row 1: day header track -->
-        <div class="day-cols-track" style="grid-row:1">
-          ${this.layout.days.map((t, n) => L`
-              <div
-                class="day-header ${Xr(t, e) ? "today" : ""}"
-                style="grid-column: ${n + 1}"
-              >
-                <div class="day-pill">
-                  <span class="day-weekday">${r.format(t)}</span>
-                  <span class="day-num">${t.getDate()}</span>
+          <!-- Day header track -->
+          <div class="day-cols-track" style="grid-row:1">
+            ${this.layout.days.map((t, n) => L`
+                <div
+                  class="day-header ${Xr(t, e) ? "today" : ""}"
+                  style="grid-column: ${n + 1}"
+                >
+                  <div class="day-pill">
+                    <span class="day-weekday">${r.format(t)}</span>
+                    <span class="day-num">${t.getDate()}</span>
+                  </div>
                 </div>
-              </div>
-            `)}
-        </div>
+              `)}
+          </div>
 
-        <!-- Row 2: all-day event track (wrapped in .day-cols-clip — see CSS) -->
-        <div class="day-cols-clip" style="grid-row:2">
-          <div class="day-cols-track">
-            ${this.layout.days.map((e, t) => {
+          <div class="allday-spacer">all-day</div>
+
+          <!-- All-day event track (wrapped in .day-cols-clip — see CSS) -->
+          <div class="day-cols-clip" style="grid-row:2">
+            <div class="day-cols-track">
+              ${this.layout.days.map((e, t) => {
 			let n = J(e), r = this.cachedDayKeys.has(n), i = this.layout.perDay.get(n);
 			return L`
-                <div class="allday-cell" style="grid-column: ${t + 1}">
-                  ${r ? ((i == null ? void 0 : i.allDay) ?? []).map((e) => {
+                  <div class="allday-cell" style="grid-column: ${t + 1}">
+                    ${r ? ((i == null ? void 0 : i.allDay) ?? []).map((e) => {
 				var t;
 				let n = i == null || (t = i.allDayClipped) == null ? void 0 : t.get(Ot(e));
 				return L`
-                          <div
-                            class="allday-event"
-                            style="background: ${this._eventColor(e)}cc"
-                            @click=${(t) => {
+                            <div
+                              class="allday-event"
+                              style="background: ${this._eventColor(e)}cc"
+                              @click=${(t) => {
 					t.stopPropagation(), this.dispatchEvent(new CustomEvent("lucarne-event-tap", {
 						detail: {
 							event: e,
@@ -4547,31 +4540,45 @@ var Zr = (Yr = class extends H {
 						composed: !0
 					}));
 				}}
-                          >
-                            ${n != null && n.left ? L`<span class="clip-chevron">‹</span>` : ""}${e.summary}${n != null && n.right ? L`<span class="clip-chevron">›</span>` : ""}
-                          </div>
-                        `;
+                            >
+                              ${n != null && n.left ? L`<span class="clip-chevron">‹</span>` : ""}${e.summary}${n != null && n.right ? L`<span class="clip-chevron">›</span>` : ""}
+                            </div>
+                          `;
 			}) : L`<div class="allday-skeleton"><div class="shimmer-sweep"></div></div>`}
+                  </div>
+                `;
+		})}
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-body">
+          <div class="time-col" style="height:${n}px">
+            ${t.map((e, n) => L`
+                <div
+                  class="hour-label ${n === 0 ? "first" : ""}"
+                  style="top: ${n / (t.length - 1) * 100}%"
+                >
+                  ${e === 0 || e === 24 ? "12 AM" : e < 12 ? `${e} AM` : e === 12 ? "12 PM" : `${e - 12} PM`}
+                </div>
+              `)}
+          </div>
+
+          <!-- Time-band columns track -->
+          <div class="day-cols-track">
+            ${this.layout.days.map((t, n) => {
+			let r = J(t), i = this.cachedDayKeys.has(r);
+			return L`
+                <div style="grid-column:${n + 1}; position:relative; overflow:visible; display:flex; flex-direction:column;">
+                  ${i ? this._renderDayColumn(t, e) : L`<lucarne-skeleton-day-column
+                        .bandStart=${this.bandStart}
+                        .bandEnd=${this.bandEnd}
+                        .hourHeightPx=${this.hourHeightPx}
+                      ></lucarne-skeleton-day-column>`}
                 </div>
               `;
 		})}
           </div>
-        </div>
-
-        <!-- Row 3: time-band columns track -->
-        <div class="day-cols-track" style="grid-row:3">
-          ${this.layout.days.map((t, n) => {
-			let r = J(t), i = this.cachedDayKeys.has(r);
-			return L`
-              <div style="grid-column:${n + 1}; position:relative; overflow:visible; display:flex; flex-direction:column;">
-                ${i ? this._renderDayColumn(t, e) : L`<lucarne-skeleton-day-column
-                      .bandStart=${this.bandStart}
-                      .bandEnd=${this.bandEnd}
-                      .hourHeightPx=${this.hourHeightPx}
-                    ></lucarne-skeleton-day-column>`}
-              </div>
-            `;
-		})}
         </div>
       </div>
     `;
@@ -4581,31 +4588,61 @@ var Zr = (Yr = class extends H {
         display: block;
         position: relative;
       }
+      /*
+       * Two stacked blocks, not one 3-row grid: .grid-head (day names +
+       * all-day) is position:sticky so both rows stay pinned while the time
+       * band scrolls under it (issue #82). Both blocks declare the same
+       * grid-template-columns, which is what keeps the gutter and the day
+       * columns aligned across the split.
+       *
+       * Why one block rather than two sticky rows: sticky siblings all resolve
+       * top against the same scrollport, so a sticky all-day row would need
+       * top = height-of-the-day-name-row to sit below the headers instead of
+       * under them — a hard-coded offset that breaks as soon as the header's
+       * font, padding, or the narrow-column layout changes its height. One
+       * sticky block pins both rows at top: 0 with no measurement.
+       *
+       * The wrapper must stay overflow-visible and span the full content
+       * height: it is the sticky element's containing block, so it defines how
+       * far the head may travel.
+       */
       .grid-wrapper {
+        display: block;
+      }
+      /* minmax(0, 1fr) prevents the .day-cols-track (which is wider than 1fr
+         when render buffer columns are present) from expanding the column. */
+      .grid-head,
+      .grid-body {
         display: grid;
-        /* minmax(0, 1fr) prevents the .day-cols-track (which is wider than 1fr
-           when render buffer columns are present) from expanding the column. */
         grid-template-columns: 40px minmax(0, 1fr);
-        grid-template-rows: auto auto 1fr;
+      }
+      .grid-head {
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        grid-template-rows: auto auto;
+        /* Opaque: the time band scrolls underneath it. .day-header and the two
+           gutter spacers paint their own surface, but .allday-cell does not. */
+        background: var(--lucarne-surface);
       }
       /*
-       * Wraps ONLY the row-2 all-day .day-cols-track in a column-2-scoped
-       * overflow:hidden box (issue #3). On iPad Safari the sticky gutter
-       * spacer wasn't reliably stacking above the all-day track's
-       * transform-induced stacking context, so all-day events bled across the
-       * hour column during pan. Clipping at the column boundary fixes it
-       * unconditionally and browser-agnostic.
+       * Wraps ONLY the all-day .day-cols-track in a column-2-scoped
+       * overflow:hidden box (issue #3). On iPad Safari the gutter spacer
+       * wasn't reliably stacking above the all-day track's transform-induced
+       * stacking context, so all-day events bled across the hour column during
+       * pan. Clipping at the column boundary fixes it unconditionally and
+       * browser-agnostic.
        *
-       * Why row 2 only:
-       *  - Row 1 (.day-header) uses position: sticky; top: 0 — an
-       *    overflow:hidden ancestor becomes its scrollport and breaks sticky.
-       *  - Row 3 contains <lucarne-out-of-band-stub> whose backdrop/popover are
-       *    position: fixed. Because .day-cols-track has a transform, it is the
-       *    containing block for those fixed children; clipping it would also
-       *    clip the stub's full-viewport overlay.
-       *  - Row 3's regular events already don't bleed past the gutter (the
-       *    .time-col sticky spacer plus the .day-col isolation: isolate keep
-       *    them stacked correctly).
+       * Why the all-day row only:
+       *  - The day-name row's events are the headers themselves, which never
+       *    overflow their column.
+       *  - The time-band row contains <lucarne-out-of-band-stub> whose
+       *    backdrop/popover are position: fixed. Because .day-cols-track has a
+       *    transform, it is the containing block for those fixed children;
+       *    clipping it would also clip the stub's full-viewport overlay.
+       *  - The time band's regular events already don't bleed past the gutter
+       *    (the .time-col sticky spacer plus the .day-col isolation: isolate
+       *    keep them stacked correctly).
        */
       .day-cols-clip {
         grid-column: 2;
@@ -4613,12 +4650,12 @@ var Zr = (Yr = class extends H {
         min-width: 0;
       }
       /*
-       * Three .day-cols-track elements — one per outer grid row — so that each
-       * outer auto-row is sized by its day-column content (headers, allday cells,
-       * time-band cols). All three receive the same translateX during pan.
-       * Using a single spanning element would decouple the inner sub-grid row
-       * sizing from the outer grid rows and cause the time-column gutter labels
-       * to misalign with the day content (no CSS subgrid on Safari < 16).
+       * Three .day-cols-track elements — day names, all-day, time band — so that
+       * each row is sized by its own day-column content. All three receive the
+       * same translateX during pan. Using a single spanning element would
+       * decouple the inner sub-grid row sizing from the outer rows and cause the
+       * time-column gutter labels to misalign with the day content (no CSS
+       * subgrid on Safari < 16).
        *
        * Track is rendered at fixed px widths (--lucarne-day-render-count columns
        * × --lucarne-day-width-px each) so visible columns keep their target width
@@ -4629,9 +4666,9 @@ var Zr = (Yr = class extends H {
        * this CSS baseline reapplies (the new days then occupy the same screen
        * position as the OLD days at the snap target — visually invisible swap).
        *
-       * Rows 1 and 3 place the track directly into grid-column 2; row 2 wraps
-       * the track in a .day-cols-clip first (see the .day-cols-clip rule above
-       * for why row 2 needs the wrapper and rows 1 and 3 don't).
+       * The day-name and time-band tracks sit directly in grid-column 2; the
+       * all-day track is wrapped in a .day-cols-clip first (see the
+       * .day-cols-clip rule above for why only that one needs the wrapper).
        */
       .day-cols-track {
         grid-column: 2;
@@ -4653,8 +4690,12 @@ var Zr = (Yr = class extends H {
       .header-spacer {
         grid-column: 1;
         grid-row: 1;
+        /* sticky (not relative) so the gutter cells hold column 1 alongside
+           .time-col if scrollLeft ever leaves 0 — overflow-x: hidden still
+           scrolls programmatically, e.g. when focus moves to an off-screen
+           buffer day. z-index keeps this painted over the day-name track, which
+           is wider than its column while buffer days are rendered. */
         position: sticky;
-        top: 0;
         left: 0;
         z-index: 4;
         background: var(--lucarne-surface);
@@ -4669,9 +4710,6 @@ var Zr = (Yr = class extends H {
         color: var(--lucarne-on-surface-muted);
         border-bottom: 1px solid rgba(0, 0, 0, 0.07);
         user-select: none;
-        position: sticky;
-        top: 0;
-        z-index: 3;
         background: var(--lucarne-surface);
         /* Container query target: lets the @container rule below hide the
            weekday when the column itself becomes too narrow. inline-size
@@ -4721,6 +4759,7 @@ var Zr = (Yr = class extends H {
         justify-content: center;
         padding: 2px;
         min-height: 24px;
+        /* Sticky for the same reason as .header-spacer above. */
         position: sticky;
         left: 0;
         z-index: 2;
@@ -4782,7 +4821,6 @@ var Zr = (Yr = class extends H {
       /* Time grid */
       .time-col {
         grid-column: 1;
-        grid-row: 3;
         border-right: 1px solid rgba(0, 0, 0, 0.07);
         position: sticky;
         left: 0;
@@ -4797,6 +4835,12 @@ var Zr = (Yr = class extends H {
         transform: translateY(-50%);
         white-space: nowrap;
         user-select: none;
+      }
+      /* The band's first label sits at top:0, so centring it on the line pushes
+         half of it above the time column — where the sticky head now paints over
+         it. Hang it below the line instead so it stays fully readable. */
+      .hour-label.first {
+        transform: none;
       }
       .day-col {
         position: relative;
@@ -4971,8 +5015,15 @@ var ti, ni = (ti = class extends H {
 }, ti.styles = M`
     :host {
       display: block;
-      overflow: hidden;
       position: relative;
+      /*
+       * Deliberately NOT overflow: hidden. That makes the host a scroll
+       * container, which then becomes the scrollport for every sticky
+       * descendant — including the grid's sticky head, which would silently
+       * stop sticking (issue #82). The card's .grid-area owns the clipping
+       * instead (overflow-x: hidden), so the wider-than-viewport day track is
+       * still cut off at the card edge.
+       */
     }
     .pan-wrapper {
       touch-action: pan-y;
@@ -5744,28 +5795,29 @@ var Z = (ui = class extends ut {
 		});
 	}
 	_performAutoScroll(e) {
-		var t, n, r;
-		let i = this._gridAreaEl;
-		if (!i || !this._config) return !1;
-		let a = this.renderRoot.querySelector("lucarne-calendar-grid"), o = a == null || (t = a.shadowRoot) == null ? void 0 : t.querySelector(".time-col");
-		if (!o) return !1;
-		let s = i.getBoundingClientRect(), c = o.getBoundingClientRect();
-		if (c.height <= 0) return !1;
-		let [l] = (((n = this._config.visible_hours) == null ? void 0 : n.start) ?? "07:00").split(":").map(Number), [u] = (((r = this._config.visible_hours) == null ? void 0 : r.end) ?? "21:00").split(":").map(Number), d = u - l;
-		if (d <= 0) return !1;
-		let f = jr({
+		var t, n, r, i;
+		let a = this._gridAreaEl;
+		if (!a || !this._config) return !1;
+		let o = this.renderRoot.querySelector("lucarne-calendar-grid"), s = o == null || (t = o.shadowRoot) == null ? void 0 : t.querySelector(".time-col");
+		if (!s) return !1;
+		let c = o == null || (n = o.shadowRoot) == null ? void 0 : n.querySelector(".grid-head"), l = a.getBoundingClientRect(), u = s.getBoundingClientRect();
+		if (u.height <= 0) return !1;
+		let [d] = (((r = this._config.visible_hours) == null ? void 0 : r.start) ?? "07:00").split(":").map(Number), [f] = (((i = this._config.visible_hours) == null ? void 0 : i.end) ?? "21:00").split(":").map(Number), p = f - d;
+		if (p <= 0) return !1;
+		let m = jr({
 			now: /* @__PURE__ */ new Date(),
-			bandStartH: l,
-			bandEndH: u,
-			timeGridTopPx: c.top - s.top + i.scrollTop,
-			timeGridHeightPx: c.height,
-			paddingPx: c.height / d,
-			maxScrollTop: i.scrollHeight - i.clientHeight
+			bandStartH: d,
+			bandEndH: f,
+			timeGridTopPx: u.top - l.top + a.scrollTop,
+			timeGridHeightPx: u.height,
+			paddingPx: u.height / p,
+			stickyHeadPx: (c == null ? void 0 : c.getBoundingClientRect().height) ?? 0,
+			maxScrollTop: a.scrollHeight - a.clientHeight
 		});
-		return i.scrollTo({
-			top: f,
+		return a.scrollTo({
+			top: m,
 			behavior: e
-		}), this._lastAutoScrollTop = f, !0;
+		}), this._lastAutoScrollTop = m, !0;
 	}
 	_followNow() {
 		var e;
@@ -6039,7 +6091,17 @@ var Z = (ui = class extends ut {
         border-bottom: 1px solid rgba(0, 0, 0, 0.05);
       }
       .grid-area {
-        overflow: auto;
+        /*
+         * The vertical scrollport for the whole grid — and therefore the box the
+         * grid's sticky head pins against (issue #82). It has to be the nearest
+         * scroll container to that head, which is why <lucarne-calendar-day-pan>
+         * no longer sets overflow: hidden.
+         * overflow-x: hidden (not auto) clips the render-buffer day columns that
+         * make the day track wider than the card, without ever letting the user
+         * scroll horizontally — days move by pan gesture only.
+         */
+        overflow-x: hidden;
+        overflow-y: auto;
         /* Fill the space below the header + pills; ha-card sets the card height. */
         flex: 1 1 auto;
         min-height: 0;

@@ -80,6 +80,33 @@ describe('computeNowScrollTop', () => {
     assert.equal(computeNowScrollTop({ ...BASE, now, maxScrollTop: -50 }), 0);
   });
 
+  it('scrolls short of the plain target so the sticky head does not cover "now"', () => {
+    // Same 15:00 case as the first test (target 520), but a 54px sticky head
+    // now overlays the top of the scrollport. Stopping 54px earlier leaves the
+    // now-line a full padding unit below the head's bottom edge instead of
+    // under it.
+    const now = new Date(2026, 5, 5, 15, 0, 0);
+    assert.equal(computeNowScrollTop({ ...BASE, now, stickyHeadPx: 54 }), 520 - 54);
+  });
+
+  it('treats a missing stickyHeadPx as 0', () => {
+    const now = new Date(2026, 5, 5, 15, 0, 0);
+    assert.equal(
+      computeNowScrollTop({ ...BASE, now }),
+      computeNowScrollTop({ ...BASE, now, stickyHeadPx: 0 }),
+    );
+  });
+
+  it('still clamps to 0 when a tall sticky head drags the target negative', () => {
+    // 07:30 → 100 + (0.5/14)*840 - 60 = 70, comfortably positive on its own, so
+    // only the 120px head can push this below zero. (Keep BASE's timeGridTopPx:
+    // zeroing it makes the target negative before stickyHeadPx is even applied,
+    // and the test would pass without exercising the head at all.)
+    const now = new Date(2026, 5, 5, 7, 30, 0);
+    assert.equal(computeNowScrollTop({ ...BASE, now }), 70, 'guard: positive without a head');
+    assert.equal(computeNowScrollTop({ ...BASE, now, stickyHeadPx: 120 }), 0);
+  });
+
   it('never returns more than maxScrollTop even mid-band on a short container', () => {
     const now = new Date(2026, 5, 5, 20, 0, 0); // 20:00 → near bottom
     const result = computeNowScrollTop({ ...BASE, now, maxScrollTop: 100 });

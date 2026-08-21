@@ -84,6 +84,20 @@ Each card manages its own HA subscriptions independently.
 
 `LucarneCalendarDayPan` (`src/components/calendar-day-pan.ts`) is a thin Lit element that wraps `<lucarne-calendar-grid>` via a `<slot>` and translates Pointer Events into a `pan-snap` CustomEvent carrying a `deltaDays` count. It uses the Pointer Events API (`pointerdown / pointermove / pointerup / pointercancel`) so that mouse, pen, and touch are handled uniformly without fighting the browser's native scroll. Direction lock: the first 10 px of movement decide the axis — if vertical movement dominates, pointer capture is released immediately and the browser's native vertical scroll takes over. During a horizontal pan the slotted grid's inner `.day-cols-track` elements receive a `transform: translateX(...)`, while the time-column gutter (grid column 1, outside `.day-cols-track`) remains stationary. When the pointer is released, `snapToDay(dx, dayWidthPx, velocity)` (from `pan-math.ts`) computes the day count with a flick-velocity bias (≥500 px/s overcomes the half-column threshold), and `rubberBand(dx, 0)` provides resistance when panning into a disabled direction. The snap-back animation uses the `--lucarne-pan-easing` and `--lucarne-pan-duration` tokens; under `prefers-reduced-motion: reduce`, the transform is applied instantly.
 
+### Calendar grid sticky head
+
+`lucarne-calendar-grid` renders two stacked blocks inside `.grid-wrapper`, not one three-row grid: `.grid-head` (day-name row + all-day row) and `.grid-body` (hour gutter + time band). `.grid-head` is `position: sticky; top: 0`, so the day names and all-day events stay pinned while the time band scrolls under them. Both blocks declare the same `grid-template-columns: 40px minmax(0, 1fr)`, which is what keeps the gutter aligned across the split.
+
+The two rows pin as one block rather than as two sticky rows because sticky siblings all resolve `top` against the same scrollport: a separately-sticky all-day row would need `top: <height of the day-name row>` to land below the headers instead of under them, and that hard-coded offset breaks whenever the header's font, padding, or narrow-column layout changes its height. One block pins both with `top: 0` and no measurement.
+
+Three things have to stay true or the head silently stops sticking:
+
+- **`lucarne-calendar-day-pan` must not set `overflow`.** `overflow: hidden` there makes the pan host a scroll container, which then becomes the scrollport for every sticky descendant — and since the host is content-sized, that scrollport never scrolls, so `.day-header`'s long-standing `position: sticky; top: 0` resolved to a zero offset. That is a necessary cause of the original bug; whether a stretched sticky grid item could have travelled once the overflow was gone is engine-dependent (hence the widely cited `align-self: start` workaround), and the current shape deliberately doesn't depend on the answer — `.grid-head` is a plain block child of a block wrapper, with no grid-item constraint anywhere. The clipping it used to provide is now `.grid-area`'s job.
+- **`.grid-area` (in the card) must be the nearest scroll container.** It declares `overflow-x: hidden; overflow-y: auto` — hidden, not auto, on the x axis so the render-buffer day columns that make the day track wider than the card are clipped without ever exposing a horizontal scrollbar. Days move by pan gesture only. Note `overflow-x: hidden` still scrolls *programmatically* (focus moving to an off-screen buffer day), which is why the two gutter spacers keep `position: sticky; left: 0` to stay in column 1 alongside `.time-col`.
+- **`.grid-wrapper` must not scroll or clip** — including `overflow-x`, since `overflow-x: hidden` with a visible `overflow-y` computes `overflow-y` to `auto`. It is the sticky element's containing block, so it defines how far the head may travel.
+
+Because the head overlays the top of the scrollport, `computeNowScrollTop` takes a `stickyHeadPx` input and stops that much short of the plain target, so scroll-to-now leaves the now-line below the head rather than under it.
+
 ### User action data flow
 
 ```

@@ -445,3 +445,39 @@ describe('LucarneCalendarDayPan — snap animation (1B)', () => {
     assert.equal(snapEvents.length, 0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sticky head scrollport (issue #82)
+// ---------------------------------------------------------------------------
+
+describe('LucarneCalendarDayPan — host must not be a scroll container', () => {
+  // `overflow: hidden` here makes the host the nearest scrollport for every
+  // sticky descendant, so the calendar grid's sticky head silently stops
+  // sticking. Clipping the wider-than-viewport day track is the card's job
+  // (`.grid-area { overflow-x: hidden }`), not this element's.
+  let el: LucarneCalendarDayPan;
+  afterEach(() => el?.remove());
+
+  it(':host declares no overflow', async () => {
+    el = makeEl();
+    await el.updateComplete;
+
+    let seen = 0;
+    for (const sheet of el.shadowRoot?.adoptedStyleSheets ?? []) {
+      for (const rule of Array.from(sheet.cssRules) as CSSStyleRule[]) {
+        if (rule.selectorText?.trim() !== ':host') continue;
+        seen++;
+        for (const prop of ['overflow', 'overflow-x', 'overflow-y']) {
+          assert.equal(
+            rule.style.getPropertyValue(prop),
+            '',
+            `:host must not set ${prop} — it would capture the grid's sticky head`,
+          );
+        }
+      }
+    }
+    // Without this the loop body could stop running (rule renamed or moved) and
+    // the guard would green-light the very regression it exists to catch.
+    assert.ok(seen > 0, 'no :host rule found — the guard is not actually running');
+  });
+});
