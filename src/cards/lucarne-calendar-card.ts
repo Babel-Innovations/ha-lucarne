@@ -132,7 +132,17 @@ export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConf
         border-bottom: 1px solid rgba(0, 0, 0, 0.05);
       }
       .grid-area {
-        overflow: auto;
+        /*
+         * The vertical scrollport for the whole grid — and therefore the box the
+         * grid's sticky head pins against (issue #82). It has to be the nearest
+         * scroll container to that head, which is why <lucarne-calendar-day-pan>
+         * no longer sets overflow: hidden.
+         * overflow-x: hidden (not auto) clips the render-buffer day columns that
+         * make the day track wider than the card, without ever letting the user
+         * scroll horizontally — days move by pan gesture only.
+         */
+        overflow-x: hidden;
+        overflow-y: auto;
         /* Fill the space below the header + pills; ha-card sets the card height. */
         flex: 1 1 auto;
         min-height: 0;
@@ -456,6 +466,9 @@ export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConf
     const gridEl = this.renderRoot.querySelector('lucarne-calendar-grid');
     const timeCol = gridEl?.shadowRoot?.querySelector('.time-col') as HTMLElement | null;
     if (!timeCol) return false;
+    // The sticky head overlays the top of the scrollport, so "now" has to be
+    // pushed below it or it lands underneath the all-day row.
+    const head = gridEl?.shadowRoot?.querySelector('.grid-head') as HTMLElement | null;
 
     const areaRect = area.getBoundingClientRect();
     const colRect = timeCol.getBoundingClientRect();
@@ -474,6 +487,7 @@ export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConf
       timeGridTopPx: colRect.top - areaRect.top + area.scrollTop,
       timeGridHeightPx: colRect.height,
       paddingPx: colRect.height / bandHours, // one hour of breathing room
+      stickyHeadPx: head?.getBoundingClientRect().height ?? 0,
       maxScrollTop: area.scrollHeight - area.clientHeight,
     });
 

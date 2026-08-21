@@ -40,15 +40,16 @@ function shadowQueryAll(grid: LucarneCalendarGrid, selector: string): Element[] 
 describe('LucarneCalendarGrid — column-2 clip wrapper (issue #3)', () => {
   // The transformed `.day-cols-track` shifts left during pan; without a
   // scoped clip the all-day events painted in the wider track bleed across
-  // the column-1 gutter on iPad Safari (sticky + transform-induced stacking
-  // context don't reliably stack).
+  // the column-1 gutter on iPad Safari (the gutter spacer and the track's
+  // transform-induced stacking context don't reliably stack).
   //
-  // The clip is intentionally applied ONLY to row 2 (all-day):
-  //  - Row 1's .day-header uses `position: sticky; top: 0` — wrapping it
-  //    in overflow:hidden would re-parent the sticky scrollport.
-  //  - Row 3 hosts <lucarne-out-of-band-stub> whose backdrop/popover are
-  //    `position: fixed`; because .day-cols-track has `transform`, it is
-  //    their containing block, so a clip would also clip the stub overlay.
+  // The clip is intentionally applied ONLY to the all-day track:
+  //  - The day-name track holds only the headers, which never overflow their
+  //    own column.
+  //  - The time-band track hosts <lucarne-out-of-band-stub> whose
+  //    backdrop/popover are `position: fixed`; because .day-cols-track has
+  //    `transform`, it is their containing block, so a clip would also clip
+  //    the stub overlay.
   let grid: LucarneCalendarGrid;
   afterEach(() => grid?.remove());
 
@@ -60,24 +61,23 @@ describe('LucarneCalendarGrid — column-2 clip wrapper (issue #3)', () => {
     assert.equal(tracks.length, 3, 'pan logic relies on three tracks (one per row)');
   });
 
-  it('wraps ONLY the row-2 track in a .day-cols-clip; rows 1 and 3 remain direct', async () => {
+  it('wraps ONLY the all-day track in a .day-cols-clip; the other two remain direct', async () => {
     grid = makeGrid();
     await grid.updateComplete;
 
     const clips = shadowQueryAll(grid, '.day-cols-clip');
-    assert.equal(clips.length, 1, 'expect exactly one clip wrapper (row 2 only)');
+    assert.equal(clips.length, 1, 'expect exactly one clip wrapper (all-day only)');
     const clip = clips[0] as HTMLElement;
     assert.match(clip.getAttribute('style') ?? '', /grid-row:\s*2/);
     const innerTrack = clip.querySelector('.day-cols-track');
-    assert.ok(innerTrack, 'clip should contain the row-2 .day-cols-track');
+    assert.ok(innerTrack, 'clip should contain the all-day .day-cols-track');
 
-    // Rows 1 and 3: track is a direct grid child of .grid-wrapper.
-    const directTracks = shadowQueryAll(grid, '.grid-wrapper > .day-cols-track') as HTMLElement[];
-    assert.equal(directTracks.length, 2, 'rows 1 and 3 keep direct tracks');
-    const rows = directTracks
-      .map((el) => (el.getAttribute('style') ?? '').match(/grid-row:\s*(\d+)/)?.[1])
-      .sort();
-    assert.deepEqual(rows, ['1', '3']);
+    // Day names live in the sticky head, the time band in the scrolling body;
+    // both keep their track as a direct, unclipped grid child.
+    const headTrack = shadowQueryAll(grid, '.grid-head > .day-cols-track');
+    assert.equal(headTrack.length, 1, 'day-name track is a direct child of .grid-head');
+    const bodyTrack = shadowQueryAll(grid, '.grid-body > .day-cols-track');
+    assert.equal(bodyTrack.length, 1, 'time-band track is a direct child of .grid-body');
   });
 
   it('.day-cols-clip rule declares overflow:hidden and grid-column:2', async () => {
@@ -193,5 +193,129 @@ describe('LucarneCalendarGrid — single-row day header (issue #5)', () => {
       }
     }
     assert.ok(found, 'a @container rule should hide .day-weekday in narrow columns');
+  });
+});
+
+describe('LucarneCalendarGrid — sticky head (issue #82)', () => {
+  // The day-name row and the all-day row must stay pinned to the top of the
+  // card's scrollport while the time band scrolls under them. `.day-header`
+  // used to carry its own `position: sticky`, which did nothing:
+  // <lucarne-calendar-day-pan> set `overflow: hidden`, so the scrollport it
+  // pinned against was a content-sized box that never scrolls. Both rows now
+  // live in one `.grid-head` block: sticky siblings all resolve `top` against
+  // the same scrollport, so keeping them separate would need a hard-coded
+  // `top` equal to the header row's height.
+  let grid: LucarneCalendarGrid;
+  afterEach(() => grid?.remove());
+
+  /** Every rule whose selector list contains `selector` (a class may be styled by several). */
+  function rulesFor(g: LucarneCalendarGrid, selector: string): CSSStyleRule[] {
+    const out: CSSStyleRule[] = [];
+    for (const sheet of g.shadowRoot?.adoptedStyleSheets ?? []) {
+      for (const rule of Array.from(sheet.cssRules) as CSSStyleRule[]) {
+        if (!rule.selectorText) continue;
+        if (rule.selectorText.split(',').map((x) => x.trim()).includes(selector)) out.push(rule);
+      }
+    }
+    return out;
+  }
+
+  /** Last declared value of `prop` across all rules matching `selector` (cascade order). */
+  function declFor(g: LucarneCalendarGrid, selector: string, prop: string): string {
+    let value = '';
+    for (const rule of rulesFor(g, selector)) {
+      const v = rule.style.getPropertyValue(prop);
+      if (v) value = v;
+    }
+    return value;
+  }
+
+  it('puts the day-name and all-day rows in .grid-head, the time band in .grid-body', async () => {
+    grid = makeGrid();
+    await grid.updateComplete;
+
+    const head = grid.shadowRoot?.querySelector('.grid-head') as HTMLElement | null;
+    assert.ok(head, '.grid-head must exist');
+    assert.ok(head.querySelector('.header-spacer'), 'gutter spacer for the day-name row');
+    assert.ok(head.querySelector('.day-header'), 'day names belong to the head');
+    assert.ok(head.querySelector('.allday-spacer'), 'the "all-day" gutter label belongs to the head');
+    assert.ok(head.querySelector('.allday-cell'), 'all-day cells belong to the head');
+    assert.equal(head.querySelector('.time-col'), null, 'the hour gutter must NOT be in the head');
+
+    const body = grid.shadowRoot?.querySelector('.grid-body') as HTMLElement | null;
+    assert.ok(body, '.grid-body must exist');
+    assert.ok(body.querySelector('.time-col'), 'hour gutter scrolls with the body');
+    assert.equal(body.querySelector('.day-header'), null, 'day names must not be duplicated in the body');
+    assert.equal(body.querySelector('.allday-cell'), null, 'all-day cells must not be duplicated in the body');
+  });
+
+  it('.grid-head is position:sticky at top:0 with an opaque background', async () => {
+    grid = makeGrid();
+    await grid.updateComplete;
+
+    assert.ok(rulesFor(grid, '.grid-head').length > 0, '.grid-head must be styled');
+    assert.equal(
+      declFor(grid, '.grid-head', 'position'),
+      'sticky',
+      'without sticky the head scrolls away again',
+    );
+    assert.equal(declFor(grid, '.grid-head', 'top'), '0px');
+    // The time band scrolls underneath; a transparent head would show it through.
+    assert.ok(declFor(grid, '.grid-head', 'background'), '.grid-head must paint a background');
+  });
+
+  it('head and body declare the same column template so the gutter stays aligned', async () => {
+    grid = makeGrid();
+    await grid.updateComplete;
+
+    for (const block of ['.grid-head', '.grid-body']) {
+      assert.equal(declFor(grid, block, 'display'), 'grid', `${block} must be a grid`);
+      assert.ok(
+        declFor(grid, block, 'grid-template-columns').includes('40px'),
+        `${block} needs the 40px gutter column or the head drifts out of alignment`,
+      );
+    }
+    // Shared, not merely equal: one declaration for both keeps them in step.
+    const combined = rulesFor(grid, '.grid-head').filter((r) =>
+      (r.selectorText ?? '').split(',').map((x) => x.trim()).includes('.grid-body'),
+    );
+    assert.equal(combined.length, 1, 'expected one rule covering both .grid-head and .grid-body');
+  });
+
+  it('keeps all three gutter cells stuck to column 1 together', async () => {
+    grid = makeGrid();
+    await grid.updateComplete;
+
+    // `.grid-area` uses overflow-x: hidden, which still scrolls
+    // *programmatically* — e.g. when focus moves to an off-screen buffer day.
+    // Measured at scrollLeft 120 with these dropped: .time-col held at left 0
+    // while both spacers sat at -120, tearing the gutter apart. Identical
+    // construction is the durable property: whatever an engine does with a
+    // sticky grid item, it then does to all three together.
+    for (const cell of ['.header-spacer', '.allday-spacer', '.time-col']) {
+      assert.equal(declFor(grid, cell, 'position'), 'sticky', `${cell} must be sticky`);
+      assert.equal(declFor(grid, cell, 'left'), '0px', `${cell} must pin to left: 0`);
+    }
+    // The vertical pin belongs to .grid-head alone; a `top` here would fight it.
+    for (const cell of ['.header-spacer', '.allday-spacer']) {
+      assert.equal(declFor(grid, cell, 'top'), '', `${cell} must not set top`);
+    }
+  });
+
+  it('.grid-wrapper stays a plain, unclipped block (it is the sticky containing block)', async () => {
+    grid = makeGrid();
+    await grid.updateComplete;
+
+    assert.ok(rulesFor(grid, '.grid-wrapper').length > 0, '.grid-wrapper must be styled');
+    assert.equal(declFor(grid, '.grid-wrapper', 'display'), 'block');
+    // overflow-x counts too: `overflow-x: hidden` with a visible overflow-y
+    // computes overflow-y to `auto`, making the wrapper a scroll container.
+    for (const prop of ['overflow', 'overflow-x', 'overflow-y']) {
+      assert.equal(
+        declFor(grid, '.grid-wrapper', prop),
+        '',
+        `${prop} on the wrapper would become the head's scrollport and kill the sticky`,
+      );
+    }
   });
 });

@@ -16,13 +16,21 @@ export interface NowScrollInput {
   timeGridHeightPx: number;
   /** Space to leave above "now" so it isn't flush against the viewport top (px). */
   paddingPx: number;
+  /**
+   * Height of the sticky head (day names + all-day row) that overlays the top of
+   * the scrollport (px). "now" is placed `paddingPx` below the head's bottom
+   * edge rather than below the scrollport top, so a tall all-day row can't hide
+   * it. Defaults to 0 for callers with no sticky head.
+   */
+  stickyHeadPx?: number;
   /** Maximum scrollable offset: scrollHeight - clientHeight (px). */
   maxScrollTop: number;
 }
 
 /**
  * Returns the `scrollTop` that places the current time near the top of the
- * viewport with `paddingPx` of breathing room above it.
+ * viewport with `paddingPx` of breathing room between it and the bottom edge of
+ * the sticky head.
  *
  * Handles the two edge cases from the issue explicitly, because outside the
  * visible band there is no now-line to centre on (and the centred formula can
@@ -43,6 +51,7 @@ export function computeNowScrollTop(input: NowScrollInput): number {
     timeGridTopPx,
     timeGridHeightPx,
     paddingPx,
+    stickyHeadPx = 0,
     maxScrollTop,
   } = input;
 
@@ -55,7 +64,7 @@ export function computeNowScrollTop(input: NowScrollInput): number {
   if (nowHours >= bandEndH) return Math.max(0, maxScrollTop);
 
   const ratio = (nowHours - bandStartH) / bandHours;
-  const target = timeGridTopPx + ratio * timeGridHeightPx - paddingPx;
+  const target = timeGridTopPx + ratio * timeGridHeightPx - paddingPx - stickyHeadPx;
 
   return Math.max(0, Math.min(maxScrollTop, target));
 }

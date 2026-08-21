@@ -22,8 +22,15 @@ export class LucarneCalendarDayPan extends LitElement {
   static styles = css`
     :host {
       display: block;
-      overflow: hidden;
       position: relative;
+      /*
+       * Deliberately NOT overflow: hidden. That makes the host a scroll
+       * container, which then becomes the scrollport for every sticky
+       * descendant — including the grid's sticky head, which would silently
+       * stop sticking (issue #82). The card's .grid-area owns the clipping
+       * instead (overflow-x: hidden), so the wider-than-viewport day track is
+       * still cut off at the card edge.
+       */
     }
     .pan-wrapper {
       touch-action: pan-y;

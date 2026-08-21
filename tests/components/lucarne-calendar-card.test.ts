@@ -447,3 +447,37 @@ describe('lucarne-calendar-card — grid measurement re-arms', () => {
     }
   });
 });
+
+describe('LucarneCalendarCard — .grid-area is the sticky scrollport (issue #82)', () => {
+  // The grid's sticky head pins against the nearest scroll container. That has
+  // to be `.grid-area`: it is the only ancestor that actually scrolls
+  // vertically. It also has to clip horizontally, because the day track is
+  // rendered wider than the card (buffer days) and days move by pan gesture —
+  // never by a horizontal scrollbar.
+  let card: LucarneCalendarCard;
+  afterEach(() => card?.remove());
+
+  it('declares overflow-x: hidden and overflow-y: auto (not a bare overflow: auto)', () => {
+    card = makeCard();
+
+    const styles = (card.constructor as unknown as { styles: { styleSheet?: CSSStyleSheet }[] }).styles;
+    let rule: CSSStyleRule | null = null;
+    for (const sheet of styles) {
+      for (const r of Array.from(sheet.styleSheet?.cssRules ?? []) as CSSStyleRule[]) {
+        if (r.selectorText?.trim() === '.grid-area') rule = r;
+      }
+    }
+    assert.ok(rule, '.grid-area rule must exist');
+    assert.equal(rule.style.getPropertyValue('overflow-y'), 'auto', 'the grid scrolls vertically here');
+    assert.equal(
+      rule.style.getPropertyValue('overflow-x'),
+      'hidden',
+      'auto would expose a horizontal scrollbar for the off-screen buffer days',
+    );
+    assert.equal(
+      rule.style.getPropertyValue('overflow'),
+      '',
+      'a shorthand would re-introduce horizontal scrolling',
+    );
+  });
+});

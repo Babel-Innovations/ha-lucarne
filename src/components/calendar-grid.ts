@@ -23,31 +23,61 @@ export class LucarneCalendarGrid extends LitElement {
         display: block;
         position: relative;
       }
+      /*
+       * Two stacked blocks, not one 3-row grid: .grid-head (day names +
+       * all-day) is position:sticky so both rows stay pinned while the time
+       * band scrolls under it (issue #82). Both blocks declare the same
+       * grid-template-columns, which is what keeps the gutter and the day
+       * columns aligned across the split.
+       *
+       * Why one block rather than two sticky rows: sticky siblings all resolve
+       * top against the same scrollport, so a sticky all-day row would need
+       * top = height-of-the-day-name-row to sit below the headers instead of
+       * under them — a hard-coded offset that breaks as soon as the header's
+       * font, padding, or the narrow-column layout changes its height. One
+       * sticky block pins both rows at top: 0 with no measurement.
+       *
+       * The wrapper must stay overflow-visible and span the full content
+       * height: it is the sticky element's containing block, so it defines how
+       * far the head may travel.
+       */
       .grid-wrapper {
+        display: block;
+      }
+      /* minmax(0, 1fr) prevents the .day-cols-track (which is wider than 1fr
+         when render buffer columns are present) from expanding the column. */
+      .grid-head,
+      .grid-body {
         display: grid;
-        /* minmax(0, 1fr) prevents the .day-cols-track (which is wider than 1fr
-           when render buffer columns are present) from expanding the column. */
         grid-template-columns: 40px minmax(0, 1fr);
-        grid-template-rows: auto auto 1fr;
+      }
+      .grid-head {
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        grid-template-rows: auto auto;
+        /* Opaque: the time band scrolls underneath it. .day-header and the two
+           gutter spacers paint their own surface, but .allday-cell does not. */
+        background: var(--lucarne-surface);
       }
       /*
-       * Wraps ONLY the row-2 all-day .day-cols-track in a column-2-scoped
-       * overflow:hidden box (issue #3). On iPad Safari the sticky gutter
-       * spacer wasn't reliably stacking above the all-day track's
-       * transform-induced stacking context, so all-day events bled across the
-       * hour column during pan. Clipping at the column boundary fixes it
-       * unconditionally and browser-agnostic.
+       * Wraps ONLY the all-day .day-cols-track in a column-2-scoped
+       * overflow:hidden box (issue #3). On iPad Safari the gutter spacer
+       * wasn't reliably stacking above the all-day track's transform-induced
+       * stacking context, so all-day events bled across the hour column during
+       * pan. Clipping at the column boundary fixes it unconditionally and
+       * browser-agnostic.
        *
-       * Why row 2 only:
-       *  - Row 1 (.day-header) uses position: sticky; top: 0 — an
-       *    overflow:hidden ancestor becomes its scrollport and breaks sticky.
-       *  - Row 3 contains <lucarne-out-of-band-stub> whose backdrop/popover are
-       *    position: fixed. Because .day-cols-track has a transform, it is the
-       *    containing block for those fixed children; clipping it would also
-       *    clip the stub's full-viewport overlay.
-       *  - Row 3's regular events already don't bleed past the gutter (the
-       *    .time-col sticky spacer plus the .day-col isolation: isolate keep
-       *    them stacked correctly).
+       * Why the all-day row only:
+       *  - The day-name row's events are the headers themselves, which never
+       *    overflow their column.
+       *  - The time-band row contains <lucarne-out-of-band-stub> whose
+       *    backdrop/popover are position: fixed. Because .day-cols-track has a
+       *    transform, it is the containing block for those fixed children;
+       *    clipping it would also clip the stub's full-viewport overlay.
+       *  - The time band's regular events already don't bleed past the gutter
+       *    (the .time-col sticky spacer plus the .day-col isolation: isolate
+       *    keep them stacked correctly).
        */
       .day-cols-clip {
         grid-column: 2;
@@ -55,12 +85,12 @@ export class LucarneCalendarGrid extends LitElement {
         min-width: 0;
       }
       /*
-       * Three .day-cols-track elements — one per outer grid row — so that each
-       * outer auto-row is sized by its day-column content (headers, allday cells,
-       * time-band cols). All three receive the same translateX during pan.
-       * Using a single spanning element would decouple the inner sub-grid row
-       * sizing from the outer grid rows and cause the time-column gutter labels
-       * to misalign with the day content (no CSS subgrid on Safari < 16).
+       * Three .day-cols-track elements — day names, all-day, time band — so that
+       * each row is sized by its own day-column content. All three receive the
+       * same translateX during pan. Using a single spanning element would
+       * decouple the inner sub-grid row sizing from the outer rows and cause the
+       * time-column gutter labels to misalign with the day content (no CSS
+       * subgrid on Safari < 16).
        *
        * Track is rendered at fixed px widths (--lucarne-day-render-count columns
        * × --lucarne-day-width-px each) so visible columns keep their target width
@@ -71,9 +101,9 @@ export class LucarneCalendarGrid extends LitElement {
        * this CSS baseline reapplies (the new days then occupy the same screen
        * position as the OLD days at the snap target — visually invisible swap).
        *
-       * Rows 1 and 3 place the track directly into grid-column 2; row 2 wraps
-       * the track in a .day-cols-clip first (see the .day-cols-clip rule above
-       * for why row 2 needs the wrapper and rows 1 and 3 don't).
+       * The day-name and time-band tracks sit directly in grid-column 2; the
+       * all-day track is wrapped in a .day-cols-clip first (see the
+       * .day-cols-clip rule above for why only that one needs the wrapper).
        */
       .day-cols-track {
         grid-column: 2;
@@ -95,8 +125,12 @@ export class LucarneCalendarGrid extends LitElement {
       .header-spacer {
         grid-column: 1;
         grid-row: 1;
+        /* sticky (not relative) so the gutter cells hold column 1 alongside
+           .time-col if scrollLeft ever leaves 0 — overflow-x: hidden still
+           scrolls programmatically, e.g. when focus moves to an off-screen
+           buffer day. z-index keeps this painted over the day-name track, which
+           is wider than its column while buffer days are rendered. */
         position: sticky;
-        top: 0;
         left: 0;
         z-index: 4;
         background: var(--lucarne-surface);
@@ -111,9 +145,6 @@ export class LucarneCalendarGrid extends LitElement {
         color: var(--lucarne-on-surface-muted);
         border-bottom: 1px solid rgba(0, 0, 0, 0.07);
         user-select: none;
-        position: sticky;
-        top: 0;
-        z-index: 3;
         background: var(--lucarne-surface);
         /* Container query target: lets the @container rule below hide the
            weekday when the column itself becomes too narrow. inline-size
@@ -163,6 +194,7 @@ export class LucarneCalendarGrid extends LitElement {
         justify-content: center;
         padding: 2px;
         min-height: 24px;
+        /* Sticky for the same reason as .header-spacer above. */
         position: sticky;
         left: 0;
         z-index: 2;
@@ -224,7 +256,6 @@ export class LucarneCalendarGrid extends LitElement {
       /* Time grid */
       .time-col {
         grid-column: 1;
-        grid-row: 3;
         border-right: 1px solid rgba(0, 0, 0, 0.07);
         position: sticky;
         left: 0;
@@ -239,6 +270,12 @@ export class LucarneCalendarGrid extends LitElement {
         transform: translateY(-50%);
         white-space: nowrap;
         user-select: none;
+      }
+      /* The band's first label sits at top:0, so centring it on the line pushes
+         half of it above the time column — where the sticky head now paints over
+         it. Hang it below the line instead so it stays fully readable. */
+      .hour-label.first {
+        transform: none;
       }
       .day-col {
         position: relative;
@@ -473,96 +510,103 @@ export class LucarneCalendarGrid extends LitElement {
 
     return html`
       <div class="grid-wrapper" style=${styleMap(gridVars)}>
-        <!-- Time-column gutter cells (col 1): stay fixed during pan -->
-        <div class="header-spacer" style="grid-row:1; grid-column:1"></div>
-        <div class="allday-spacer" style="grid-row:2; grid-column:1">all-day</div>
-        <div class="time-col" style="height:${totalHeight}px; grid-row:3; grid-column:1">
-          ${hours.map(
-            (h, i) => html`
-              <div
-                class="hour-label"
-                style="top: ${(i / (hours.length - 1)) * 100}%"
-              >
-                ${h === 0 || h === 24 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`}
-              </div>
-            `,
-          )}
-        </div>
+        <!-- Sticky head: day names + all-day rows stay pinned while the time band scrolls -->
+        <div class="grid-head">
+          <!-- Time-column gutter cells (col 1): stay fixed during pan -->
+          <div class="header-spacer"></div>
 
-        <!-- Row 1: day header track -->
-        <div class="day-cols-track" style="grid-row:1">
-          ${this.layout.days.map(
-            (day, idx) => html`
-              <div
-                class="day-header ${isSameDay(day, now) ? 'today' : ''}"
-                style="grid-column: ${idx + 1}"
-              >
-                <div class="day-pill">
-                  <span class="day-weekday">${weekdayFmt.format(day)}</span>
-                  <span class="day-num">${day.getDate()}</span>
+          <!-- Day header track -->
+          <div class="day-cols-track" style="grid-row:1">
+            ${this.layout.days.map(
+              (day, idx) => html`
+                <div
+                  class="day-header ${isSameDay(day, now) ? 'today' : ''}"
+                  style="grid-column: ${idx + 1}"
+                >
+                  <div class="day-pill">
+                    <span class="day-weekday">${weekdayFmt.format(day)}</span>
+                    <span class="day-num">${day.getDate()}</span>
+                  </div>
                 </div>
-              </div>
-            `,
-          )}
+              `,
+            )}
+          </div>
+
+          <div class="allday-spacer">all-day</div>
+
+          <!-- All-day event track (wrapped in .day-cols-clip — see CSS) -->
+          <div class="day-cols-clip" style="grid-row:2">
+            <div class="day-cols-track">
+              ${this.layout.days.map((day, idx) => {
+                const dayKey = isoDateKey(day);
+                const isCached = this.cachedDayKeys.has(dayKey);
+                const dayLayout = this.layout!.perDay.get(dayKey);
+                return html`
+                  <div class="allday-cell" style="grid-column: ${idx + 1}">
+                    ${!isCached
+                      ? html`<div class="allday-skeleton"><div class="shimmer-sweep"></div></div>`
+                      : (dayLayout?.allDay ?? []).map(
+                        (event) => {
+                          const clip = dayLayout?.allDayClipped?.get(eventKey(event));
+                          return html`
+                            <div
+                              class="allday-event"
+                              style="background: ${this._eventColor(event)}cc"
+                              @click=${(e: MouseEvent) => {
+                                e.stopPropagation();
+                                this.dispatchEvent(
+                                  new CustomEvent('lucarne-event-tap', {
+                                    detail: { event, color: this._eventColor(event) },
+                                    bubbles: true,
+                                    composed: true,
+                                  }),
+                                );
+                              }}
+                            >
+                              ${clip?.left ? html`<span class="clip-chevron">‹</span>` : ''}${event.summary}${clip?.right ? html`<span class="clip-chevron">›</span>` : ''}
+                            </div>
+                          `;
+                        },
+                      )}
+                  </div>
+                `;
+              })}
+            </div>
+          </div>
         </div>
 
-        <!-- Row 2: all-day event track (wrapped in .day-cols-clip — see CSS) -->
-        <div class="day-cols-clip" style="grid-row:2">
+        <div class="grid-body">
+          <div class="time-col" style="height:${totalHeight}px">
+            ${hours.map(
+              (h, i) => html`
+                <div
+                  class="hour-label ${i === 0 ? 'first' : ''}"
+                  style="top: ${(i / (hours.length - 1)) * 100}%"
+                >
+                  ${h === 0 || h === 24 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`}
+                </div>
+              `,
+            )}
+          </div>
+
+          <!-- Time-band columns track -->
           <div class="day-cols-track">
             ${this.layout.days.map((day, idx) => {
               const dayKey = isoDateKey(day);
               const isCached = this.cachedDayKeys.has(dayKey);
-              const dayLayout = this.layout!.perDay.get(dayKey);
               return html`
-                <div class="allday-cell" style="grid-column: ${idx + 1}">
-                  ${!isCached
-                    ? html`<div class="allday-skeleton"><div class="shimmer-sweep"></div></div>`
-                    : (dayLayout?.allDay ?? []).map(
-                      (event) => {
-                        const clip = dayLayout?.allDayClipped?.get(eventKey(event));
-                        return html`
-                          <div
-                            class="allday-event"
-                            style="background: ${this._eventColor(event)}cc"
-                            @click=${(e: MouseEvent) => {
-                              e.stopPropagation();
-                              this.dispatchEvent(
-                                new CustomEvent('lucarne-event-tap', {
-                                  detail: { event, color: this._eventColor(event) },
-                                  bubbles: true,
-                                  composed: true,
-                                }),
-                              );
-                            }}
-                          >
-                            ${clip?.left ? html`<span class="clip-chevron">‹</span>` : ''}${event.summary}${clip?.right ? html`<span class="clip-chevron">›</span>` : ''}
-                          </div>
-                        `;
-                      },
-                    )}
+                <div style="grid-column:${idx + 1}; position:relative; overflow:visible; display:flex; flex-direction:column;">
+                  ${isCached
+                    ? this._renderDayColumn(day, now)
+                    : html`<lucarne-skeleton-day-column
+                        .bandStart=${this.bandStart}
+                        .bandEnd=${this.bandEnd}
+                        .hourHeightPx=${this.hourHeightPx}
+                      ></lucarne-skeleton-day-column>`}
                 </div>
               `;
             })}
           </div>
-        </div>
-
-        <!-- Row 3: time-band columns track -->
-        <div class="day-cols-track" style="grid-row:3">
-          ${this.layout.days.map((day, idx) => {
-            const dayKey = isoDateKey(day);
-            const isCached = this.cachedDayKeys.has(dayKey);
-            return html`
-              <div style="grid-column:${idx + 1}; position:relative; overflow:visible; display:flex; flex-direction:column;">
-                ${isCached
-                  ? this._renderDayColumn(day, now)
-                  : html`<lucarne-skeleton-day-column
-                      .bandStart=${this.bandStart}
-                      .bandEnd=${this.bandEnd}
-                      .hourHeightPx=${this.hourHeightPx}
-                    ></lucarne-skeleton-day-column>`}
-              </div>
-            `;
-          })}
         </div>
       </div>
     `;
