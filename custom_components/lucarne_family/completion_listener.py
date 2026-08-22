@@ -24,6 +24,7 @@ from homeassistant.helpers.event import EventStateChangedData, async_track_state
 from .apple_sentinel_backfill import async_backfill_apple_sentinel
 from .const import EVENT_APPLE_WRITEBACK_REQUESTED
 from .store import LucarneFamilyStore
+from .task_adoption import resolve_member_slug
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -139,6 +140,17 @@ def async_start_completion_listener(
 
             if old_entry is None or new_entry is None:
                 # Item appeared: check for Apple-sentinel in description and backfill metadata.
+                #
+                # Deliberately narrow — only bridge-synced items are enrolled here.
+                # Adopting *every* appeared uid would hand a `type="chore"` row to
+                # items Lucarne did not create (HA's to-do panel, voice, the
+                # Companion app), and reset_logic deletes completed chores at the
+                # daily reset window: ticking one off in HA's own to-do panel would
+                # silently destroy it at 04:00. `metadata is None` is what keeps
+                # those items out of the sweep. Un-adopted items are still fully
+                # deletable and toggleable — task_service resolves them against the
+                # todo entity (issue #111) — and update_task_metadata adopts one on
+                # demand when the user actually edits it in Lucarne.
                 if old_entry is None and new_entry is not None:
                     metadata = await store.async_get_task_metadata(uid)
                     member_slug_for_backfill = (
@@ -286,8 +298,11 @@ def async_start_completion_listener(
 
 
 def _resolve_member(entity_id: str, store: LucarneFamilyStore) -> str:
-    """Return the member slug for a todo entity_id, or empty string if not found."""
-    for member in store.get_members():
-        if member.todo_entity_id == entity_id:
-            return member.slug
-    return ""
+    """Return the member slug for a todo entity_id, or empty string if not found.
+
+    Delegates to the household-aware resolver: the shared list has no ``Member``
+    row, so a plain scan over ``get_members()`` returned "" for it and both
+    callers here gate on a truthy slug — which silently dropped every completion
+    logged against an un-adopted household item (issue #111).
+    """
+    return resolve_member_slug(entity_id, store)

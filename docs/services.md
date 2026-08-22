@@ -62,6 +62,30 @@ data:
 
 Update metadata fields on an existing task. Only the fields provided are changed.
 
+Unlike `delete_task` / `toggle_task`, this service needs a row to write to, so a uid
+with no `task_metadata` row is **adopted** first — a default `chore` row is inserted
+for it (`source: apple` plus the extracted `apple_uid` when the description carries
+an `[apple:UUID]` sentinel, `manual` otherwise) — and then the requested update is
+applied on top.
+
+`uid` is the only required field, so a call may legitimately carry no updatable
+field at all. Such a call, on a uid that exists in a managed list, adopts
+**nothing** and succeeds without error — there is
+no update to apply, so there is no row to need — though the
+`lucarne_family_task_metadata_updated` event still fires. Don't treat a successful
+call as proof the uid was adopted: pass at least one field if adoption is what
+you're after.
+
+> **Adoption enrolls the item into the daily reset.** `reset_logic` deletes completed
+> `chore` items at the reset window, and an un-adopted item is exempt from that sweep.
+> Editing an item that was added outside Lucarne therefore makes it behave like any
+> other Lucarne chore: once completed, it is removed at the next reset. This is the
+> only path that adopts — deleting or toggling such an item leaves it un-adopted.
+>
+> Adoption is committed only after every validation above has passed. A call that
+> returns a `ServiceValidationError` writes nothing, so a rejected request never
+> arms that deletion.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `uid` | string | yes | The task's unique identifier (UUID) |
@@ -76,7 +100,7 @@ Update metadata fields on an existing task. Only the fields provided are changed
 **Fires event**: `lucarne_family_task_metadata_updated`
 
 **Validation errors**:
-- `uid` not found in task_metadata → `ServiceValidationError`
+- `uid` held by no managed todo list → `ServiceValidationError`
 - `recurrence` non-empty and not a valid RRULE → schema error
 - `type` not in `{"routine", "chore", "rotating"}` → schema error
 - `assignee` on a non-household task → `ServiceValidationError`
@@ -107,7 +131,12 @@ Delete a task and its metadata row. Completion log rows are preserved for audit 
 **Fires event**: `lucarne_family_task_deleted`
 
 **Validation errors**:
-- `uid` not found in task_metadata → `ServiceValidationError`
+- `uid` held by no managed todo list → `ServiceValidationError`
+
+A uid with no `task_metadata` row is **not** an error: an item added outside
+`add_task` (HA's to-do panel, voice, the Companion app, the Reminders bridge) has
+none, and the todo entity — not `task_metadata` — is the source of truth for whether
+a task exists. The item is removed from its list and there is simply no row to drop.
 
 **Example call**:
 ```yaml
@@ -129,7 +158,10 @@ Toggle a task's completion status (needs_action ↔ completed) and append a comp
 **Fires event**: `lucarne_family_task_toggled`
 
 **Validation errors**:
-- `uid` not found in task_metadata → `ServiceValidationError`
+- `uid` held by no managed todo list → `ServiceValidationError`
+
+As with `delete_task`, a uid with no `task_metadata` row is resolved by scanning the
+managed lists rather than rejected.
 
 **Example call**:
 ```yaml

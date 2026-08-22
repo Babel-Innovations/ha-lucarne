@@ -144,7 +144,9 @@ event_data:
 
 ### lucarne_family_task_metadata_updated
 
-Fired when `lucarne_family.update_task_metadata` modifies a task's metadata row.
+Fired when `lucarne_family.update_task_metadata` completes for a uid — including
+when the call carried no updatable field and so modified nothing. Treat it as a
+refresh cue, not proof a row changed.
 
 **Payload:**
 
