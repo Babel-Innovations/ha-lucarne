@@ -21,6 +21,12 @@ from .const import DOMAIN, HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
 from .recurrence import is_valid_rrule
 from .rotation import parse_owners, serialize_owners
 from .store import LucarneFamilyStore
+from .task_adoption import (
+    async_adopt_item,
+    default_task_metadata,
+    find_managed_item,
+    resolve_member_slug,
+)
 
 _LOGGER = logging.getLogger(__name__)
 # Aliases to the shared constants in const.py (single source of truth).
@@ -55,6 +61,27 @@ def _resolve_todo_entity_id(store: LucarneFamilyStore, member_slug: str) -> str:
     if not member.todo_entity_id:
         raise HomeAssistantError(f"Member {member_slug!r} has no todo entity configured")
     return member.todo_entity_id
+
+
+async def _resolve_task_target(
+    hass: HomeAssistant, store: LucarneFamilyStore, uid: str
+) -> tuple[str, dict[str, Any] | None]:
+    """Return ``(todo_entity_id, metadata_or_None)`` for a uid.
+
+    A metadata row names the owning list directly. When there is none — the item
+    was created outside ``add_task``, e.g. through HA's to-do panel (issue #111) —
+    fall back to scanning the managed lists: the todo entity, not
+    ``task_metadata``, is the source of truth for whether a task exists.
+
+    Raises ServiceValidationError only when no managed list holds the uid either.
+    """
+    metadata = await store.async_get_task_metadata(uid)
+    if metadata is not None:
+        return _resolve_todo_entity_id(store, metadata["member_slug"]), metadata
+    located = find_managed_item(hass, store, uid)
+    if located is None:
+        raise ServiceValidationError(f"No task found with uid {uid!r}")
+    return located[0], None
 
 
 def _rrule_validator(value: str) -> str:
@@ -202,8 +229,28 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         uid: str = call.data["uid"]
 
         metadata = await store.async_get_task_metadata(uid)
+        # Unlike delete/toggle, this handler needs a row to write to, so an item
+        # created outside add_task (issue #111) has to be adopted. The adoption is
+        # *deferred* until every validation below has passed: adopting enrolls the
+        # item into reset_logic's completed-chore sweep, and a call the user got an
+        # error back from must not leave that behind. Until then we validate
+        # against the row adoption would write.
+        pending_adoption: tuple[str, str] | None = None
         if metadata is None:
-            raise ServiceValidationError(f"No task found with uid {uid!r}")
+            located = find_managed_item(hass, store, uid)
+            if located is None:
+                raise ServiceValidationError(f"No task found with uid {uid!r}")
+            adopt_entity_id, adopt_item = located
+            adopt_slug = resolve_member_slug(adopt_entity_id, store)
+            if not adopt_slug:
+                raise HomeAssistantError(
+                    f"Todo entity {adopt_entity_id!r} maps to no known member"
+                )
+            metadata = default_task_metadata(uid, adopt_slug, adopt_item)
+            # Only the entity + slug are carried forward. async_adopt_item re-reads
+            # the item itself, so a concurrent delete during validation is caught
+            # there rather than adopting an item that no longer exists.
+            pending_adoption = (adopt_entity_id, adopt_slug)
 
         assignee = call.data.get("assignee")
         if assignee is not None and metadata.get("member_slug") != _HOUSEHOLD_SLUG:
@@ -304,6 +351,22 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
             if seeded_owners:
                 update_fields["current_owner"] = seeded_owners[0]
 
+        # Every validation passed, so the deferred adoption is now safe to commit.
+        # Skipped for a fields-less call: async_update_task_metadata early-returns
+        # on an empty update set, so adopting there would arm the daily-reset sweep
+        # while changing nothing — the same trade the deferral exists to avoid.
+        if pending_adoption is not None and update_fields:
+            adopt_entity_id, adopt_slug = pending_adoption
+            adopted = await async_adopt_item(
+                hass, store, adopt_entity_id, uid, adopt_slug
+            )
+            if not adopted and await store.async_get_task_metadata(uid) is None:
+                # Adoption declined and no row appeared, so the item went away
+                # while this call was validating. Without this the UPDATE below
+                # matches nothing and the event still tells the caller the edit
+                # landed.
+                raise ServiceValidationError(f"No task found with uid {uid!r}")
+
         await store.async_update_task_metadata(uid, **update_fields)
         hass.bus.async_fire("lucarne_family_task_metadata_updated", {"uid": uid})
 
@@ -311,14 +374,13 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         store = _get_store(hass, entry_id)
         uid: str = call.data["uid"]
 
-        metadata = await store.async_get_task_metadata(uid)
-        if metadata is None:
-            raise ServiceValidationError(f"No task found with uid {uid!r}")
-
-        todo_entity_id = _resolve_todo_entity_id(store, metadata["member_slug"])
+        todo_entity_id, _metadata = await _resolve_task_target(hass, store, uid)
         entity = _get_todo_entity(hass, todo_entity_id)
 
         await entity.async_delete_todo_items([uid])
+        # Unconditional: the DELETE is a no-op when the item was never adopted, and
+        # gating it on the earlier read would leak a row for an item that gets
+        # adopted between that read and this call.
         await store.async_delete_task_metadata(uid)
         hass.bus.async_fire("lucarne_family_task_deleted", {"uid": uid})
 
@@ -326,11 +388,7 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         store = _get_store(hass, entry_id)
         uid: str = call.data["uid"]
 
-        metadata = await store.async_get_task_metadata(uid)
-        if metadata is None:
-            raise ServiceValidationError(f"No task found with uid {uid!r}")
-
-        todo_entity_id = _resolve_todo_entity_id(store, metadata["member_slug"])
+        todo_entity_id, _metadata = await _resolve_task_target(hass, store, uid)
         entity = _get_todo_entity(hass, todo_entity_id)
 
         items = entity.todo_items or []

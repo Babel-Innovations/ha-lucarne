@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sqlite3
 
 from homeassistant.components.todo.const import DATA_COMPONENT
 from homeassistant.core import HomeAssistant
@@ -73,14 +74,22 @@ async def async_backfill_apple_sentinel(
         return False
 
     apple_uid = match.group(1)
-    await store.async_add_task_metadata(
-        member_slug=member_slug,
-        item_uid=uid,
-        type="chore",
-        recurrence="",
-        source="apple",
-        apple_uid=apple_uid,
-    )
+    try:
+        await store.async_add_task_metadata(
+            member_slug=member_slug,
+            item_uid=uid,
+            type="chore",
+            recurrence="",
+            source="apple",
+            apple_uid=apple_uid,
+        )
+    except sqlite3.IntegrityError:
+        # Symmetric with task_adoption.async_adopt_item: the existence check above
+        # and this INSERT are several awaits apart, and adoption is a second
+        # inserter for the same item_uid PRIMARY KEY. Losing that race means the
+        # row is there either way — don't raise out of a background listener task.
+        _LOGGER.debug("Apple sentinel backfill of %s lost a race; row present", uid)
+        return False
     _LOGGER.debug(
         "Apple sentinel backfill: entity=%s uid=%s apple_uid=%s member=%s",
         entity_id,

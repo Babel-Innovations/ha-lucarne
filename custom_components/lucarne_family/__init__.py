@@ -23,6 +23,7 @@ from .const import DOMAIN, FRONTEND_URL, PRESET_ADULT_NONE, THEME_FILE, THEME_NA
 from .models import Member, RoutinePreset
 from .presets import BUILTIN_PRESETS
 from .store import LucarneFamilyStore
+from .task_adoption import managed_todo_entity_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -164,10 +165,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Step 5: Start completion listener (state-change listener for managed entities).
     from .completion_listener import async_start_completion_listener
 
-    members = store.get_members()
-    managed_entity_ids = {
-        m.todo_entity_id for m in members if m.todo_entity_id
-    } | {"todo.lucarne_household"}
+    managed_entity_ids = set(managed_todo_entity_ids(store))
     unsub_listener = async_start_completion_listener(
         hass, store, managed_entity_ids, entry_id=entry.entry_id
     )
@@ -239,10 +237,7 @@ async def async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None
     from .completion_listener import async_start_completion_listener
 
     store: LucarneFamilyStore = entry_data["store"]
-    members = store.get_members()
-    managed_entity_ids = {
-        m.todo_entity_id for m in members if m.todo_entity_id
-    } | {"todo.lucarne_household"}
+    managed_entity_ids = set(managed_todo_entity_ids(store))
     entry_data["unsub_listener"] = async_start_completion_listener(
         hass, store, managed_entity_ids, entry_id=entry.entry_id
     )

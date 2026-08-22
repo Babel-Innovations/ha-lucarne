@@ -27,6 +27,8 @@ Apple Reminders
                                           │  │   backfill           │   │
                                           │  │   ([apple:UUID] →    │   │
                                           │  │   source=apple meta) │   │
+                                          │  │   others stay        │   │
+                                          │  │   un-adopted         │   │
                                           │  └──────────────────────┘   │
                                           │  status transition →        │
                                           │    completion_log row       │
@@ -281,6 +283,61 @@ The config entry `data` dict has this shape (Phase 2):
 | Task metadata | SQLite (`lucarne_family_<entry_id>.db`, table `task_metadata`) | Unbounded — could be thousands; SQLite handles this cleanly |
 | Completion history | SQLite (`completion_log` table) | Append-only audit log; foundation for streak computation and future rewards |
 | Avatar files | `<config>/www/lucarne/avatars/` | Binary files stay off the database; path reference in member data |
+
+### The todo entity owns existence; `task_metadata` is enrichment
+
+A task exists because a `local_todo` item exists. Its `task_metadata` row carries the
+Lucarne-specific extras — type, icon, recurrence, assignee, time-of-day, rotation
+owners — and may legitimately be absent.
+
+Anything created outside `lucarne_family.add_task` arrives without one: HA's to-do
+panel, voice, the Companion app, an agent/MCP `todo.add_item` call, the Reminders
+bridge. Such an item still renders in the cards, because `buildRenderableTasks`
+(`src/shared/family-subscription.ts`) synthesizes fallback metadata for uids it
+doesn't recognize. Treating the table as the *existence* check therefore produced a
+row that looked normal but could not be deleted, toggled, or edited (issue #111).
+
+`task_adoption.py` owns the reconciliation:
+
+- **`find_managed_item`** — locate a uid across the managed lists (household list
+  included) when no metadata row names the owning list. `delete_task` and
+  `toggle_task` fall back to this and act on the todo entity directly. Neither
+  adopts: removing or ticking an item needs no metadata.
+- **`async_adopt_item`** — write the missing row so the item becomes first-class.
+  Idempotent: an existing row is never overwritten, since the user may have
+  deliberately changed its type, and losing the insert race to a concurrent adopter
+  returns `False` rather than raising `IntegrityError` out of a service call. A
+  description carrying the bridge's `[apple:UUID]` sentinel adopts as `source=apple`
+  with the extracted `apple_uid`; everything else as a manual chore.
+
+**Adoption is deliberately not automatic.** `update_task_metadata` is its only
+caller — it needs a row to write to, and reaching it means the user edited the task
+in Lucarne. The completion listener does *not* adopt every uid that appears; it
+still runs only `apple_sentinel_backfill`, enrolling bridge-synced items alone.
+
+The reason is `reset_logic`: it deletes completed `chore` items at the daily reset
+window, and `if metadata is None: continue` is the only thing keeping foreign items
+out of that sweep. Adopting on appearance would give a `chore` row to everything
+added through HA's to-do panel, voice, or the Companion app — so ticking one off
+there would silently destroy it at 04:00. Two tests pin both halves:
+`test_orphan_survives_daily_reset_after_completion` and
+`test_adopted_orphan_is_swept_by_daily_reset`.
+
+**Behaviour change to expect on upgrade.** `resolve_member_slug` special-cases the
+household list, which the previous `get_members()` scan resolved to `""`. Two
+consequences, both previously-broken paths now working: completions logged against
+an un-adopted household item are no longer dropped, and bridge-synced items in the
+household list are now apple-sentinel backfilled like they always were in member
+lists. The second one enrolls them in the daily-reset sweep once completed — and
+because a `local_todo` reload replays every item as an appearance (below), it
+reaches existing installs on the next reload, not just newly-synced items.
+
+Note the listener's appeared branch is not a reliable "seen for the first time"
+signal anyway: `_read_entity_snapshot` returns `{}` for an entity missing from
+`DATA_COMPONENT`, so reloading a `local_todo` config entry diffs `{}` → full list
+and re-surfaces every item as an appearance. (An HA restart is safe — `_on_ha_started`
+re-snapshots before arming the listener.) Anything keyed off that branch must be
+idempotent and cheap; enrolling items into a destructive sweep is neither.
 
 ### Members are first-class
 

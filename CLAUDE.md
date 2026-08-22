@@ -254,6 +254,36 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Avatar center-square crop is deferred**: The upload modal accepts any aspect ratio; `avatar_service.py` stores raw uploaded bytes. A future spec should add `PIL ImageOps.fit` centering in `_write_avatar`. Do not add it without a spec.
 - **Round-trip event vs POST**: `completion_listener.py` fires `lucarne_family_apple_writeback_requested` when `round_trip.enabled == true` but does **not** POST to the webhook. The POST is deferred to a future spec. Future subscribers **must** call `get_round_trip_config(hass)` from `__init__.py` — never read `entry.data["round_trip"]` directly, to survive storage layout changes.
 - **`set_member_avatar` emoji validation**: Uses explicit Unicode block ranges (U+1F000–U+1FAFF, U+2300–U+27FF, U+2B00–U+2BFF, U+1F1E0–U+1F1FF). Requires at least one base-emoji codepoint; allows ZWJ-joined compound emoji (e.g., family/profession glyphs); rejects ASCII text, invisible-only strings, and unjoined back-to-back emoji.
+- **A task exists because the todo item exists, not because `task_metadata` has a row**:
+  anything added outside `lucarne_family.add_task` — HA's to-do panel, voice, the Companion
+  app, an agent/MCP `todo.add_item` call, the Reminders bridge — lands in `local_todo` with no
+  metadata row, and the cards render it anyway because `buildRenderableTasks`
+  (`src/shared/family-subscription.ts`) synthesizes fallback metadata for unknown uids. Never
+  gate a write service on `async_get_task_metadata(uid) is not None` — that is what made
+  `delete_task` reject visible rows (#111). Use `find_managed_item` / `async_adopt_item` from
+  `task_adoption.py`: `delete_task` and `toggle_task` resolve the owning list by scanning,
+  `update_task_metadata` adopts first because it needs a row to write to. Tell-tale sign of an
+  un-adopted item: the uid is a **UUID1** (`…-9db6-11f1-…`, what `local_todo` mints);
+  `add_task` mints UUID4.
+- **Never adopt a todo item automatically**: `reset_logic` deletes completed `type="chore"`
+  items at the daily-reset window, and `if metadata is None: continue` is the *only* thing
+  keeping items Lucarne didn't create out of that sweep. Adopting on appearance would mean a
+  task ticked off in HA's own to-do panel silently vanishes at 04:00. `update_task_metadata` is
+  the sole adopter — reaching it means the user edited the task in Lucarne. The completion
+  listener's appeared branch still runs `apple_sentinel_backfill` only. Two tests pin this:
+  `test_orphan_survives_daily_reset_after_completion` and `test_adopted_orphan_is_swept_by_daily_reset`.
+  For the same reason `update_task_metadata` **defers** its adoption until every validation has
+  passed, validating against `default_task_metadata()` in the meantime: adopting up front meant a
+  call the user got a `ServiceValidationError` back from still armed the 04:00 deletion.
+- **The listener's "item appeared" branch is not a first-sight signal**: `_read_entity_snapshot`
+  returns `{}` for an entity missing from `DATA_COMPONENT`, so reloading a `local_todo` config
+  entry diffs `{}` → full list and replays every item as an appearance. (HA restart is safe —
+  `_on_ha_started` re-snapshots first.) Anything hooked there must be idempotent and must not
+  have destructive downstream consequences.
+- **`todo.lucarne_household` has no `Member` row**: resolving a todo entity_id → member slug by
+  scanning `store.get_members()` returns `""` for the household list, and callers that gate on a
+  truthy slug then silently skip every household item. Use `resolve_member_slug` from
+  `task_adoption.py`, which special-cases it to `"household"`.
 - **Rotating tasks** live in the household list (`member_slug = "household"`) with two extra metadata columns: `rotation_owners` (JSON array of slugs) and `current_owner` (whose turn it is). Ownership **advances at the daily-reset window**, not at the moment of completion — do not advance it manually. Rotating tasks are **excluded from streaks** (the recurrence evaluator filters by `type == "routine"`). Completions are **attributed to `current_owner`**, not `"household"`. All rotation math lives in `rotation.py`; never import or hand-roll it elsewhere.
 - **Today-card completed-row state is module-global on purpose**: `src/shared/completed-window.ts`
   keeps crossed-out completions keyed by entity + local day at *module* scope, not on
