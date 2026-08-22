@@ -15,9 +15,12 @@ cd "$REPO_DIR"
 # shellcheck source=scripts/lib/version.sh
 . "${REPO_DIR}/scripts/lib/version.sh"
 
-# The card bundle ships inside the integration (HACS pulls the repo at the tag),
-# so it is committed, not uploaded as a release asset.
-BUNDLE="custom_components/lucarne_family/frontend/ha-lucarne.js"
+# The card bundles ship inside the integration (HACS pulls the repo at the tag),
+# so they are committed, not uploaded as release assets. There are two of them;
+# scripts/lib/bundles.sh says which and why, and is shared with
+# create-prerelease.sh and deploy-integration.sh so the list cannot drift.
+# shellcheck source=scripts/lib/bundles.sh
+. "${REPO_DIR}/scripts/lib/bundles.sh"
 
 # HACS/HA report the integration version from manifest.json's "version" key, so it
 # must track package.json. npm version only bumps package.json; we sync this too.
@@ -137,10 +140,12 @@ fi
 # Used by the branch-protection helpers (and restore trap) below.
 REPO_SLUG=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 
-if [ ! -f "$BUNDLE" ]; then
-    log_error "$BUNDLE not found. Run 'npm run build' first."
-    exit 1
-fi
+for bundle in "${BUNDLES[@]}"; do
+    if [ ! -f "$bundle" ]; then
+        log_error "$bundle not found. Run 'npm run build' first."
+        exit 1
+    fi
+done
 
 log_success "All validation checks passed"
 
@@ -254,38 +259,46 @@ log_success "Files updated"
 # 5. BUILD
 # ============================================================================
 
-log_info "Building $BUNDLE..."
+log_info "Building ${BUNDLES[*]}..."
 npm run build
 
-if [ ! -f "$BUNDLE" ]; then
-    log_error "Build failed — $BUNDLE not created"
-    exit 1
-fi
+# Budget is per bundle, not summed: a browser downloads one of the two, never
+# both, so the ceiling that matters is the bigger single file. Currently ~380 KiB
+# raw / ~89 KiB gzipped for the ES module and ~331 KiB / ~82 KiB for the IIFE, so
+# the ES module has roughly 20 KiB of headroom against the 400 KiB limit.
+for bundle in "${BUNDLES[@]}"; do
+    if [ ! -f "$bundle" ]; then
+        log_error "Build failed — $bundle not created"
+        exit 1
+    fi
 
-BUNDLE_SIZE=$(wc -c < "$BUNDLE")
-BUNDLE_SIZE_KIB=$((BUNDLE_SIZE / 1024))
-# Budget is on the raw bundle, measured in KiB like BUNDLE_SIZE_KIB above:
-# ~367 KiB / ~83 KiB gzipped since build.target was pinned to the ES2020 browser
-# floor in #101 (the pin costs ~7 KiB). That leaves ~33 KiB against the 400 limit.
-if [ "$BUNDLE_SIZE_KIB" -gt 400 ]; then
-    log_error "Bundle size ${BUNDLE_SIZE_KIB} KiB exceeds 400 KiB limit"
-    exit 1
-fi
-log_success "Build complete (${BUNDLE_SIZE_KIB} KiB)"
+    BUNDLE_SIZE=$(wc -c < "$bundle")
+    BUNDLE_SIZE_KIB=$((BUNDLE_SIZE / 1024))
+    # Compared in bytes, not floored KiB — kept identical to create-prerelease.sh:
+    # `$((BUNDLE_SIZE / 1024)) -gt 400` would let anything up to 410,623 bytes
+    # through a nominal 400 KiB ceiling, and this is the path that publishes.
+    if [ "$BUNDLE_SIZE" -gt $((400 * 1024)) ]; then
+        log_error "$bundle is ${BUNDLE_SIZE} bytes (${BUNDLE_SIZE_KIB} KiB), over the 400 KiB limit"
+        exit 1
+    fi
+    log_success "Build complete: $bundle (${BUNDLE_SIZE_KIB} KiB)"
+done
 
 # The release path commits and pushes these exact bytes, so it needs the same
-# browser-floor gate CI applies — a bundle that parses only as ES2022 bricks every
-# card on iPadOS 15 / Tizen 6.5 with no recoverable error (issue #101).
-log_info "Verifying bundle parses at the supported browser floor..."
-if ! GUARD_OUTPUT=$(node --import tsx --test tests/build/bundle-syntax.test.ts 2>&1); then
-    log_error "Bundle syntax floor check failed:"
+# bundle gates CI applies. Both failure modes of issue #101 are unrecoverable on
+# the devices — a bundle that parses only as ES2022, and a bundle the legacy
+# frontend cannot load at all — and neither shows up on a developer browser.
+log_info "Verifying the shipped bundles parse and load..."
+if ! GUARD_OUTPUT=$(node --import tsx --test 'tests/build/*.test.ts' 2>&1); then
+    log_error "Bundle guards failed:"
     # Surface acorn's line/column and the offending construct — without this the
     # operator only sees a generic failure and has to re-run the test by hand.
     echo "$GUARD_OUTPUT" >&2
-    log_error "Check that build.target is still set in vite.config.ts, then rebuild."
+    log_error "A syntax failure means build.target in vite.config.ts; a registration"
+    log_error "failure means the iife format or the define guard. Fix, then rebuild."
     exit 1
 fi
-log_success "Bundle syntax floor verified"
+log_success "Bundle guards verified"
 
 # ============================================================================
 # 6. COMMIT AND PUSH
@@ -293,7 +306,7 @@ log_success "Bundle syntax floor verified"
 
 log_info "Committing changes..."
 
-git add package.json package-lock.json "$MANIFEST" CHANGELOG.md "$BUNDLE"
+git add package.json package-lock.json "$MANIFEST" CHANGELOG.md "${BUNDLES[@]}"
 git commit -m "bump: v${NEW_VERSION}"
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)

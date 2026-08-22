@@ -15,6 +15,7 @@ import {
 import '../components/member-column.js';
 import '../components/add-task-popover.js';
 import '../components/edit-task-popover.js';
+import { registerCustomCard } from '../shared/register-card.js';
 
 export interface LucarneChoresCardConfig {
   type: 'custom:lucarne-chores-card';
@@ -85,9 +86,7 @@ function editMatches(real: RenderableTask, opt: RenderableTask): boolean {
   );
 }
 
-(window as Window & typeof globalThis & { customCards?: object[] }).customCards =
-  (window as Window & typeof globalThis & { customCards?: object[] }).customCards || [];
-(window as Window & typeof globalThis & { customCards?: object[] }).customCards!.push({
+registerCustomCard({
   type: 'lucarne-chores-card',
   name: 'Lucarne Chores',
   description: 'Family chore grid with streaks and celebration',

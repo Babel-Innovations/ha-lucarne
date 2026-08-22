@@ -125,12 +125,15 @@ limitation. Avoid Personal Automations that require HA Companion interaction on 
 wrap entity tiles, so this is unlikely — but if you add standard entity cards alongside them on the
 same view, be aware of this behavior.
 
-**Card bundle cache**: The integration serves the bundle at a content-hashed
-`/lucarne_family_frontend/ha-lucarne.js?v=<version>.<digest>` URL (`_bundle_digest` in
+**Card bundle cache**: The integration serves each bundle at a content-hashed
+`?v=<version>.<digest>` URL (`_bundle_digest` in
 `custom_components/lucarne_family/__init__.py`), so changed bundle bytes produce a new URL and a
-normal reload picks them up — no hard refresh needed. That URL is registered in `async_setup`, so HA
-must be **restarted** for a new bundle to be served; reloading the config entry only runs
-`async_setup_entry` and will not recompute the digest. On iPad, force-quit the Companion app if the
+normal reload picks them up — no hard refresh needed. Each of `ha-lucarne.js` and
+`ha-lucarne-legacy.js` is hashed from its own file, so rebuilding either busts only its own cache.
+Those URLs are registered in `async_setup`, so HA must be **restarted** for a new bundle to be
+served; reloading the config entry only runs `async_setup_entry` and will not recompute the digests.
+An iPadOS 15 tablet is on HA's legacy frontend and loads the `-legacy` bundle — see
+`docs/ipad-debugging.md`. On iPad, force-quit the Companion app if the
 app shell itself looks stale — the shell is service-worker cached. Clearing Safari website data is a
 last resort, since it signs the device out of Home Assistant.
 

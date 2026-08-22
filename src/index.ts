@@ -1,3 +1,8 @@
+// MUST stay first: ES module evaluation follows import order, so this is the
+// only position from which the guard covers every element module below it.
+// See src/shared/define-guard.ts for why a duplicate define has to be survivable.
+import './shared/define-guard.js';
+
 import { installGlobalErrorReporter } from './shared/error-reporter.js';
 
 // Capture uncaught Lucarne errors (incl. throws inside child components) so they

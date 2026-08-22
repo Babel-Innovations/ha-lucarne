@@ -46,34 +46,81 @@ paths below can see, because none of our code ever runs.
   entirely different reason. If you tap the box and see a `lucarne-*:`-prefixed
   message, that is config validation working, not a load failure.
 
-That is the bundle failing to **load**, in one of two ways:
+That is the bundle failing to **load**, in one of three ways:
 
-- **Parse / link error.** Nothing runs at all, so no `customElements.define()`
-  executes and HA can't find any of the elements.
+- **Never requested.** The browser was never told to fetch it, so there is no
+  error anywhere — just an absence. See **Was the bundle even requested?** below.
+- **Parse / link error.** It was fetched, but nothing runs at all, so no
+  `customElements.define()` executes and HA can't find any of the elements.
 - **Throw during module evaluation.** Execution stops at the throwing statement,
   so cards registered *before* it survive and everything after it is missing —
-  which is why the "every card is red" symptom points at the parse case.
+  which is why the "every card is red" symptom points at the first two cases.
 
-Either way no in-bundle try/catch and no reporter can catch it: `src/index.ts`
-imports every card, and ESM hoists those imports above
-`installGlobalErrorReporter()`, so no handler is installed yet.
+None of the three can be caught from inside the bundle: `src/index.ts` imports
+every card, and ESM hoists those imports above `installGlobalErrorReporter()`, so
+no handler is installed yet — and in the first case our code never runs at all.
 
-Confirm which of the two it is before acting — a `SyntaxError` on `ha-lucarne.js`
-in Safari Web Inspector's console (with no Lucarne logs before it) means the build
-target regressed; any other exception there means a module-evaluation bug. The
-repo check covers only the first:
+Establish which one it is before acting. In Safari Web Inspector: **no network
+request** for `ha-lucarne*.js` means "never requested"; a `SyntaxError` on it
+(with no Lucarne logs before it) means the build target regressed; any other
+exception there means a module-evaluation bug. The repo checks cover the parse case
+for both bundles and, for the legacy one, evaluation as well; only *never requested*
+has to be diagnosed on the device:
 
 ```bash
-node --import tsx --test tests/build/bundle-syntax.test.ts
+node --import tsx --test 'tests/build/*.test.ts'
 ```
 
-(No `TZ` or `dom-globals.mjs` here, unlike every other test in this repo — this
-one only reads a file and parses it. `build.yml` and `create-release.sh` invoke it
-exactly this way.)
+(No `TZ` or `dom-globals.mjs` here, unlike every other test in this repo — these
+only read the committed files: `bundle-syntax.test.ts` parses both, and
+`bundle-registers.test.ts` evaluates the legacy one in its own happy-dom window
+and checks every card actually reached the registry. `build.yml`,
+`create-release.sh` and `create-prerelease.sh` invoke them exactly this way.)
 
-This is what issue #101 was: a Vite 5 → 8 bump silently raised the default build
-target, and the bundle started shipping ES2022 class static blocks that iPadOS 15
-and Tizen 6.5 cannot parse. See **Browser support floor** below.
+Issue #101 was both of the first two, in sequence. The parse failure came first: a
+Vite 5 → 8 bump silently raised the default build target and the bundle started
+shipping ES2022 class static blocks that iPadOS 15 and Tizen 6.5 cannot parse
+(see **Browser support floor** below). Pinning the target fixed the file but
+changed nothing on the devices, because they had never been fetching it.
+
+## Was the bundle even requested?
+
+Home Assistant has **two frontends** and serves each browser exactly one:
+
+```js
+// home-assistant/frontend — src/html/_js_base.html.template
+var isModern = <modernRegex>.test(navigator.userAgent) && "findLast" in Array.prototype;
+
+// src/html/index.html.template
+if (isModern) { … import("<extra_module_url entry>"); … window.latestJS = true; }
+if (!window.latestJS) { … _ls("<extra_js_es5 entry>"); … }
+```
+
+`modernRegex` is generated from the frontend's `.browserslistrc` **modern** query
+— *unreleased versions, last 2 years, not dead*. Every device in the table below
+is well outside that window, so all of them get the **legacy** frontend. That
+frontend is fully functional (which is why markdown and entities cards render
+normally next to the dead Lucarne card) — it simply never evaluates an
+`extra_module_url` entry, only `extra_js_es5` ones, and it injects those as
+classic `<script src>` rather than `import()`.
+
+So a card can be perfectly built and still never load. `async_setup` registers
+**both** bundles, one per channel; the failure mode to watch for is a change that
+registers only one, or a deploy/build that emits only one file.
+
+Checks, cheapest first:
+
+- **Both files exist and are non-empty** in
+  `custom_components/lucarne_family/frontend/` on the HA box.
+  `deploy-integration.sh` refuses to rsync without both.
+- **Both URLs return JavaScript** — open `/lucarne_family_frontend/ha-lucarne.js`
+  *and* `/lucarne_family_frontend/ha-lucarne-legacy.js`; a 404 on either means the
+  static path registration or the build is broken.
+- **The device actually asks for one of them.** On a TV or a locked-down tablet
+  with no dev tools, watch the request server-side while the dashboard loads: the
+  legacy device should request `/frontend_es5/…` and `ha-lucarne-legacy.js`, never
+  `ha-lucarne.js`. A device that requests `/frontend_es5/…` and *no* Lucarne
+  bundle at all is the #101 signature.
 
 ## Browser support floor
 
@@ -112,9 +159,9 @@ Three rules:
   lower targets happily — `es2019` produces a working bundle about 5 kB larger.
   Lower the floor deliberately; don't assume it can't move.
 
-`tests/build/bundle-syntax.test.ts` parses the bundle on disk with acorn at ES2020
-and fails if anything newer slips in — see the two-runs rule above for which bundle
-that is in each context.
+`tests/build/bundle-syntax.test.ts` parses both bundles on disk with acorn at ES2020
+and fails if anything newer slips in — see the two-runs rule above for which bytes
+those are in each context.
 
 Two things it deliberately does **not** prove. It does not prove the committed
 bundle is *current*: a PR that edits `src/` without rebuilding still ships a stale

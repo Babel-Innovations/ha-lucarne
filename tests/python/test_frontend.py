@@ -9,14 +9,27 @@ from homeassistant.const import EVENT_THEMES_UPDATED
 from homeassistant.core import HomeAssistant
 
 import custom_components.lucarne_family as lucarne
-from custom_components.lucarne_family.const import FRONTEND_URL, THEME_FILE, THEME_NAME
+from custom_components.lucarne_family.const import (
+    FRONTEND_LEGACY_URL,
+    FRONTEND_URL,
+    THEME_FILE,
+    THEME_NAME,
+)
+
+# (public URL, filename, registered on the legacy es5 channel?)
+BUNDLES = (
+    (FRONTEND_URL, "ha-lucarne.js", False),
+    (FRONTEND_LEGACY_URL, "ha-lucarne-legacy.js", True),
+)
 
 
-def test_bundle_committed() -> None:
-    """The built card bundle must be committed — HACS ships it, it does not build."""
-    bundle = Path(lucarne.__file__).parent / "frontend" / "ha-lucarne.js"
-    assert bundle.is_file(), f"missing committed bundle at {bundle}"
-    assert bundle.stat().st_size > 0
+def test_bundles_committed() -> None:
+    """Both card bundles must be committed — HACS ships them, it does not build."""
+    frontend = Path(lucarne.__file__).parent / "frontend"
+    for _url, filename, _es5 in BUNDLES:
+        bundle = frontend / filename
+        assert bundle.is_file(), f"missing committed bundle at {bundle}"
+        assert bundle.stat().st_size > 0
 
 
 def test_theme_bundled() -> None:
@@ -29,35 +42,61 @@ def test_theme_bundled() -> None:
 
 
 async def test_async_setup_registers_frontend(hass: HomeAssistant) -> None:
-    """async_setup serves ha-lucarne.js and registers it as a versioned ES module."""
+    """Both bundles are served and registered, each on its own frontend channel.
+
+    Home Assistant runs extra *module* URLs only on the modern frontend and extra
+    *es5* URLs only on the legacy one, and a browser gets exactly one of the two.
+    Registering just the module URL is what left iPadOS 15 and Tizen 6.5 with no
+    Lucarne JS at all in issue #101, so the es5 registration is asserted here as
+    hard as the module one.
+    """
     hass.http = MagicMock()
     hass.http.async_register_static_paths = AsyncMock()
 
     with patch.object(lucarne, "add_extra_js_url") as mock_add_js:
         assert await lucarne.async_setup(hass, {}) is True
 
-    # Served as a static path at FRONTEND_URL, pointing at the real bundle file.
+    # Both served as static paths, in one registration call, each pointing at the
+    # real file on disk.
     hass.http.async_register_static_paths.assert_awaited_once()
     (configs,) = hass.http.async_register_static_paths.await_args.args
-    config = next(iter(configs))
-    assert config.url_path == FRONTEND_URL
-    assert config.path.endswith("frontend/ha-lucarne.js")
-    assert Path(config.path).is_file()
+    served = {c.url_path: c.path for c in configs}
+    assert set(served) == {url for url, _f, _e in BUNDLES}
+    for url, filename, _es5 in BUNDLES:
+        assert served[url].endswith(f"frontend/{filename}")
+        assert Path(served[url]).is_file()
 
-    # Auto-loaded as an ES module with a ?v=<version>.<bundle-hash> cache-buster.
-    mock_add_js.assert_called_once()
-    registered_url = mock_add_js.call_args.args[1]
-    assert registered_url.startswith(f"{FRONTEND_URL}?v=")
-    assert registered_url != f"{FRONTEND_URL}?v="  # version is non-empty
+    # Auto-loaded with a ?v=<version>.<bundle-hash> cache-buster, on the right
+    # channel: es5=False -> extra_module_url, es5=True -> extra_js_es5.
+    assert mock_add_js.call_count == len(BUNDLES)
+    registered = {
+        call.args[1]: call.kwargs.get("es5", False)
+        for call in mock_add_js.call_args_list
+    }
 
-    # The query carries a content hash of the bundle appended to the version, so
-    # the URL changes whenever the card is rebuilt (cache-busts without a bump).
-    query = registered_url.split("?v=", 1)[1]
-    version, _, digest = query.rpartition(".")
-    assert version, "version segment present before the hash"
-    assert len(digest) == 8 and all(c in "0123456789abcdef" for c in digest), (
-        f"expected an 8-char hex bundle hash, got {digest!r}"
-    )
+    digests = set()
+    for url, _filename, es5 in BUNDLES:
+        matches = [u for u in registered if u.startswith(f"{url}?v=")]
+        assert len(matches) == 1, f"expected exactly one registration for {url}, got {matches}"
+        registered_url = matches[0]
+        assert registered[registered_url] is es5, (
+            f"{url} must be registered with es5={es5}; "
+            "the legacy frontend never imports extra_module_url entries"
+        )
+
+        # The query carries a content hash of that bundle appended to the version,
+        # so the URL changes whenever the card is rebuilt (cache-busts without a bump).
+        query = registered_url.split("?v=", 1)[1]
+        version, _, digest = query.rpartition(".")
+        assert version, "version segment present before the hash"
+        assert len(digest) == 8 and all(c in "0123456789abcdef" for c in digest), (
+            f"expected an 8-char hex bundle hash, got {digest!r}"
+        )
+        digests.add(digest)
+
+    # Each URL is hashed from its own file, not once from a shared one — otherwise
+    # rebuilding only the legacy bundle would not bust its cache.
+    assert len(digests) == len(BUNDLES), "each bundle must carry its own content hash"
 
 
 async def test_async_setup_registers_theme(hass: HomeAssistant) -> None:

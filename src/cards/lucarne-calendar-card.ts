@@ -17,6 +17,7 @@ import '../components/calendar-grid.js';
 import '../components/calendar-day-pan.js';
 import '../components/calendar-event-popover.js';
 import '../components/create-event-popover.js';
+import { registerCustomCard } from '../shared/register-card.js';
 
 export interface LucarneCalendarCardConfig {
   type: 'custom:lucarne-calendar-card';
@@ -57,9 +58,7 @@ const FOLLOW_DIVERGENCE_TOLERANCE_PX = 4;
  */
 const MAX_INITIAL_SCROLL_FRAMES = 60;
 
-(window as Window & typeof globalThis & { customCards?: object[] }).customCards =
-  (window as Window & typeof globalThis & { customCards?: object[] }).customCards || [];
-(window as Window & typeof globalThis & { customCards?: object[] }).customCards!.push({
+registerCustomCard({
   type: 'lucarne-calendar-card',
   name: 'Lucarne Calendar',
   description: 'Week view calendar with per-person color, visibility pills, and create-event flow',

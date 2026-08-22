@@ -46,10 +46,15 @@ cd "$REPO_DIR"
 # shellcheck source=scripts/lib/version.sh
 . "${REPO_DIR}/scripts/lib/version.sh"
 
-# The card bundle ships committed inside the integration and HACS pulls repo
+# The card bundles ship committed inside the integration and HACS pulls repo
 # source at the tag (hacs.json sets no zip_release), so — exactly as in
-# create-release.sh — the pre-release carries no uploaded assets.
-BUNDLE="custom_components/lucarne_family/frontend/ha-lucarne.js"
+# create-release.sh — the pre-release carries no uploaded assets. There are two,
+# one per Home Assistant frontend channel; scripts/lib/bundles.sh
+# says which and why, and is shared with create-release.sh and
+# deploy-integration.sh so the list cannot drift. Shipping only one leaves half
+# the devices with no cards at all (issue #101), so both are gated here.
+# shellcheck source=scripts/lib/bundles.sh
+. "${REPO_DIR}/scripts/lib/bundles.sh"
 MANIFEST="custom_components/lucarne_family/manifest.json"
 
 # Pre-releases are cut from main. A tag on a PR branch points at a commit a
@@ -157,10 +162,12 @@ if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
     exit 1
 fi
 
-if [ ! -f "$BUNDLE" ]; then
-    log_error "$BUNDLE not found. Run 'npm run build' first."
-    exit 1
-fi
+for bundle in "${BUNDLES[@]}"; do
+    if [ ! -f "$bundle" ]; then
+        log_error "$bundle not found. Run 'npm run build' first."
+        exit 1
+    fi
+done
 
 # Resolve the target repo from git's origin remote and pin every gh call with
 # --repo. gh honours $GH_REPO over local repository inference, so a stray export
@@ -249,48 +256,56 @@ COMMIT_SUBJECT=$(git log -1 --pretty=%s)
 # 3. BUILD + GATES
 # ============================================================================
 
-log_info "Building $BUNDLE..."
+log_info "Building ${BUNDLES[*]}..."
 npm run build
 
-if [ ! -f "$BUNDLE" ]; then
-    log_error "Build failed — $BUNDLE not created"
-    exit 1
-fi
+# Budget is per bundle, not summed: a browser downloads one of the two, never
+# both, so the ceiling that matters is the bigger single file.
+for bundle in "${BUNDLES[@]}"; do
+    if [ ! -f "$bundle" ]; then
+        log_error "Build failed — $bundle not created"
+        exit 1
+    fi
 
-BUNDLE_SIZE=$(wc -c < "$BUNDLE")
-BUNDLE_SIZE_KIB=$((BUNDLE_SIZE / 1024))
-# Compared in bytes, not floored KiB: `$((BUNDLE_SIZE / 1024)) -gt 400` would let
-# anything up to 410,623 bytes through a nominal 400 KiB ceiling.
-if [ "$BUNDLE_SIZE" -gt $((400 * 1024)) ]; then
-    log_error "Bundle size ${BUNDLE_SIZE} bytes (${BUNDLE_SIZE_KIB} KiB) exceeds the 400 KiB limit"
-    exit 1
-fi
-log_success "Build complete (${BUNDLE_SIZE_KIB} KiB)"
+    BUNDLE_SIZE=$(wc -c < "$bundle")
+    BUNDLE_SIZE_KIB=$((BUNDLE_SIZE / 1024))
+    # Compared in bytes, not floored KiB: `$((BUNDLE_SIZE / 1024)) -gt 400` would let
+    # anything up to 410,623 bytes through a nominal 400 KiB ceiling.
+    if [ "$BUNDLE_SIZE" -gt $((400 * 1024)) ]; then
+        log_error "$bundle is ${BUNDLE_SIZE} bytes (${BUNDLE_SIZE_KIB} KiB), over the 400 KiB limit"
+        exit 1
+    fi
+    log_success "Build complete: $bundle (${BUNDLE_SIZE_KIB} KiB)"
+done
 
-# The whole point of a pre-release here is device verification, so the browser
-# floor gate matters more than anywhere else: shipping a bundle that only parses
-# as ES2022 bricks every card on iPadOS 15 / Tizen 6.5 with no recoverable
-# error, i.e. the exact bug a tester would be asked to confirm fixed (#101).
-log_info "Verifying bundle parses at the supported browser floor..."
-if ! GUARD_OUTPUT=$(node --import tsx --test tests/build/bundle-syntax.test.ts 2>&1); then
-    log_error "Bundle syntax floor check failed:"
+# The whole point of a pre-release here is device verification, so these gates
+# matter more than anywhere else: a beta could otherwise ship the exact bug it was
+# cut to verify (#101). Both of that issue's failure modes are covered — a bundle
+# that only parses as ES2022, and one the legacy frontend cannot load at all — and
+# neither is visible on the machine cutting the tag.
+log_info "Verifying the shipped bundles parse and load..."
+if ! GUARD_OUTPUT=$(node --import tsx --test 'tests/build/*.test.ts' 2>&1); then
+    log_error "Bundle guards failed:"
     echo "$GUARD_OUTPUT" >&2
-    log_error "Check that build.target is still set in vite.config.ts, then rebuild."
+    log_error "A syntax failure means build.target in vite.config.ts; a registration"
+    log_error "failure means the iife format or the define guard. Fix, then rebuild."
     exit 1
 fi
-log_success "Bundle syntax floor verified"
+log_success "Bundle guards verified"
 
 # Nothing is committed by this script, so HACS ships the bundle bytes already in
-# the tagged commit. If a fresh build differs from them, the committed bundle is
+# the tagged commit. If a fresh build differs from them, a committed bundle is
 # stale and the tester would get the old cards while every local check passed.
+# Either one going stale is enough: which of the two it is decides whether the
+# modern or the legacy devices get the old cards.
 if [ -n "$(git status --porcelain)" ]; then
-    log_error "Rebuilding changed tracked files — the committed bundle is stale."
+    log_error "Rebuilding changed tracked files — a committed bundle is stale."
     git status --short
     echo ""
-    echo "  Commit the rebuilt bundle through the normal PR flow, then re-run."
+    echo "  Commit the rebuilt bundles through the normal PR flow, then re-run."
     exit 1
 fi
-log_success "Committed bundle matches a fresh build"
+log_success "Committed bundles match a fresh build"
 
 # ============================================================================
 # 4. RELEASE NOTES

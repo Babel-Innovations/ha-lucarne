@@ -19,7 +19,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.loader import async_get_integration
 
-from .const import DOMAIN, FRONTEND_URL, PRESET_ADULT_NONE, THEME_FILE, THEME_NAME
+from .const import (
+    DOMAIN,
+    FRONTEND_LEGACY_URL,
+    FRONTEND_URL,
+    PRESET_ADULT_NONE,
+    THEME_FILE,
+    THEME_NAME,
+)
 from .models import Member, RoutinePreset
 from .presets import BUILTIN_PRESETS
 from .store import LucarneFamilyStore
@@ -63,18 +70,44 @@ def _load_theme(path: Path) -> dict[str, Any]:
 async def async_setup(hass: HomeAssistant, _config: dict[str, Any]) -> bool:
     """Set up the Lucarne Family integration.
 
-    Serves the bundled Lovelace card JS and registers it as a frontend module so
-    the cards load automatically — no separate HACS plugin or manual Lovelace
+    Serves the bundled Lovelace card JS and registers it with the frontend so the
+    cards load automatically — no separate HACS plugin or manual Lovelace
     resource needed. Also registers the bundled "Lucarne" theme in-process so it
     appears under Profile → Theme without any configuration.yaml edits.
+
+    Both bundles are registered, on both of Home Assistant's frontend channels.
+    A browser loads exactly one of them: `index.html` runs the extra
+    *module* URLs only inside `if (isModern) { … }` and the extra *es5* URLs only
+    inside `if (!window.latestJS) { … }`, where `isModern` tests the user agent
+    against a regex built from the frontend's `.browserslistrc` "modern" query
+    (released in the last 2 years). An iPadOS 15 tablet or a Tizen 6.5 TV fails
+    that test, gets Home Assistant's legacy frontend — which works fine, hence
+    every other card rendering normally — and never imports the module URL. That
+    was issue #101: registering only the module URL left those devices with no
+    Lucarne JS at all, so no element registered and Home Assistant substituted
+    its generic Configuration error card for all three cards. The `es5=True`
+    registration is the half that reaches them; the ES module stays the path for
+    everything current.
     """
-    js_file = Path(__file__).parent / "frontend" / "ha-lucarne.js"
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL, str(js_file), cache_headers=True)]
-    )
+    frontend_dir = Path(__file__).parent / "frontend"
     integration = await async_get_integration(hass, DOMAIN)
-    digest = await hass.async_add_executor_job(_bundle_digest, js_file)
-    add_extra_js_url(hass, f"{FRONTEND_URL}?v={integration.version}.{digest}")
+
+    # (public URL, on-disk file, legacy channel?)
+    bundles = (
+        (FRONTEND_URL, frontend_dir / "ha-lucarne.js", False),
+        (FRONTEND_LEGACY_URL, frontend_dir / "ha-lucarne-legacy.js", True),
+    )
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(url, str(path), cache_headers=True)
+            for url, path, _es5 in bundles
+        ]
+    )
+    for url, path, es5 in bundles:
+        digest = await hass.async_add_executor_job(_bundle_digest, path)
+        add_extra_js_url(
+            hass, f"{url}?v={integration.version}.{digest}", es5=es5
+        )
 
     await _async_register_theme(hass)
     return True

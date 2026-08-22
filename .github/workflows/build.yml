@@ -25,16 +25,38 @@ jobs:
 
       - run: npm run typecheck
 
-      # Two runs of the same guard, covering opposite directions (issue #101).
-      # This one parses the COMMITTED bundle — the exact bytes HACS ships, which
-      # `npm run build` is about to overwrite.
-      - name: Bundle syntax floor (committed artifact)
-        run: node --import tsx --test tests/build/bundle-syntax.test.ts
+      # Two runs of the same guards, covering opposite directions (issue #101).
+      # These parse and load the COMMITTED bundles — the exact bytes HACS ships,
+      # which `npm run build` is about to overwrite.
+      - name: Bundle guards (committed artifacts)
+        run: node --import tsx --test 'tests/build/*.test.ts'
 
       - run: npm run build
 
-      # test:coverage re-runs the guard, now against freshly emitted output, so a
-      # PR that raised or removed `build.target` without rebuilding still fails.
+      # HACS ships the committed bytes and never builds, so a PR that changes card
+      # sources without committing the rebuilt bundles ships the old cards while
+      # every check passes. `npm run build` emits both files, so the realistic slip
+      # is staging one of the two out of habit — and which one you dropped decides
+      # which half of the users get a dashboard of Configuration error cards.
+      # Nothing else in CI notices: the guards below parse whatever is on disk,
+      # which is now the fresh output.
+      # `git status --porcelain`, not `git diff`: it also catches an *untracked*
+      # output, so a third bundle that is emitted but never `git add`-ed fails here
+      # instead of silently missing from what HACS ships. Same check, same wording
+      # as create-prerelease.sh. Printing the porcelain lines rather than the patch
+      # keeps ~700 kB of minified diff out of the step log.
+      - name: Committed bundles are up to date
+        run: |
+          STATUS=$(git status --porcelain -- custom_components/lucarne_family/frontend)
+          if [ -n "$STATUS" ]; then
+            echo "::error::Committed bundle(s) stale or missing — run 'npm run build' and commit custom_components/lucarne_family/frontend/"
+            echo "$STATUS"
+            exit 1
+          fi
+
+      # test:coverage re-runs the guards, now against freshly emitted output, so a
+      # PR that raised or removed `build.target`, or dropped the `iife` format,
+      # without rebuilding still fails.
       # Don't move this above the build step.
       - run: npm run test:coverage
 

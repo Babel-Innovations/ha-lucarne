@@ -7,7 +7,7 @@ Working guide for AI sessions. Covers what you'd get wrong without it.
 Single-distribution HACS repo (one `integration` install ships both halves):
 
 - **Integration** (`custom_components/lucarne_family/`) — Python HA integration that owns family members, managed entities (`todo.<slug>`, `counter.<slug>_streak`), SQLite task/completion storage, and in-process time-change listeners for daily reset and streak check.
-- **Frontend** (`custom_components/lucarne_family/frontend/ha-lucarne.js`) — three Lit-based Lovelace cards: `lucarne-today-card`, `lucarne-calendar-card`, `lucarne-chores-card`. Single ESM bundle; no code splitting. The integration's `async_setup` serves this file at `FRONTEND_URL` (`/lucarne_family_frontend/ha-lucarne.js`) and calls `add_extra_js_url` so the cards auto-register — **no HACS plugin, no manual Lovelace resource.**
+- **Frontend** (`custom_components/lucarne_family/frontend/ha-lucarne.js` + `ha-lucarne-legacy.js`) — three Lit-based Lovelace cards: `lucarne-today-card`, `lucarne-calendar-card`, `lucarne-chores-card`. One entry point, no code splitting, built twice: an ESM for HA's modern frontend and an IIFE for its legacy frontend. The integration's `async_setup` serves both and calls `add_extra_js_url` once per channel so the cards auto-register — **no HACS plugin, no manual Lovelace resource.** See the two-frontends pitfall below.
 
 Two test runners (node:test + pytest), one deploy target.
 
@@ -38,7 +38,8 @@ custom_components/
     apple_sentinel_backfill.py Extracts [apple:UUID] from item descriptions → source=apple metadata
     presets.py                Routine preset definitions (school-age kid, toddler, adult)
     models.py, const.py       Dataclasses and constants
-    frontend/ha-lucarne.js    Built card bundle (committed; served + registered by async_setup)
+    frontend/ha-lucarne.js    Built card bundle, ESM (committed; served + registered by async_setup)
+    frontend/ha-lucarne-legacy.js Same bundle as an IIFE, for HA's legacy frontend (committed)
 blueprints/automation/
   lucarne_reminders_sync.yaml Only remaining blueprint (webhook receiver for Reminders bridge)
 bridge/                       Mac mini launchd bridge setup instructions
@@ -47,6 +48,7 @@ tests/                        Node test suites (components + shared), pytest sui
   setup/ha-mock.mjs           Shared HA stub for Lit component tests
 scripts/
   lib/version.sh              shared conventional-commit version derivation (both release scripts)
+  lib/bundles.sh              shared list of the two committed bundles (release + deploy scripts)
   deploy-integration.sh       build cards + rsync custom_components/lucarne_family/ to ha-vm
   create-release.sh           bump version + changelog + commit + tag + GitHub release
   create-prerelease.sh        tag an already-pushed commit as a pre-release (no bump)
@@ -58,7 +60,7 @@ scripts/
 ### TypeScript (cards)
 
 ```bash
-npm run build         # Vite build → custom_components/lucarne_family/frontend/ha-lucarne.js (single ESM, committed)
+npm run build         # Vite build → frontend/ha-lucarne.js (ESM) + frontend/ha-lucarne-legacy.js (IIFE), both committed
 npm test              # node:test runner (NOT vitest — see pitfalls)
 npm run test:coverage # same suite + Node coverage, fails under line 88 / branch 80 / funcs 73 (CI gate)
 npm run typecheck     # tsc --noEmit
@@ -69,11 +71,13 @@ CI runs `test:coverage`, not `test`. The thresholds are floored from the
 current numbers — raise them as coverage improves, never lower to make a PR
 pass. `npm test` stays coverage-free for fast local iteration.
 
-The built bundle is **committed** — HACS ships repo files for an integration and does not run a build. Rebuild and commit `frontend/ha-lucarne.js` whenever card sources change.
+The built bundles are **committed** — HACS ships repo files for an integration and does not run a build. Rebuild and commit **both** `frontend/ha-lucarne.js` and `frontend/ha-lucarne-legacy.js` whenever card sources change; one `npm run build` emits both.
 
 `vite.config.ts` pins `build.target` to `["es2020", "safari15", "ios15", "chrome85"]` —
 the floor for the iPadOS 15 wall tablet and the Tizen 6.5 TV. `tests/build/bundle-syntax.test.ts`
-parses the committed bundle at ES2020 and fails the build if anything newer ships.
+parses both committed bundles at ES2020 — the ESM as a module, the IIFE as a **script**, which is
+what proves the legacy artifact carries no `import`/`export` — and fails the build if anything
+newer, or anything module-shaped, ships in them.
 
 ### Python (integration)
 
@@ -99,8 +103,8 @@ npm run build && npm run test:coverage && npm run lint && npm run typecheck
 pytest tests/python/
 ```
 
-`build` runs **first** so `tests/build/bundle-syntax.test.ts` parses the bundle you
-are about to commit rather than the previous one — same reason CI orders it this way.
+`build` runs **first** so the guards in `tests/build/` check the bundles you are
+about to commit rather than the previous ones — same reason CI orders it this way.
 
 Use `test:coverage` here (not `test`) so the local gate matches CI's coverage
 floors. Bare `pytest` already enforces the Python floor via `addopts`.
@@ -219,7 +223,7 @@ Single HACS item — `integration` category only. The cards ride along inside th
 
 | Surface | Category | Source |
 |---------|----------|--------|
-| Integration + cards | `integration` | `custom_components/lucarne_family/` (cards at `frontend/ha-lucarne.js`) |
+| Integration + cards | `integration` | `custom_components/lucarne_family/` (cards at `frontend/ha-lucarne.js` + `frontend/ha-lucarne-legacy.js`) |
 
 `hacs.json` carries only integration-level keys (`name`, `render_readme`, `homeassistant`) — the plugin-only `filename`/`content_in_root` keys were removed.
 
@@ -230,17 +234,44 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **No blocking I/O in async HA code**: Use `hass.async_add_executor_job(...)` for blocking calls (heavy SQLite migrations, file I/O). Never block the event loop.
 - **Entity rename has downstream impact**: Slug-changing renames go through `rename.py` which shows an impact preview before proceeding; never rename entities outside that flow.
 - **Integration uses `lucarne_family.*` services and `lucarne_family_*` events**: The older `ha_lucarne_chores_all_done` event is a deprecated compat shim still fired by `completion_listener.py` in v0.x alongside `lucarne_family_all_routines_done`. Migrate consumers to the new event; see `docs/events.md`.
+- **HA has two frontends and a browser loads exactly one**: `index.html` runs `extra_module_url`
+  entries only inside `if (isModern) { … }` and `extra_js_es5` entries only inside
+  `if (!window.latestJS) { … }`, where `isModern` matches the user agent against a regex built from
+  the frontend's `.browserslistrc` "modern" query (*released in the last 2 years*). iPadOS 15 and
+  Tizen 6.5 fail that test, get HA's **legacy** frontend — which works fine, hence every non-Lucarne
+  card rendering normally — and never import a module URL. So `async_setup` registers **two**
+  bundles: `ha-lucarne.js` (ESM, `es5=False`) and `ha-lucarne-legacy.js` (IIFE, `es5=True`). The
+  legacy channel injects a classic `<script src>`, which cannot contain `import`/`export` — that is
+  why it needs its own `iife` output rather than the same file registered twice. Registering only
+  the module URL was the second half of #101: the cards were fine, those devices simply never
+  fetched them, and no `debug: true` reporter could say so because none of our code ran. Keep both
+  registrations, both `vite.config.ts` `formats`, and both entries in the release/deploy scripts.
+- **Duplicate `customElements.define` is survivable on purpose**: `src/shared/define-guard.ts` runs
+  first in `src/index.ts` (import order is load-bearing) and makes a redefinition of a `lucarne-*`
+  tag a no-op. Two copies of the bundle on one page — usually a stale hand-added Lovelace resource —
+  would otherwise throw out of the first `define()` and abort the rest of that bundle, which looks
+  exactly like #101 and is just as invisible. Scoped to the `lucarne-` prefix so it can never hide a
+  redefinition bug in HA's own elements. `registerCustomCard()` (`src/shared/register-card.ts`)
+  dedupes the Lovelace card-picker entry for the same reason — a bare `customCards.push` shows every
+  card twice. Double-load is *survivable*, not fully idempotent: `error-reporter.ts` keeps its
+  installed-flag at module scope, so a second copy attaches its own `error`/`unhandledrejection`
+  listeners and each throw is logged twice (the persistent-notification id is signature-derived, so
+  HA overwrites rather than duplicating). `tests/build/bundle-registers.test.ts` evaluates the
+  shipped legacy bundle twice and is the only check that the guard is still *in* the bundle and
+  still emitted before the first `define()`.
 - **Browser floor is pinned in `vite.config.ts`**: never remove or raise `build.target`. Vite's
   default (`baseline-widely-available` = safari16.4/chrome111) emits ES2022 class static blocks,
   which iPadOS 15 WebKit and Tizen 6.5 (Chromium 85) cannot **parse** — the whole module dies, no
   card registers, and every card becomes HA's generic red "Configuration error" panel with
-  `debug: true` unable to report anything (issue #101). The pin is the fix; with it in place a Vite
-  bump is safe. `tests/build/bundle-syntax.test.ts` is the alarm that fails if the pin is ever
-  removed, raised, or stops being honoured — keep both. The guard parses whichever bundle is on
+  `debug: true` unable to report anything (issue #101 — the first of its two causes; the other is
+  the two-frontends pitfall above, and fixing only this one changed nothing on the devices). The pin
+  is the fix for the parse half; with it in place a Vite bump is safe.
+  `tests/build/bundle-syntax.test.ts` is the alarm that fails if the pin is ever
+  removed, raised, or stops being honoured — keep both. The guard parses whichever bundles are on
   disk, so CI runs it twice: once before `npm run build` (the committed bytes HACS ships) and again
   inside `test:coverage` after it (proof the pin holds in fresh output). `create-release.sh` re-runs
   it after its own build. Don't drop either CI step or move `test:coverage` above the build.
-  Note it proves the committed bundle *parses*, not that it is *current* — rebuilding after card
+  Note it proves the committed bundles *parse*, not that they are *current* — rebuilding after card
   source changes is still on you. es2020 is a chosen floor, not a tool limit — Vite 8 (Rolldown) builds lower targets
   fine, it just buys nothing below Chromium 85. Runtime APIs newer than the floor still need a
   `typeof` guard — syntax lowering does not polyfill them.
@@ -301,9 +332,13 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Don't** write files to `<config>/www/` outside `/local/lucarne/avatars/`.
 - **Don't** add `contributing.md`, `code_of_conduct.md`, or other meta docs unless asked.
 - **Don't** generate vitest imports in test files.
-- **Don't** remove `build.target` from `vite.config.ts` or delete `tests/build/bundle-syntax.test.ts`.
+- **Don't** remove `build.target` from `vite.config.ts` or delete either build guard
+  (`tests/build/bundle-syntax.test.ts`, `tests/build/bundle-registers.test.ts`) — they are the
+  alarms for the two halves of #101, and each is the only alarm for its half.
+- **Don't** drop the `iife` output from `vite.config.ts` `formats`, or the `es5=True`
+  `add_extra_js_url` call in `async_setup` — that is what reaches iPadOS 15 / Tizen 6.5 at all.
 - **Don't** override `setConfig()` or `render()` in a card — use `applyConfig()` / `renderContent()`.
-- **Don't** split the ESM bundle or re-introduce a separate HACS `plugin` distribution — the integration serves and registers the single bundle itself.
+- **Don't** code-split either bundle or re-introduce a separate HACS `plugin` distribution — the integration serves and registers both bundles itself.
 - **Don't** implement the round-trip webhook POST without a spec — only the HA event is fired in v0.2.
 - **Don't** add server-side center-square crop to `avatar_service.py` without a spec — the deferred design is documented in CLAUDE.md and the phase-6 spec.
 

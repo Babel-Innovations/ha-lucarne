@@ -4,8 +4,21 @@ from __future__ import annotations
 DOMAIN = "lucarne_family"
 STORAGE_VERSION = 1
 
-# Frontend bundle served + auto-registered by the integration (see __init__.async_setup).
+# Frontend bundles served + auto-registered by the integration (see
+# __init__.async_setup). Home Assistant has two frontend channels and a given
+# browser only ever loads one of them, so both have to be registered:
+#
+#   FRONTEND_URL         ES module, loaded by the MODERN frontend via
+#                        `import(url)` from extra_module_url.
+#   FRONTEND_LEGACY_URL  IIFE, injected by the LEGACY frontend as a classic
+#                        <script src> from extra_js_es5.
+#
+# Home Assistant picks the legacy frontend for any browser outside its
+# `.browserslistrc` "modern" query (released in the last 2 years) — which
+# includes the iPadOS 15 wall tablet and the Tizen 6.5 TV. Registering only the
+# module URL means those devices load no Lucarne JS at all (issue #101).
 FRONTEND_URL = "/lucarne_family_frontend/ha-lucarne.js"
+FRONTEND_LEGACY_URL = "/lucarne_family_frontend/ha-lucarne-legacy.js"
 
 # Pastel theme bundled with the integration and auto-registered in async_setup.
 # THEME_NAME must match the top-level key inside THEME_FILE.

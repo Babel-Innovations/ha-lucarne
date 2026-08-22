@@ -194,7 +194,7 @@ and the `RollingWindowController` state machine.
 
 ## Custom integration (lucarne_family)
 
-This repo ships a single **Integration** (`custom_components/lucarne_family/`) that also bundles the **Frontend** (Lovelace card pack, `custom_components/lucarne_family/frontend/ha-lucarne.js`). The integration owns family members, task metadata, managed entities (`todo.<slug>`, `counter.<slug>_streak`), and managed automations — and on setup it serves the card bundle and registers it with the frontend so the cards load with no separate install.
+This repo ships a single **Integration** (`custom_components/lucarne_family/`) that also bundles the **Frontend** (Lovelace card pack, `custom_components/lucarne_family/frontend/`). The integration owns family members, task metadata, managed entities (`todo.<slug>`, `counter.<slug>_streak`), and managed automations — and on setup it serves both card bundles and registers them with the frontend so the cards load with no separate install. See [Build](#build) for why there are two.
 
 ### Data flow — entity-manager + task-service (Phase 2)
 
@@ -386,12 +386,39 @@ in-process time-change listeners (configured via the integration's Options Flow)
 
 ## Build
 
-Vite bundles `src/index.ts` (which imports all three card entry points) into
-`custom_components/lucarne_family/frontend/ha-lucarne.js`. The bundle is a single ES module with no
-external runtime dependencies (Lit is bundled in) and is committed to the repo. HACS installs the
-integration directory at the tagged GitHub release, so the bundle ships with it; the integration's
-`async_setup` serves it at `/lucarne_family_frontend/ha-lucarne.js` and registers it via
-`add_extra_js_url`, so no separate HACS plugin or Lovelace resource is needed.
+Vite bundles `src/index.ts` (which imports all three card entry points) into **two** committed
+artifacts under `custom_components/lucarne_family/frontend/` — same code, no external runtime
+dependencies (Lit is bundled in), two module formats:
+
+| Artifact | Format | HA channel | How the browser loads it |
+|---|---|---|---|
+| `ha-lucarne.js` | ES module | `extra_module_url` | `import(url)`, modern frontend |
+| `ha-lucarne-legacy.js` | IIFE | `extra_js_es5` | `<script src>`, legacy frontend |
+
+HACS installs the integration directory at the tagged GitHub release, so both ship with it;
+`async_setup` serves each at its own path and registers it with `add_extra_js_url(..., es5=...)`, so
+no separate HACS plugin or Lovelace resource is needed.
+
+**Why two.** Home Assistant's `index.html` runs the extra *module* URLs only inside
+`if (isModern) { … }` and the extra *es5* URLs only inside `if (!window.latestJS) { … }`, where
+`isModern` matches the user agent against a regex generated from the frontend's `.browserslistrc`
+"modern" query — *released in the last 2 years*. A browser gets exactly one of the two frontends,
+and therefore exactly one of the two bundles. Anything older than that window (the iPadOS 15 wall
+tablet, the Tizen 6.5 TV) lands on the legacy frontend, which works perfectly well — it just never
+imports an `extra_module_url` entry. Registering only the ES module left those devices with no
+Lucarne JS at all, so no element registered and HA substituted its generic Configuration error card
+for all three cards. That was the second half of issue #101; the first half was the build target
+(see `docs/ipad-debugging.md`). A classic `<script src>` cannot contain `import`/`export`, which is
+why the legacy artifact has to be a separate IIFE build rather than the same file served twice.
+
+Both bundles run `installDefineGuard()` (`src/shared/define-guard.ts`) first, so if a page ever ends
+up with both — a stale hand-added Lovelace resource is the usual way — the second copy's
+`customElements.define` calls are no-ops for `lucarne-*` tags instead of throwing and aborting the
+rest of that bundle, and `registerCustomCard()` (`src/shared/register-card.ts`) keeps the Lovelace
+card picker to one entry per card. That makes a double load *survivable*, not fully idempotent: the
+error reporter's installed-flag is module-scoped, so the second copy attaches its own
+`error`/`unhandledrejection` listeners and each throw is logged twice. `tests/build/bundle-registers.test.ts`
+evaluates the shipped legacy bundle twice and is what keeps this honest.
 
 ## Breakpoints
 

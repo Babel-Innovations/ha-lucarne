@@ -4,9 +4,9 @@
 # the project root if present (see .env.example).
 #
 # The card bundle ships inside the integration (custom_components/lucarne_family/
-# frontend/ha-lucarne.js) and is auto-registered on setup, so this script builds
-# the frontend first and then rsyncs the whole integration. There is no separate
-# card deploy or Lovelace-resource step.
+# frontend/ha-lucarne.js + ha-lucarne-legacy.js) and both are auto-registered on
+# setup, so this script builds the frontend first and then rsyncs the whole
+# integration. There is no separate card deploy or Lovelace-resource step.
 #
 # Usage:
 #   ./scripts/deploy-integration.sh                  # build + rsync
@@ -92,10 +92,19 @@ if [ "$SKIP_BUILD" = "0" ]; then
   echo "Building frontend bundle (npm run build)..."
   (cd "$ROOT_DIR" && npm run build)
 fi
-if [ ! -f "$SOURCE/frontend/ha-lucarne.js" ]; then
-  echo -e "${RED}Missing $SOURCE/frontend/ha-lucarne.js — run without --skip-build${NC}" >&2
-  exit 1
-fi
+# Both bundles are required: Home Assistant serves the ES module to its modern
+# frontend and the IIFE to its legacy one, and a browser loads exactly one of the
+# two. A deploy missing the legacy file leaves iPadOS 15 / Tizen 6.5 with no cards
+# at all, which looks identical to the card being broken (issue #101). The list is
+# shared with the release scripts so it cannot drift.
+# shellcheck source=scripts/lib/bundles.sh
+. "${ROOT_DIR}/scripts/lib/bundles.sh"
+for bundle in "${BUNDLE_FILENAMES[@]}"; do
+  if [ ! -f "$SOURCE/frontend/$bundle" ]; then
+    echo -e "${RED}Missing $SOURCE/frontend/$bundle — run without --skip-build${NC}" >&2
+    exit 1
+  fi
+done
 
 echo -e "${GREEN}=========================================${NC}"
 echo "Deploying custom_components/lucarne_family/ to ${HA_SSH_HOST}:${HA_INTEGRATION_PATH}"

@@ -191,11 +191,13 @@ See [docs/events.md](docs/events.md) for the full schema and a TTS example autom
 
 ## Troubleshooting
 
-**Cards show "Custom element not defined"**
+**Cards show "Custom element not defined" or "Configuration error"**
 The integration registers the cards on startup, so make sure you **restarted HA** after installing
 and that the integration is set up. Then hard-refresh the browser (Cmd+Shift+R) to clear the
-cached bundle. You can confirm the bundle is served by opening `/lucarne_family_frontend/ha-lucarne.js`
-in your browser — it should return JavaScript, not a 404.
+cached bundle. You can confirm the bundles are served by opening
+`/lucarne_family_frontend/ha-lucarne.js` **and** `/lucarne_family_frontend/ha-lucarne-legacy.js` in
+your browser — both should return JavaScript, not a 404. Older browsers (iPadOS 15, Tizen TVs) get
+Home Assistant's legacy frontend and load only the `-legacy` one.
 
 **Chores card shows "Lucarne Family integration not set up"**
 Add and configure the integration (install step 3). The card requires it; other cards do not.

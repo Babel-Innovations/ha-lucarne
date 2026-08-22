@@ -1,10 +1,15 @@
 name: "Lucarne CodeQL config"
 
-# The committed frontend bundle (custom_components/lucarne_family/frontend/ha-lucarne.js)
-# is Vite's minified output: our card sources concatenated with bundled third-party
-# libraries (Lit, etc.). CodeQL findings there are unactionable — they sit in vendored
-# library code we don't author, and the minified line numbers shift on every rebuild,
-# so each `npm run build` re-reports the same issues as "new" alerts. The real,
-# hand-written sources under src/ are still analyzed. Exclude only the generated artifact.
+# The committed frontend bundles under custom_components/lucarne_family/frontend/
+# are Vite's minified output: our card sources concatenated with bundled third-party
+# libraries (Lit, etc.). There are two — an ES module for Home Assistant's modern
+# frontend and an IIFE for its legacy one — built from the same entry point, so they
+# carry the same vendored code twice over. CodeQL findings there are unactionable —
+# they sit in library code we don't author, and the minified line numbers shift on
+# every rebuild, so each `npm run build` re-reports the same issues as "new" alerts.
+# The real, hand-written sources under src/ are still analyzed. Exclude only the
+# generated artifacts; list them explicitly rather than globbing the directory, so a
+# future hand-written file added there is not silently dropped from analysis.
 paths-ignore:
   - custom_components/lucarne_family/frontend/ha-lucarne.js
+  - custom_components/lucarne_family/frontend/ha-lucarne-legacy.js

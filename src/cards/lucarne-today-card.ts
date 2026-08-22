@@ -16,6 +16,7 @@ import '../components/weather-block.js';
 import '../components/tasks-summary.js';
 import '../components/presence-pills.js';
 import '../components/family-ready-pill.js';
+import { registerCustomCard } from '../shared/register-card.js';
 
 export type TodaySectionId = 'calendar' | 'weather' | 'tasks';
 export const DEFAULT_SECTION_ORDER: readonly TodaySectionId[] = ['calendar', 'weather', 'tasks'] as const;
@@ -63,9 +64,7 @@ export interface LucarneTodayCardConfig {
   debug?: boolean;
 }
 
-(window as Window & typeof globalThis & { customCards?: object[] }).customCards =
-  (window as Window & typeof globalThis & { customCards?: object[] }).customCards || [];
-(window as Window & typeof globalThis & { customCards?: object[] }).customCards!.push({
+registerCustomCard({
   type: 'lucarne-today-card',
   name: 'Lucarne Today',
   description: 'Family agenda + weather + tasks + presence',
