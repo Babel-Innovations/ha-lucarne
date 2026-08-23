@@ -10,8 +10,18 @@ and how to capture the real cause without guessing.
 The red box is **Home Assistant's own `hui-error-card`**, not a Lucarne UI. HA
 wraps every custom card; when a card **throws an uncaught JavaScript exception**
 (in `setConfig`, `render`, the `hass` setter, or another Lit lifecycle hook), HA
-replaces it with that red box. So the symptom is a JS exception, **not** a
+replaces it with that red box. So the symptom is *usually* a JS exception, **not** a
 WebView memory crash or an out-of-memory kill.
+
+The exception to that — and the whole of #101 — is that HA builds the same red box
+when the tag is simply **not in the registry**, with no exception anywhere. Its
+message reads `Custom element doesn't exist: lucarne-…`, versus a Lucarne-authored
+message for a real throw. Check which one before assuming there is a throw to find.
+
+> **Before anything else, look at the box.** Since the loader shim landed, a
+> bundle that failed to load renders a Lucarne-owned box carrying the actual
+> exception text, not HA's blank red one. If you can read an error, you already
+> have the answer — skip to "find the throw".
 
 Two tells distinguish it from a Lucarne error state:
 
@@ -54,9 +64,28 @@ That is the bundle failing to **load**, in one of two ways:
   so cards registered *before* it survive and everything after it is missing —
   which is why the "every card is red" symptom points at the parse case.
 
-Either way no in-bundle try/catch and no reporter can catch it: `src/index.ts`
-imports every card, and ESM hoists those imports above
-`installGlobalErrorReporter()`, so no handler is installed yet.
+**Both** kinds now land in the loader shim, so don't try to tell them apart by which
+reporter spoke. `ha-lucarne-loader.js` is the bundle's only importer and awaits that
+`import()` inside a `try`: a parse error and an evaluation throw both reject the same
+promise, and neither fires `window.onerror` or `unhandledrejection`. Read the exception
+text instead. A `SyntaxError` naming `ha-lucarne.js` is the parse case. A fetch-class
+rejection — "Failed to fetch dynamically imported module", a 404, a CSP block, a wrong
+MIME type — means the artifact is missing or mis-served, which is what a partial deploy
+looks like (both `deploy-integration.sh` and the release scripts check for both files
+for exactly this reason). Anything else is an evaluation bug in our code.
+
+The in-bundle reporter still matters, for everything *after* evaluation: render
+throws, async failures, child-component lifecycle. `src/index.ts`'s first import is
+`./shared/install-reporter.js` so `window.onerror` is armed before any card module
+evaluates. (Until #101 this was a bare `installGlobalErrorReporter()` call in the
+module body, which ESM hoisting pushed to dead last — after all 31 registrations. Don't
+move it back.)
+
+So on a device with no developer tools, read the card first: a Lucarne-owned box with
+error text is the loader reporting a load failure, and `window.__lucarneBoot` carries
+`stage` / `registryWait` / `error` / `marks` / `registered`. Note `registered: []` with
+`stage: 'loaded'` and no error is a *third* case — the registry swap of #101 — not a
+load failure at all.
 
 Confirm which of the two it is before acting — a `SyntaxError` on `ha-lucarne.js`
 in Safari Web Inspector's console (with no Lucarne logs before it) means the build
@@ -71,14 +100,23 @@ node --import tsx --test tests/build/bundle-syntax.test.ts
 one only reads a file and parses it. `build.yml` and `create-release.sh` invoke it
 exactly this way.)
 
-This is what issue #101 was: a Vite 5 → 8 bump silently raised the default build
-target, and the bundle started shipping ES2022 class static blocks that iPadOS 15
-and Tizen 6.5 cannot parse. See **Browser support floor** below.
+This is what issue #101 was first thought to be: a Vite 5 → 8 bump silently raised
+the default build target, and the bundle started shipping ES2022 class static
+blocks that iPadOS 15 and Tizen 6.5 cannot parse. **That pin did not fix #101** —
+the pinned bundle parses cleanly at ES2020 and the TV still failed with it in place
+(the iPad was never re-measured, so treat it as unconfirmed there) — so keep
+the pin on its own merits. It is still load-bearing for the iPadOS 15 tablet, whose
+WebKit 15.6 genuinely cannot parse class static blocks — but it was never relevant to
+the Frame TV, which reports `parses class static block (ES2022): yes`. #101's actual
+cause was Home Assistant's app entrypoint replacing `window.customElements`; the file header
+in `src/loader/boot.ts` has the full account. See **Browser support floor** below.
 
 ## Browser support floor
 
-The shipped bundle must parse on every display this project is deployed to. The
-floor is pinned in `vite.config.ts`:
+Both shipped artifacts must parse on every display this project is deployed to.
+The floor is pinned identically in `vite.config.ts` and `vite.loader.config.ts` —
+a loader that needed a newer engine than the bundle it reports on would be useless
+precisely when it is needed:
 
 ```ts
 target: ["es2020", "safari15", "ios15", "chrome85"]
@@ -87,7 +125,7 @@ target: ["es2020", "safari15", "ios15", "chrome85"]
 | Device | Engine | Why it sets the floor |
 |---|---|---|
 | iPad Air 2 (iPadOS 15.8) | WebKit 15.6 | Oldest wall/Companion-app tablet in use |
-| Samsung Frame TV (2022) | Tizen 6.5 / Chromium 85 | Dashboard on the TV |
+| Samsung Frame TV (2022) | Tizen 6.5 / **Chrome 108** (measured off the device) | Dashboard on the TV — note this parses ES2022 fine, so the floor is set by the iPad, not by the TV |
 
 Three rules:
 
@@ -112,9 +150,18 @@ Three rules:
   lower targets happily — `es2019` produces a working bundle about 5 kB larger.
   Lower the floor deliberately; don't assume it can't move.
 
-`tests/build/bundle-syntax.test.ts` parses the bundle on disk with acorn at ES2020
-and fails if anything newer slips in — see the two-runs rule above for which bundle
-that is in each context.
+`tests/build/bundle-syntax.test.ts` parses both shipped artifacts on disk with acorn
+at ES2020 and fails if anything newer slips in — see the two-runs rule above for
+which bundle that is in each context.
+
+It also enforces a **second, orthogonal floor: no regex literal may use `\p{...}`,
+lookbehind, or the `v` flag.** A regex literal is an early error, so an engine that
+rejects anything inside it fails to parse the whole enclosing module — identical
+blast radius to a class static block, and invisible to the version check, because
+`build.target` only lowers *syntax level* and acorn validates Unicode property
+*names* against the latest spec rather than against Safari 15's ICU. Build such a
+pattern with `new RegExp(...)` in a try/catch with a fallback instead; see
+`src/components/member-avatar.ts`.
 
 Two things it deliberately does **not** prove. It does not prove the committed
 bundle is *current*: a PR that edits `src/` without rebuilding still ships a stale

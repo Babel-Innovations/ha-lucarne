@@ -1,8 +1,18 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LucarneMemberAvatar } from '../../src/components/member-avatar.js';
-
-await import('../../src/components/member-avatar.js');
+// This value import is what evaluates the module, and evaluating it is what runs
+// `@customElement('lucarne-member-avatar')`. The `import type` above is erased at
+// compile time, so before these bindings existed a dynamic import was needed here
+// to force registration — it is redundant now. If these named imports ever go
+// away, the element stops registering and the DOM tests below fail confusingly:
+// keep a side-effect import in that case.
+import {
+  EMOJI_PATTERN_FALLBACK,
+  EMOJI_PATTERN_PREFERRED,
+  EMOJI_RE,
+  buildEmojiRe,
+} from '../../src/components/member-avatar.js';
 
 function makeEl(opts: { name?: string; color?: string; avatar?: string | null } = {}): LucarneMemberAvatar {
   const el = document.createElement('lucarne-member-avatar') as LucarneMemberAvatar;
@@ -132,5 +142,67 @@ describe('lucarne-member-avatar', () => {
     const avatarDiv = shadow(el, '.avatar');
     assert.ok(avatarDiv, '.avatar div present');
     assert.equal((avatarDiv as HTMLElement).getAttribute('aria-label'), "Charlie's avatar");
+  });
+});
+
+/**
+ * `EMOJI_RE` is built at module scope from a string, not written as a regex
+ * literal, because a literal is an early error and would take the whole bundle
+ * down on an engine that does not know one of the `\p{...}` property names
+ * (issue #101 — see the comment on EMOJI_PATTERN_PREFERRED). That safety net is
+ * dead weight unless the fallback it falls back *to* is known to behave the
+ * same, so exercise both compiled forms against the same corpus.
+ */
+describe('EMOJI_RE construction', () => {
+  const ACCEPTED: [string, string][] = [
+    ['single emoji', '🪥'],
+    ['ZWJ family', '👨‍👩‍👧'],
+    ['skin-tone modifier', '👋🏻'],
+    ['heart with VS16', '❤️'],
+    ['regional-indicator flag', '🇺🇸'],
+    ['dingbat star', '⭐'],
+  ];
+  const REJECTED: [string, string][] = [
+    ['plain ASCII', 'hello'],
+    ['empty string', ''],
+    ['bare ZWJ', '‍'],
+    ['bare VS16', '️'],
+    ['emoji with trailing text', '🪥x'],
+  ];
+
+  for (const [label, source] of [
+    ['preferred (property escapes)', EMOJI_PATTERN_PREFERRED],
+    ['fallback (codepoint ranges)', EMOJI_PATTERN_FALLBACK],
+  ] as [string, string][]) {
+    describe(label, () => {
+      const re = buildEmojiRe([source]);
+      for (const [name, value] of ACCEPTED) {
+        it(`accepts ${name}`, () => assert.equal(re.test(value), true, JSON.stringify(value)));
+      }
+      for (const [name, value] of REJECTED) {
+        it(`rejects ${name}`, () => assert.equal(re.test(value), false, JSON.stringify(value)));
+      }
+    });
+  }
+
+  it('falls through to the next pattern when the engine rejects one', () => {
+    // Stands in for an old WebKit that knows \p{...} syntax but not this name.
+    const re = buildEmojiRe(['\\p{DefinitelyNotAUnicodeProperty}', EMOJI_PATTERN_FALLBACK]);
+    assert.equal(re.test('🪥'), true, 'fell through to the codepoint fallback');
+    assert.equal(re.test('hello'), false);
+  });
+
+  it('returns a never-matching regex rather than throwing when every pattern fails', () => {
+    // The point is that avatars degrade to initials; nothing may propagate out
+    // of module scope, where there is no error boundary and no reporter yet.
+    const re = buildEmojiRe(['(((', '\\p{AlsoNotReal}']);
+    assert.equal(re.test('🪥'), false);
+    assert.equal(re.test(''), false);
+  });
+
+  it('compiles the preferred pattern on this engine', () => {
+    // Guards the ordering: if EMOJI_RE ever silently degraded to the fallback on
+    // a modern engine, the tests above would still pass and nobody would notice.
+    assert.equal(EMOJI_RE.source, buildEmojiRe([EMOJI_PATTERN_PREFERRED]).source);
   });
 });

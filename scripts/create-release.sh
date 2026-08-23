@@ -18,6 +18,10 @@ cd "$REPO_DIR"
 # The card bundle ships inside the integration (HACS pulls the repo at the tag),
 # so it is committed, not uploaded as a release asset.
 BUNDLE="custom_components/lucarne_family/frontend/ha-lucarne.js"
+# The loader shim built alongside it (vite.loader.config.ts). It is what catches a
+# bundle that fails to parse and reports it on the dashboard instead of leaving
+# Home Assistant's generic red panel (#101), so it has to ship in the same commit.
+LOADER="custom_components/lucarne_family/frontend/ha-lucarne-loader.js"
 
 # HACS/HA report the integration version from manifest.json's "version" key, so it
 # must track package.json. npm version only bumps package.json; we sync this too.
@@ -137,8 +141,8 @@ fi
 # Used by the branch-protection helpers (and restore trap) below.
 REPO_SLUG=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 
-if [ ! -f "$BUNDLE" ]; then
-    log_error "$BUNDLE not found. Run 'npm run build' first."
+if [ ! -f "$BUNDLE" ] || [ ! -f "$LOADER" ]; then
+    log_error "$BUNDLE / $LOADER not found. Run 'npm run build' first."
     exit 1
 fi
 
@@ -257,8 +261,8 @@ log_success "Files updated"
 log_info "Building $BUNDLE..."
 npm run build
 
-if [ ! -f "$BUNDLE" ]; then
-    log_error "Build failed — $BUNDLE not created"
+if [ ! -f "$BUNDLE" ] || [ ! -f "$LOADER" ]; then
+    log_error "Build failed — $BUNDLE / $LOADER not created"
     exit 1
 fi
 
@@ -293,7 +297,7 @@ log_success "Bundle syntax floor verified"
 
 log_info "Committing changes..."
 
-git add package.json package-lock.json "$MANIFEST" CHANGELOG.md "$BUNDLE"
+git add package.json package-lock.json "$MANIFEST" CHANGELOG.md "$BUNDLE" "$LOADER"
 git commit -m "bump: v${NEW_VERSION}"
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)

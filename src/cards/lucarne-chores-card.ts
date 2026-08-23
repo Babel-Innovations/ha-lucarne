@@ -15,6 +15,7 @@ import {
 import '../components/member-column.js';
 import '../components/add-task-popover.js';
 import '../components/edit-task-popover.js';
+import { markBoot } from '../shared/boot-marks.js';
 
 export interface LucarneChoresCardConfig {
   type: 'custom:lucarne-chores-card';
@@ -93,6 +94,10 @@ function editMatches(real: RenderableTask, opt: RenderableTask): boolean {
   description: 'Family chore grid with streaks and celebration',
   preview: true,
 });
+// Breadcrumb, not a registration: @customElement below has not run yet. The
+// three cards are spread across the module graph, so the last mark present in
+// window.__lucarneBoot.marks locates where evaluation stopped (issue #101).
+markBoot('evaluating:lucarne-chores-card');
 
 @customElement('lucarne-chores-card')
 export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> {

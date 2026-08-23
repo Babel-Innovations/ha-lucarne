@@ -50,6 +50,10 @@ cd "$REPO_DIR"
 # source at the tag (hacs.json sets no zip_release), so — exactly as in
 # create-release.sh — the pre-release carries no uploaded assets.
 BUNDLE="custom_components/lucarne_family/frontend/ha-lucarne.js"
+# The loader shim built alongside it (vite.loader.config.ts). It is what catches a
+# bundle that fails to parse and reports it on the dashboard instead of leaving
+# Home Assistant's generic red panel (#101), so it has to ship in the same commit.
+LOADER="custom_components/lucarne_family/frontend/ha-lucarne-loader.js"
 MANIFEST="custom_components/lucarne_family/manifest.json"
 
 # Pre-releases are cut from main. A tag on a PR branch points at a commit a
@@ -157,8 +161,8 @@ if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
     exit 1
 fi
 
-if [ ! -f "$BUNDLE" ]; then
-    log_error "$BUNDLE not found. Run 'npm run build' first."
+if [ ! -f "$BUNDLE" ] || [ ! -f "$LOADER" ]; then
+    log_error "$BUNDLE / $LOADER not found. Run 'npm run build' first."
     exit 1
 fi
 
@@ -252,8 +256,8 @@ COMMIT_SUBJECT=$(git log -1 --pretty=%s)
 log_info "Building $BUNDLE..."
 npm run build
 
-if [ ! -f "$BUNDLE" ]; then
-    log_error "Build failed — $BUNDLE not created"
+if [ ! -f "$BUNDLE" ] || [ ! -f "$LOADER" ]; then
+    log_error "Build failed — $BUNDLE / $LOADER not created"
     exit 1
 fi
 

@@ -19,7 +19,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.loader import async_get_integration
 
-from .const import DOMAIN, FRONTEND_URL, PRESET_ADULT_NONE, THEME_FILE, THEME_NAME
+from .const import (
+    DOMAIN,
+    FRONTEND_URL,
+    LOADER_URL,
+    PRESET_ADULT_NONE,
+    THEME_FILE,
+    THEME_NAME,
+)
 from .models import Member, RoutinePreset
 from .presets import BUILTIN_PRESETS
 from .store import LucarneFamilyStore
@@ -28,18 +35,32 @@ from .task_adoption import managed_todo_entity_ids
 _LOGGER = logging.getLogger(__name__)
 
 
-def _bundle_digest(path: Path) -> str:
-    """Short content hash of the card bundle, used to cache-bust the ?v= query.
+def _bundle_digest(*paths: Path) -> str:
+    """Short content hash of the frontend artifacts, used to cache-bust the ?v= query.
 
-    The URL changes whenever the bundle bytes change, so a rebuilt card busts
-    the browser and frontend service-worker caches without a manifest version
-    bump. Reading the file is blocking I/O — call via async_add_executor_job.
+    The URL changes whenever the bytes change, so a rebuilt card busts the browser
+    and frontend service-worker caches without a manifest version bump. Reading the
+    files is blocking I/O — call via async_add_executor_job.
+
+    Hash EVERY artifact the query is appended to, not just the card bundle. Both
+    URLs are served with ``cache_headers=True`` (a 31-day ``Cache-Control`` —
+    ``CACHE_TIME`` in homeassistant/components/http/static.py), so
+    an artifact whose bytes changed while the query did not stays cached on the
+    device effectively forever. Hashing only ha-lucarne.js meant a loader-only
+    change never busted — which is the common case while debugging #101, since the
+    loader is the diagnostic instrument and the bundle is the thing under test.
+
+    Order matters (the hash is over concatenated bytes), so keep the call site's
+    argument order stable; it only ever needs to be self-consistent.
     """
-    try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()[:8]
-    except OSError as err:
-        _LOGGER.warning("Could not hash card bundle %s for cache-busting: %s", path, err)
-        return "0"
+    digest = hashlib.sha256()
+    for path in paths:
+        try:
+            digest.update(path.read_bytes())
+        except OSError as err:
+            _LOGGER.warning("Could not hash frontend artifact %s for cache-busting: %s", path, err)
+            return "0"
+    return digest.hexdigest()[:8]
 
 
 def _load_theme(path: Path) -> dict[str, Any]:
@@ -64,18 +85,58 @@ def _load_theme(path: Path) -> dict[str, Any]:
 async def async_setup(hass: HomeAssistant, _config: dict[str, Any]) -> bool:
     """Set up the Lucarne Family integration.
 
-    Serves the bundled Lovelace card JS and registers it as a frontend module so
-    the cards load automatically — no separate HACS plugin or manual Lovelace
-    resource needed. Also registers the bundled "Lucarne" theme in-process so it
-    appears under Profile → Theme without any configuration.yaml edits.
+    Serves the bundled Lovelace card JS and registers the loader shim that imports
+    it — the bundle itself must never be a frontend module, see the add_extra_js_url
+    block below (#101). No separate HACS plugin or manual Lovelace resource needed.
+
+    Also registers the bundled "Lucarne" theme in-process so it appears under
+    Profile → Theme without any configuration.yaml edits.
     """
-    js_file = Path(__file__).parent / "frontend" / "ha-lucarne.js"
+    frontend_dir = Path(__file__).parent / "frontend"
+    js_file = frontend_dir / "ha-lucarne.js"
+    loader_file = frontend_dir / "ha-lucarne-loader.js"
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL, str(js_file), cache_headers=True)]
+        [
+            StaticPathConfig(FRONTEND_URL, str(js_file), cache_headers=True),
+            StaticPathConfig(LOADER_URL, str(loader_file), cache_headers=True),
+        ]
     )
     integration = await async_get_integration(hass, DOMAIN)
-    digest = await hass.async_add_executor_job(_bundle_digest, js_file)
-    add_extra_js_url(hass, f"{FRONTEND_URL}?v={integration.version}.{digest}")
+    digest = await hass.async_add_executor_job(_bundle_digest, js_file, loader_file)
+    # ONLY the loader is registered as a frontend module. This is the fix for #101
+    # and the bundle URL must NOT be added here.
+    #
+    # Home Assistant's app entrypoint imports
+    # @webcomponents/scoped-custom-element-registry, whose final statement is:
+    #
+    #     Object.defineProperty(window, "customElements",
+    #       {value: new CustomElementRegistry, configurable: true, writable: true})
+    #
+    # It installs a brand-new registry, discarding everything defined before it. A
+    # directly-registered bundle evaluated first, registered all 31 elements into
+    # the native registry, and had them thrown away — define() returning cleanly,
+    # nothing thrown, and every card becoming HA's "Custom element doesn't exist"
+    # panel.
+    #
+    # That polyfill is in frontend_latest/app.js as well as frontend_es5/app.js
+    # (verified on a live instance), so this is NOT es5-only. What differs is
+    # ORDERING: index.html carries <link rel="modulepreload"> for the latest
+    # core/app, so on a modern device they evaluate — and swap — before our bundle
+    # and our registrations survive. The es5 path has no preload and is loaded by
+    # _ls(...) from a script block after ours, so there we registered first and were
+    # wiped. A race, which is why it presented as intermittent and device-specific.
+    #
+    # Registering only the loader hands it control of *when* the bundle is imported,
+    # and module evaluation is what registers — so it waits for the swap on every
+    # path before importing. See whenRegistryIsFinal in src/loader/boot.ts. It also
+    # means the loader is the sole importer, so its `.catch` sees any parse or
+    # evaluation failure, which HA's own un-caught `import(...)` would discard.
+    #
+    # The bundle stays served at FRONTEND_URL above; the loader resolves it relative
+    # to its own URL and carries this same ?v= across, and the digest covers both
+    # files so editing either one busts the cache (see _bundle_digest).
+    version_query = f"?v={integration.version}.{digest}"
+    add_extra_js_url(hass, f"{LOADER_URL}{version_query}")
 
     await _async_register_theme(hass)
     return True
