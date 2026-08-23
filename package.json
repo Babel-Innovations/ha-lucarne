@@ -5,8 +5,8 @@
   "type": "module",
   "main": "custom_components/lucarne_family/frontend/ha-lucarne.js",
   "scripts": {
-    "build": "vite build",
-    "dev": "vite build --watch",
+    "build": "vite build && vite build -c vite.loader.config.ts",
+    "dev": "vite build --watch & BUNDLE_WATCH=$!; trap 'kill $BUNDLE_WATCH 2>/dev/null' INT TERM EXIT; vite build -c vite.loader.config.ts --watch",
     "deploy": "bash scripts/deploy-integration.sh",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",

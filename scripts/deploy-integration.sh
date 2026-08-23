@@ -4,7 +4,7 @@
 # the project root if present (see .env.example).
 #
 # The card bundle ships inside the integration (custom_components/lucarne_family/
-# frontend/ha-lucarne.js) and is auto-registered on setup, so this script builds
+# frontend/ha-lucarne.js) and is imported by the loader shim registered on setup, so this script builds
 # the frontend first and then rsyncs the whole integration. There is no separate
 # card deploy or Lovelace-resource step.
 #
@@ -92,10 +92,15 @@ if [ "$SKIP_BUILD" = "0" ]; then
   echo "Building frontend bundle (npm run build)..."
   (cd "$ROOT_DIR" && npm run build)
 fi
-if [ ! -f "$SOURCE/frontend/ha-lucarne.js" ]; then
-  echo -e "${RED}Missing $SOURCE/frontend/ha-lucarne.js — run without --skip-build${NC}" >&2
-  exit 1
-fi
+# Both artifacts, not just the bundle: async_setup registers a static path for
+# each, and a deploy missing the loader silently loses the only thing that can
+# report a bundle which fails to parse (#101).
+for artifact in ha-lucarne.js ha-lucarne-loader.js; do
+  if [ ! -f "$SOURCE/frontend/$artifact" ]; then
+    echo -e "${RED}Missing $SOURCE/frontend/$artifact — run without --skip-build${NC}" >&2
+    exit 1
+  fi
+done
 
 echo -e "${GREEN}=========================================${NC}"
 echo "Deploying custom_components/lucarne_family/ to ${HA_SSH_HOST}:${HA_INTEGRATION_PATH}"

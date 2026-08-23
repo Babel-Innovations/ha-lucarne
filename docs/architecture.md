@@ -196,7 +196,7 @@ and the `RollingWindowController` state machine.
 
 ## Custom integration (lucarne_family)
 
-This repo ships a single **Integration** (`custom_components/lucarne_family/`) that also bundles the **Frontend** (Lovelace card pack, `custom_components/lucarne_family/frontend/ha-lucarne.js`). The integration owns family members, task metadata, managed entities (`todo.<slug>`, `counter.<slug>_streak`), and managed automations — and on setup it serves the card bundle and registers it with the frontend so the cards load with no separate install.
+This repo ships a single **Integration** (`custom_components/lucarne_family/`) that also bundles the **Frontend** (Lovelace card pack, `custom_components/lucarne_family/frontend/ha-lucarne.js`). The integration owns family members, task metadata, managed entities (`todo.<slug>`, `counter.<slug>_streak`), and managed automations — and on setup it serves the card bundle and registers the loader shim that imports it, so the cards load with no separate install.
 
 ### Data flow — entity-manager + task-service (Phase 2)
 
@@ -447,8 +447,28 @@ Vite bundles `src/index.ts` (which imports all three card entry points) into
 `custom_components/lucarne_family/frontend/ha-lucarne.js`. The bundle is a single ES module with no
 external runtime dependencies (Lit is bundled in) and is committed to the repo. HACS installs the
 integration directory at the tagged GitHub release, so the bundle ships with it; the integration's
-`async_setup` serves it at `/lucarne_family_frontend/ha-lucarne.js` and registers it via
-`add_extra_js_url`, so no separate HACS plugin or Lovelace resource is needed.
+`async_setup` serves it at `/lucarne_family_frontend/ha-lucarne.js`. It is deliberately **not**
+passed to `add_extra_js_url` — the loader described below is the only importer (#101) — and no
+separate HACS plugin or Lovelace resource is needed.
+
+A **second, ~4 kB artifact** is built alongside it from `src/loader.ts` by
+`vite.loader.config.ts` and served at `/lucarne_family_frontend/ha-lucarne-loader.js`.
+`async_setup` registers **only that URL** as a frontend module; the bundle is served but never
+imported by Home Assistant directly. That is the fix for issue #101: HA's app entrypoint imports
+`@webcomponents/scoped-custom-element-registry`, which replaces `window.customElements` with a
+fresh registry and discards everything defined earlier, and `index.html` imports extra modules
+*before* that runs — so a directly-registered bundle registered all 31 elements and lost them
+all. The polyfill ships in **both** builds; the modern one only escapes because `index.html`
+preloads its core/app so they swap first. The loader therefore waits for the swap on every path
+(`whenRegistryIsFinal`) before importing, since module evaluation is what registers.
+Being the sole importer also means its `.catch` observes any parse or evaluation failure that
+Home Assistant's own un-caught `import()` would discard. On failure it registers the
+three card tags with an element that renders the exception on the dashboard; on success it
+re-fires `ll-rebuild` at any `hui-error-card` still standing in for one of our cards. This is
+the only path by which a bundle that fails to *parse* can report anything at all — the file
+header in `src/loader/boot.ts` has the full account. It is a separate single-entry Vite config
+on purpose:
+multiple lib entries can emit a shared chunk, and each artifact needs its own static path.
 
 ## Breakpoints
 

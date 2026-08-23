@@ -16,6 +16,7 @@ import '../components/weather-block.js';
 import '../components/tasks-summary.js';
 import '../components/presence-pills.js';
 import '../components/family-ready-pill.js';
+import { markBoot } from '../shared/boot-marks.js';
 
 export type TodaySectionId = 'calendar' | 'weather' | 'tasks';
 export const DEFAULT_SECTION_ORDER: readonly TodaySectionId[] = ['calendar', 'weather', 'tasks'] as const;
@@ -71,6 +72,10 @@ export interface LucarneTodayCardConfig {
   description: 'Family agenda + weather + tasks + presence',
   preview: true,
 });
+// Breadcrumb, not a registration: @customElement below has not run yet. The
+// three cards are spread across the module graph, so the last mark present in
+// window.__lucarneBoot.marks locates where evaluation stopped (issue #101).
+markBoot('evaluating:lucarne-today-card');
 
 @customElement('lucarne-today-card')
 export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {

@@ -17,6 +17,7 @@ import '../components/calendar-grid.js';
 import '../components/calendar-day-pan.js';
 import '../components/calendar-event-popover.js';
 import '../components/create-event-popover.js';
+import { markBoot } from '../shared/boot-marks.js';
 
 export interface LucarneCalendarCardConfig {
   type: 'custom:lucarne-calendar-card';
@@ -65,6 +66,10 @@ const MAX_INITIAL_SCROLL_FRAMES = 60;
   description: 'Week view calendar with per-person color, visibility pills, and create-event flow',
   preview: true,
 });
+// Breadcrumb, not a registration: @customElement below has not run yet. The
+// three cards are spread across the module graph, so the last mark present in
+// window.__lucarneBoot.marks locates where evaluation stopped (issue #101).
+markBoot('evaluating:lucarne-calendar-card');
 
 @customElement('lucarne-calendar-card')
 export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConfig> {

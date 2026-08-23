@@ -125,15 +125,19 @@ limitation. Avoid Personal Automations that require HA Companion interaction on 
 wrap entity tiles, so this is unlikely — but if you add standard entity cards alongside them on the
 same view, be aware of this behavior.
 
-**Card bundle cache**: The integration serves the bundle at a content-hashed
-`/lucarne_family_frontend/ha-lucarne.js?v=<version>.<digest>` URL (`_bundle_digest` in
-`custom_components/lucarne_family/__init__.py`), so changed bundle bytes produce a new URL and a
-normal reload picks them up — no hard refresh needed. That URL is registered in `async_setup`, so HA
-must be **restarted** for a new bundle to be served; reloading the config entry only runs
+**Card bundle cache**: The integration serves two artifacts under
+`/lucarne_family_frontend/`, both carrying the same content-hashed
+`?v=<version>.<digest>` query (`_bundle_digest` in
+`custom_components/lucarne_family/__init__.py`, which hashes **both** files, so editing either one
+busts the cache). Changed bytes produce a new URL and a normal reload picks them up — no hard
+refresh needed. Only `ha-lucarne-loader.js` is registered with the frontend; it imports
+`ha-lucarne.js` itself, relative to its own URL, and the bundle must never be registered directly
+(see issue #101 and the file header in `src/loader/boot.ts`). Registration happens in `async_setup`, so HA
+must be **restarted** for a new build to be served; reloading the config entry only runs
 `async_setup_entry` and will not recompute the digest. On iPad, force-quit the Companion app if the
 app shell itself looks stale — the shell is service-worker cached. Clearing Safari website data is a
 last resort, since it signs the device out of Home Assistant.
 
 (This replaces an older note about hard-refreshing after switching the Lovelace resource URL from
-`/local/lucarne/...` to `/hacsfiles/...`; the integration now serves and registers the bundle
-itself, so there is no manual Lovelace resource to switch.)
+`/local/lucarne/...` to `/hacsfiles/...`; the integration now serves the bundle itself and
+registers the loader shim that imports it, so there is no manual Lovelace resource to switch.)

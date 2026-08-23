@@ -7,7 +7,8 @@ Working guide for AI sessions. Covers what you'd get wrong without it.
 Single-distribution HACS repo (one `integration` install ships both halves):
 
 - **Integration** (`custom_components/lucarne_family/`) — Python HA integration that owns family members, managed entities (`todo.<slug>`, `counter.<slug>_streak`), SQLite task/completion storage, and in-process time-change listeners for daily reset and streak check.
-- **Frontend** (`custom_components/lucarne_family/frontend/ha-lucarne.js`) — three Lit-based Lovelace cards: `lucarne-today-card`, `lucarne-calendar-card`, `lucarne-chores-card`. Single ESM bundle; no code splitting. The integration's `async_setup` serves this file at `FRONTEND_URL` (`/lucarne_family_frontend/ha-lucarne.js`) and calls `add_extra_js_url` so the cards auto-register — **no HACS plugin, no manual Lovelace resource.**
+- **Frontend** (`custom_components/lucarne_family/frontend/ha-lucarne.js`) — three Lit-based Lovelace cards: `lucarne-today-card`, `lucarne-calendar-card`, `lucarne-chores-card`. Single ESM bundle; no code splitting. The integration's `async_setup` **serves** this file at `FRONTEND_URL` (`/lucarne_family_frontend/ha-lucarne.js`) but does **not** register it as a frontend module — the loader shim below is the only importer (#101). No HACS plugin, no manual Lovelace resource.
+- **Loader shim** (`frontend/ha-lucarne-loader.js`, ~4 kB) — the **only** module registered with the frontend. It waits for HA's legacy build to finish replacing `window.customElements`, then imports the bundle with a `.catch` attached. Both halves are the fix for #101; see the loader pitfall below and the file header in `src/loader/boot.ts`.
 
 Two test runners (node:test + pytest), one deploy target.
 
@@ -15,6 +16,8 @@ Two test runners (node:test + pytest), one deploy target.
 
 ```
 src/                          TypeScript sources (Lit cards + components)
+  index.ts                    bundle entry; FIRST import must stay install-reporter (see #101)
+  loader.ts + loader/boot.ts  the ~3 kB loader shim built to frontend/ha-lucarne-loader.js
   cards/                      lucarne-today-card.ts, lucarne-calendar-card.ts, lucarne-chores-card.ts
   components/                 Lit sub-components (member-column, task-row, family-ready-pill, avatar-upload-modal, ...)
   editors/                    Visual editor elements for each card
@@ -38,7 +41,8 @@ custom_components/
     apple_sentinel_backfill.py Extracts [apple:UUID] from item descriptions → source=apple metadata
     presets.py                Routine preset definitions (school-age kid, toddler, adult)
     models.py, const.py       Dataclasses and constants
-    frontend/ha-lucarne.js    Built card bundle (committed; served + registered by async_setup)
+    frontend/ha-lucarne.js    Built card bundle (committed; SERVED by async_setup, never registered)
+    frontend/ha-lucarne-loader.js  Built loader shim (committed; the ONLY registered frontend module)
 blueprints/automation/
   lucarne_reminders_sync.yaml Only remaining blueprint (webhook receiver for Reminders bridge)
 bridge/                       Mac mini launchd bridge setup instructions
@@ -51,6 +55,8 @@ scripts/
   create-release.sh           bump version + changelog + commit + tag + GitHub release
   create-prerelease.sh        tag an already-pushed commit as a pre-release (no bump)
   delete-prerelease.sh        remove pre-releases + their tags (stable releases untouched)
+vite.config.ts                card bundle build
+vite.loader.config.ts         loader shim build (separate config on purpose — see Build & test)
 ```
 
 ## Build & test
@@ -58,7 +64,7 @@ scripts/
 ### TypeScript (cards)
 
 ```bash
-npm run build         # Vite build → custom_components/lucarne_family/frontend/ha-lucarne.js (single ESM, committed)
+npm run build         # TWO Vite builds → frontend/ha-lucarne.js + frontend/ha-lucarne-loader.js (both committed)
 npm test              # node:test runner (NOT vitest — see pitfalls)
 npm run test:coverage # same suite + Node coverage, fails under line 88 / branch 80 / funcs 73 (CI gate)
 npm run typecheck     # tsc --noEmit
@@ -69,7 +75,15 @@ CI runs `test:coverage`, not `test`. The thresholds are floored from the
 current numbers — raise them as coverage improves, never lower to make a PR
 pass. `npm test` stays coverage-free for fast local iteration.
 
-The built bundle is **committed** — HACS ships repo files for an integration and does not run a build. Rebuild and commit `frontend/ha-lucarne.js` whenever card sources change.
+Both built artifacts are **committed** — HACS ships repo files for an integration and does not
+run a build. Rebuild and commit `frontend/ha-lucarne.js` *and* `frontend/ha-lucarne-loader.js`
+whenever card or loader sources change.
+
+`npm run build` runs two single-entry Vite builds. The loader has its own config
+(`vite.loader.config.ts`) rather than being a second `lib.entry`: with more than one entry,
+Rolldown may hoist shared code into a third chunk file, and `async_setup` registers one static
+path per artifact, so a surprise chunk would simply 404 at runtime. The card bundle is still a
+single self-contained ESM file — **do not code-split it.**
 
 `vite.config.ts` pins `build.target` to `["es2020", "safari15", "ios15", "chrome85"]` —
 the floor for the iPadOS 15 wall tablet and the Tizen 6.5 TV. `tests/build/bundle-syntax.test.ts`
@@ -215,7 +229,7 @@ otherwise ship the exact parse bug it was cut to verify (#101).
 
 ## HACS distribution
 
-Single HACS item — `integration` category only. The cards ride along inside the integration package and are auto-registered by `async_setup`; there is **no** `plugin` category and **no** separate Dashboard registration.
+Single HACS item — `integration` category only. The cards ride along inside the integration package; `async_setup` serves them and registers the loader shim, which imports them; there is **no** `plugin` category and **no** separate Dashboard registration.
 
 | Surface | Category | Source |
 |---------|----------|--------|
@@ -232,11 +246,15 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Integration uses `lucarne_family.*` services and `lucarne_family_*` events**: The older `ha_lucarne_chores_all_done` event is a deprecated compat shim still fired by `completion_listener.py` in v0.x alongside `lucarne_family_all_routines_done`. Migrate consumers to the new event; see `docs/events.md`.
 - **Browser floor is pinned in `vite.config.ts`**: never remove or raise `build.target`. Vite's
   default (`baseline-widely-available` = safari16.4/chrome111) emits ES2022 class static blocks,
-  which iPadOS 15 WebKit and Tizen 6.5 (Chromium 85) cannot **parse** — the whole module dies, no
+  which iPadOS 15 WebKit cannot **parse** (the Frame TV measured as Chrome 108 and parses them
+  fine; `chrome85` is a conservative floor, not the deployed engine) — the whole module dies, no
   card registers, and every card becomes HA's generic red "Configuration error" panel with
-  `debug: true` unable to report anything (issue #101). The pin is the fix; with it in place a Vite
-  bump is safe. `tests/build/bundle-syntax.test.ts` is the alarm that fails if the pin is ever
-  removed, raised, or stops being honoured — keep both. The guard parses whichever bundle is on
+  `debug: true` unable to report anything. The pin is the fix for *that* failure mode; with it in
+  place a Vite bump is safe. **It did not fix issue #101** — the pinned bundle parses cleanly at
+  ES2020 on both failing devices and they still show the red panel, so keep the pin on its own
+  merits and don't treat #101 as evidence for or against it (see the #101 pitfall below).
+  `tests/build/bundle-syntax.test.ts` is the alarm that fails if the pin is ever
+  removed, raised, or stops being honoured — keep both. The guard parses whichever artifacts are on
   disk, so CI runs it twice: once before `npm run build` (the committed bytes HACS ships) and again
   inside `test:coverage` after it (proof the pin holds in fresh output). `create-release.sh` re-runs
   it after its own build. Don't drop either CI step or move `test:coverage` above the build.
@@ -244,6 +262,53 @@ Single HACS item — `integration` category only. The cards ride along inside th
   source changes is still on you. es2020 is a chosen floor, not a tool limit — Vite 8 (Rolldown) builds lower targets
   fine, it just buys nothing below Chromium 85. Runtime APIs newer than the floor still need a
   `typeof` guard — syntax lowering does not polyfill them.
+- **NEVER register the card bundle as an `extra_module_url`. This is the #101 fix.**
+  `async_setup` must register **only** `LOADER_URL`. HA's app entrypoint imports
+  `@webcomponents/scoped-custom-element-registry`, whose last statement is
+  `Object.defineProperty(window, "customElements", {value: new CustomElementRegistry, ...})` —
+  it installs a **brand-new registry and discards everything defined before it**. A
+  directly-registered bundle evaluated first, registered all 31 elements into the native
+  registry, and lost them all: `define()` returns cleanly, nothing throws, and every card
+  becomes HA's `Custom element doesn't exist: lucarne-…` panel.
+  **This is not es5-only** — the polyfill is in `frontend_latest/app.js` too. What differs is
+  *ordering*: `index.html` preloads the latest core/app (`<link rel="modulepreload">`) so they
+  swap before our bundle, while the es5 pair is loaded by `_ls(...)` from a script block *after*
+  ours. That accident is why it looked device-specific and intermittent — don't mistake it for
+  immunity, and don't add a `latestJS` fast path. The loader delays the import until after the
+  swap on **every** path (`whenRegistryIsFinal` in `src/loader/boot.ts`); it cannot do that if
+  HA is also importing the bundle itself. `tests/python/test_frontend.py` pins this.
+- **A failure during bundle *evaluation* is invisible unless you keep the two guards that
+  see it** (issue #101). Home Assistant renders every `extra_module_url` as a bare
+  `import(...)` with **no `.catch`**, so a bundle that fails to parse or throws while
+  evaluating dies in total silence: nothing registers, HA substitutes its generic red panel,
+  and no `debug: true` notification appears because `LucarneCardBase`'s boundaries need an
+  *instance*. Two things close that, and both are load-bearing:
+  1. `src/index.ts`'s **first** import must stay `'./shared/install-reporter.js'`. ESM hoists
+     imports above the module body, so the old arrangement — a bare
+     `installGlobalErrorReporter()` call at the top of the file — ran **dead last**, after all
+     31 registrations. Moving it back into the body silently disarms `window.onerror` for the
+     entire evaluation phase.
+  2. `frontend/ha-lucarne-loader.js` is the **sole importer** of the bundle, so its `.catch`
+     is the only thing that can observe a parse or evaluation failure. On failure it registers
+     the three card tags with an element that renders the exception on the dashboard; on both
+     outcomes it re-fires `ll-rebuild` at any `hui-error-card` still standing in for one of our
+     cards. It resolves the bundle relative to its own URL so the `?v=<version>.<digest>`
+     cache-buster carries across, and the digest covers **both** artifacts so editing either
+     one busts the cache. `window.__lucarneBoot` carries `stage` / `registryWait` / `error` /
+     `marks` / `registered` / `healed`.
+- **Never ship a regex *literal* using `\p{...}`, lookbehind, or the `v` flag.** A regex
+  literal is an *early error*: an engine that does not recognise a Unicode property **name**
+  rejects the whole enclosing module at parse time — same blast radius as a class static block,
+  but `build.target` cannot help (it lowers syntax level only) and acorn validates names
+  against the latest spec, not against Safari 15's ICU. Build the pattern with
+  `new RegExp(pattern, flags)` inside a try/catch with a fallback, as
+  `src/components/member-avatar.ts` does; `tests/build/bundle-syntax.test.ts` walks both
+  shipped artifacts' ASTs and fails on any offender.
+- **`window.customCards` is not evidence that our bundle ran.** It is a shared global every
+  custom card writes to, and our bundle pushes to it three separate times spread across the
+  module graph — so a partial abort still leaves it non-empty. Reading it as "the bundle ran
+  fine" is what sent the first pass at #101 down a dead end. Ask about our own tags
+  (`customElements.get('lucarne-chores-card')`) and `window.__lucarneBoot` instead.
 - **Cards implement `applyConfig()` / `renderContent()`, never `setConfig()` / `render()`**:
   `LucarneCardBase` owns both error boundaries. Throw `LucarneConfigError` for invalid user config
   (it is deliberately re-thrown so HA shows the message); any other throw is contained and
@@ -331,9 +396,12 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Don't** write files to `<config>/www/` outside `/local/lucarne/avatars/`.
 - **Don't** add `contributing.md`, `code_of_conduct.md`, or other meta docs unless asked.
 - **Don't** generate vitest imports in test files.
-- **Don't** remove `build.target` from `vite.config.ts` or delete `tests/build/bundle-syntax.test.ts`.
+- **Don't** remove `build.target` from `vite.config.ts` / `vite.loader.config.ts`, or delete `tests/build/bundle-syntax.test.ts`.
+- **Don't** add `FRONTEND_URL` back to `add_extra_js_url` — only the loader may be a frontend module (#101).
+- **Don't** move `installGlobalErrorReporter()` back into `src/index.ts`'s body, or drop the loader shim — see the #101 pitfall above.
+- **Don't** write a regex literal using `\p{...}`, lookbehind, or the `v` flag — use `new RegExp` with a fallback.
 - **Don't** override `setConfig()` or `render()` in a card — use `applyConfig()` / `renderContent()`.
-- **Don't** split the ESM bundle or re-introduce a separate HACS `plugin` distribution — the integration serves and registers the single bundle itself.
+- **Don't** split the ESM bundle or re-introduce a separate HACS `plugin` distribution — the integration serves the single bundle and registers only the loader shim that imports it.
 - **Don't** implement the round-trip webhook POST without a spec — only the HA event is fired in v0.2.
 - **Don't** add server-side center-square crop to `avatar_service.py` without a spec — the deferred design is documented in CLAUDE.md and the phase-6 spec.
 
@@ -345,3 +413,4 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - Service reference: `docs/services.md`
 - Event reference: `docs/events.md`
 - Reminders bridge setup: `bridge/README.md`
+- Issue #101 root cause (read before touching the loader or the build target): the file header in `src/loader/boot.ts`, plus PR #115 and the issue thread

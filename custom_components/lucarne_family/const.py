@@ -4,8 +4,18 @@ from __future__ import annotations
 DOMAIN = "lucarne_family"
 STORAGE_VERSION = 1
 
-# Frontend bundle served + auto-registered by the integration (see __init__.async_setup).
+# Frontend bundle. SERVED as a static path but deliberately NOT registered as a
+# frontend module — see the add_extra_js_url block in __init__.async_setup. The loader
+# below is the only thing that imports it.
 FRONTEND_URL = "/lucarne_family_frontend/ha-lucarne.js"
+
+# The only module registered with the frontend. It waits for Home Assistant's legacy
+# (es5) build to finish replacing window.customElements — which discards every element
+# defined before it — and only then imports FRONTEND_URL, with a .catch attached that
+# HA's own import in index.html does not have. Both halves are the fix for issue #101;
+# see the file header in src/loader/boot.ts. Must live in the same
+# served directory as FRONTEND_URL: it resolves the bundle relative to its own URL.
+LOADER_URL = "/lucarne_family_frontend/ha-lucarne-loader.js"
 
 # Pastel theme bundled with the integration and auto-registered in async_setup.
 # THEME_NAME must match the top-level key inside THEME_FILE.

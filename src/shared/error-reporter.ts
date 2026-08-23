@@ -37,10 +37,17 @@ const RENOTIFY_MS = 60_000;
  * error loop must not grow this without limit, and because only the first few
  * reports of a startup failure are interesting.
  *
- * This does NOT cover a failure during module evaluation. `src/index.ts` imports
- * every card, and ESM hoists imports above `installGlobalErrorReporter()`, so a
- * throw while a card module evaluates aborts the bundle before any handler
- * exists — nothing reaches this backlog. See the note in card-base.ts.
+ * The handlers are armed before any card module evaluates: `src/index.ts`'s first
+ * import is `./shared/install-reporter.js` (it used to be a call in the module
+ * body, which ESM hoisting pushed to dead last — issue #101). Don't move it back.
+ *
+ * They still do not see a bundle that fails to LOAD, and not only in the parse
+ * case. The loader shim is the bundle's sole importer and awaits that dynamic
+ * `import()` inside a `try`, so a parse error *and* an evaluation throw both
+ * reject that promise and fire neither `error` nor `unhandledrejection` — both are
+ * reported by `src/loader/boot.ts` instead. What reaches here is everything after
+ * evaluation: render throws, async failures, child-component lifecycle. See also
+ * the note in card-base.ts.
  */
 const MAX_PENDING_REPORTS = 5;
 /**
