@@ -28,7 +28,11 @@ from custom_components.lucarne_family.completion_listener import (
     async_start_completion_listener,
 )
 from custom_components.lucarne_family.const import DOMAIN
-from custom_components.lucarne_family.models import Member
+from custom_components.lucarne_family.models import (
+    Member,
+    RoutinePreset,
+    RoutineTemplate,
+)
 from custom_components.lucarne_family.store import LucarneFamilyStore
 from custom_components.lucarne_family.task_adoption import (
     async_adopt_item,
@@ -748,30 +752,43 @@ async def test_household_orphan_completion_is_logged(
 # ---------------------------------------------------------------------------
 
 
-async def _hold_insert_until_delete_settles(
-    delete_done: asyncio.Event, uid: str = ORPHAN_UID
+async def _hold_until_contender_settles(
+    contender_done: asyncio.Event, uid: str = ORPHAN_UID
 ) -> None:
-    """Block until the concurrent delete either finished or parked on the lock.
+    """Block until the concurrent contender either finished or parked on the lock.
+
+    Direction-neutral on purpose: most tests here hold an insert-side step open
+    and the contender is a ``delete_task``, but the delete-side scope test holds
+    the item removal open and the contender is an adopter.
+
+    Called from inside whichever step of the critical section the test is holding
+    open. The two adoption-shaped paths hold only the INSERT. The two
+    create-then-INSERT paths hold **both** the create and the INSERT, and need
+    both: gating on the create alone misses an INSERT moved out of the lock (the
+    delete resumes on release and still finishes last), and gating on the INSERT
+    alone misses a *create* moved out. Each gate is paired with an assertion that
+    the delete is still parked, which is what turns "moved out of the lock" into a
+    deterministic failure rather than a coin flip.
 
     Both outcomes are observable without a timeout, which is what keeps these
     tests deterministic in *both* directions: unserialized, the delete runs to
-    completion inside the INSERT (the bug); serialized, it parks on the uid lock
-    and ``lock_holders`` counts it. A plain "run the delete inside the patched
-    INSERT" — the pattern the rest of this file uses — would deadlock the moment
-    the lock exists, since the delete could never complete.
+    completion inside the held step (the bug); serialized, it parks on the uid
+    lock and ``lock_holders`` counts it. A plain "run the delete inside the
+    patched INSERT" — the pattern the rest of this file uses — would deadlock the
+    moment the lock exists, since the delete could never complete.
 
-    Treating *any* second holder as "the delete" is only sound because ``_setup``
-    does not start the completion listener: with it running, the appeared-branch
-    ``async_backfill_apple_sentinel`` would take the same uid's lock and release
-    this gate before the deletion task even exists, so the race tests would pass
-    vacuously. If the listener ever moves into ``_setup``, replace this with a
-    delete-specific signal.
+    Treating *any* second holder as "the contender" is only sound because
+    ``_setup`` does not start the completion listener: with it running, the
+    appeared-branch ``async_backfill_apple_sentinel`` would take the same uid's
+    lock and release this gate before the contending task even exists, so the race
+    tests would pass vacuously. If the listener ever moves into ``_setup``,
+    replace this with a contender-specific signal.
     """
     for _ in range(2000):
-        if delete_done.is_set() or lock_holders(uid) > 1:
+        if contender_done.is_set() or lock_holders(uid) > 1:
             return
         await asyncio.sleep(0.001)
-    pytest.fail("delete_task neither completed nor took the uid lock")
+    pytest.fail("the contender neither completed nor took the uid lock")
 
 
 async def test_delete_during_adoption_insert_leaves_no_orphan_row(
@@ -795,7 +812,7 @@ async def test_delete_during_adoption_insert_leaves_no_orphan_row(
 
     async def _gated_add(*args: Any, **kwargs: Any) -> None:
         insert_reached.set()
-        await _hold_insert_until_delete_settles(delete_done)
+        await _hold_until_contender_settles(delete_done)
         await original_add(*args, **kwargs)
 
     async def _delete() -> None:
@@ -815,7 +832,8 @@ async def test_delete_during_adoption_insert_leaves_no_orphan_row(
                 blocking=True,
             )
         )
-        await insert_reached.wait()
+        async with asyncio.timeout(5):
+            await insert_reached.wait()
         deletion = asyncio.create_task(_delete())
         results = await asyncio.gather(update, deletion, return_exceptions=True)
     # Both calls must succeed on their own terms: the empty end state is reached
@@ -839,7 +857,7 @@ async def test_delete_during_apple_backfill_insert_leaves_no_orphan_row(
 
     async def _gated_add(*args: Any, **kwargs: Any) -> None:
         insert_reached.set()
-        await _hold_insert_until_delete_settles(delete_done)
+        await _hold_until_contender_settles(delete_done)
         await original_add(*args, **kwargs)
 
     async def _delete() -> None:
@@ -854,7 +872,8 @@ async def test_delete_during_apple_backfill_insert_leaves_no_orphan_row(
         backfill = asyncio.create_task(
             async_backfill_apple_sentinel(hass, store, "todo.anna", ORPHAN_UID, "anna")
         )
-        await insert_reached.wait()
+        async with asyncio.timeout(5):
+            await insert_reached.wait()
         deletion = asyncio.create_task(_delete())
         results = await asyncio.gather(backfill, deletion, return_exceptions=True)
     assert not [r for r in results if isinstance(r, BaseException)]
@@ -874,16 +893,33 @@ async def test_delete_during_add_task_insert_leaves_no_orphan_row(
     """
     _entry, store = await _setup(hass, tmp_path)
 
+    entity = _get_entity(hass, "todo.anna")
+    original_create = entity.async_create_todo_item
     original_add = store.async_add_task_metadata
-    insert_reached = asyncio.Event()
+    item_created = asyncio.Event()
     delete_done = asyncio.Event()
     new_uid = ""
 
-    async def _gated_add(*args: Any, **kwargs: Any) -> None:
+    # Two gates, because either one alone has a blind spot. Gating only on the
+    # create misses an INSERT moved out of the lock: the delete resumes when the
+    # shortened critical section releases and still lands its metadata DELETE
+    # last, so the end state looks clean. Gating only on the INSERT misses a
+    # create moved out. Each gate asserts the delete is *still parked*, which is
+    # what makes either regression fail deterministically.
+    async def _gated_create(item: TodoItem) -> None:
         nonlocal new_uid
-        new_uid = kwargs["item_uid"]
-        insert_reached.set()
-        await _hold_insert_until_delete_settles(delete_done, new_uid)
+        await original_create(item)
+        new_uid = item.uid or ""
+        item_created.set()
+        await _hold_until_contender_settles(delete_done, new_uid)
+
+    async def _gated_add(*args: Any, **kwargs: Any) -> None:
+        await _hold_until_contender_settles(delete_done, new_uid)
+        if delete_done.is_set():
+            # pytest.fail, not assert: Failed inherits BaseException, so it escapes
+            # handle_add_task's `except Exception` rollback — whose own delete would
+            # otherwise raise first and bury this message.
+            pytest.fail("INSERT ran outside the uid lock")
         await original_add(*args, **kwargs)
 
     async def _delete() -> None:
@@ -894,7 +930,10 @@ async def test_delete_during_add_task_insert_leaves_no_orphan_row(
         finally:
             delete_done.set()
 
-    with patch.object(store, "async_add_task_metadata", _gated_add):
+    with (
+        patch.object(entity, "async_create_todo_item", _gated_create),
+        patch.object(store, "async_add_task_metadata", _gated_add),
+    ):
         add = asyncio.create_task(
             hass.services.async_call(
                 DOMAIN,
@@ -903,7 +942,8 @@ async def test_delete_during_add_task_insert_leaves_no_orphan_row(
                 blocking=True,
             )
         )
-        await insert_reached.wait()
+        async with asyncio.timeout(5):
+            await item_created.wait()
         deletion = asyncio.create_task(_delete())
         results = await asyncio.gather(add, deletion, return_exceptions=True)
     assert not [r for r in results if isinstance(r, BaseException)]
@@ -918,7 +958,8 @@ async def test_delete_task_removes_metadata_before_the_item(
 ) -> None:
     """The two halves are ordered metadata-first, and the order is load-bearing.
 
-    Both are executor hops, so a cancellation (HA shutdown, a dropped WebSocket)
+    Both are executor hops, so a cancellation (HA shutdown, or an explicit
+    caller cancellation)
     or a raising item delete can land between them. Metadata-first leaves an item
     with no row — what every un-adopted item already is, and what the cards render
     via their fallback. The reverse leaves the unreapable orphan of #114. Pinned
@@ -938,19 +979,306 @@ async def test_delete_task_removes_metadata_before_the_item(
 
     entity = _get_entity(hass, "todo.anna")
 
-    async def _failing_delete(_uids: list[str]) -> None:
+    # Fail the ics write, not the whole call: local_todo's async_delete_todo_items
+    # mutates the in-memory calendar and *then* saves, so failing earlier would
+    # model a raise that cannot happen for this branch and would make the retry
+    # below look recoverable when it isn't.
+    async def _failing_save() -> None:
         raise HomeAssistantError("ics write failed")
 
-    with patch.object(entity, "async_delete_todo_items", _failing_delete):
+    with patch.object(entity, "async_save", _failing_save):
         with pytest.raises(HomeAssistantError, match="ics write failed"):
             await hass.services.async_call(
                 DOMAIN, "delete_task", {"uid": uid}, blocking=True
             )
 
-    # Metadata went first, so it is already gone; the item survives the failure
-    # and a retry can still remove it via find_managed_item.
+    # Metadata went first, so it is already gone — which is the whole point of the
+    # order: the reverse would have left the row with the item unreachable.
     assert await store.async_get_task_metadata(uid) is None
+    # The item is still listed, because the state refresh is skipped when the save
+    # raises. That listing is stale: the calendar itself no longer holds the uid.
     assert uid in _uids(hass, "todo.anna")
 
-    await hass.services.async_call(DOMAIN, "delete_task", {"uid": uid}, blocking=True)
-    assert uid not in _uids(hass, "todo.anna")
+    # So this branch is visible but not retry-fixable — the retry resolves the uid
+    # from the stale list and the store raises on it again, until local_todo
+    # reloads. Pinned so the rationale in handle_delete_task stays honest.
+    # ical's TodoStoreError, raw — local_todo does not wrap it — so match on the
+    # message rather than pinning this test to that exception type.
+    with pytest.raises(Exception, match="No existing item with uid"):
+        await hass.services.async_call(
+            DOMAIN, "delete_task", {"uid": uid}, blocking=True
+        )
+
+
+async def test_delete_during_preset_seeding_insert_leaves_no_orphan_row(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """Preset seeding is the fourth locked INSERT path; pin it like the other three.
+
+    It has ``add_task``'s create-then-INSERT shape, so it has the same exposure:
+    the seeded item is published to WS subscribers before its metadata row lands.
+    Without this, a regression moving either half of that pair out of the critical
+    section would orphan a seeded routine with nothing to catch it.
+    """
+    from custom_components.lucarne_family import seed_preset_routines
+
+    _entry, store = await _setup(hass, tmp_path)
+    preset = RoutinePreset(
+        slug="custom-one",
+        display_name="One routine",
+        routines=[RoutineTemplate(summary="Yoga", icon="🧘", recurrence="FREQ=DAILY")],
+    )
+    member = Member(
+        slug="anna",
+        name="Anna",
+        color="#ff0000",
+        avatar=None,
+        created_at=datetime.now(UTC),
+        preset="custom-one",
+        todo_entity_id="todo.anna",
+        streak_counter_id="counter.anna_streak",
+    )
+
+    entity = _get_entity(hass, "todo.anna")
+    original_create = entity.async_create_todo_item
+    original_add = store.async_add_task_metadata
+    item_created = asyncio.Event()
+    delete_done = asyncio.Event()
+    seeded_uid = ""
+
+    # Both gates, for the reasons spelled out in the add_task race test above.
+    async def _gated_create(item: TodoItem) -> None:
+        nonlocal seeded_uid
+        await original_create(item)
+        seeded_uid = item.uid or ""
+        item_created.set()
+        await _hold_until_contender_settles(delete_done, seeded_uid)
+
+    async def _gated_add(*args: Any, **kwargs: Any) -> None:
+        await _hold_until_contender_settles(delete_done, seeded_uid)
+        if delete_done.is_set():
+            pytest.fail("INSERT ran outside the uid lock")
+        await original_add(*args, **kwargs)
+
+    async def _delete() -> None:
+        try:
+            await hass.services.async_call(
+                DOMAIN, "delete_task", {"uid": seeded_uid}, blocking=True
+            )
+        finally:
+            delete_done.set()
+
+    with (
+        patch.object(entity, "async_create_todo_item", _gated_create),
+        patch.object(store, "async_add_task_metadata", _gated_add),
+    ):
+        seeding = asyncio.create_task(
+            seed_preset_routines(
+                hass, store, member, extra_presets={"custom-one": preset}
+            )
+        )
+        async with asyncio.timeout(5):
+            await item_created.wait()
+        deletion = asyncio.create_task(_delete())
+        results = await asyncio.gather(seeding, deletion, return_exceptions=True)
+    assert not [r for r in results if isinstance(r, BaseException)]
+
+    assert seeded_uid
+    assert await store.async_get_task_metadata(seeded_uid) is None
+    assert seeded_uid not in _uids(hass, "todo.anna")
+
+
+async def test_item_removal_stays_inside_the_uid_lock(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """`delete_task` must hold the lock across the item removal, not just the row.
+
+    Every other race test here drives an *inserter* into the lock first, so the
+    delete only ever parks on it — which leaves the delete side's own scope
+    unpinned. Narrowing the critical section to the metadata DELETE alone passes
+    all of them, and is still a #114 regression in this interleaving: the delete
+    drops the row and releases, an adopter then sees the still-present item and
+    writes a fresh row, and the item is removed afterwards, orphaning it.
+    """
+    _entry, store = await _setup(hass, tmp_path)
+    await _add_orphan(hass, "todo.anna")
+
+    entity = _get_entity(hass, "todo.anna")
+    original_delete_items = entity.async_delete_todo_items
+    removal_reached = asyncio.Event()
+    adopt_done = asyncio.Event()
+
+    async def _gated_delete_items(uids: list[str]) -> None:
+        removal_reached.set()
+        await _hold_until_contender_settles(adopt_done)
+        await original_delete_items(uids)
+
+    async def _adopt() -> None:
+        try:
+            await hass.services.async_call(
+                DOMAIN,
+                "update_task_metadata",
+                {"uid": ORPHAN_UID, "type": "routine", "recurrence": "FREQ=DAILY"},
+                blocking=True,
+            )
+        finally:
+            adopt_done.set()
+
+    with patch.object(entity, "async_delete_todo_items", _gated_delete_items):
+        deletion = asyncio.create_task(
+            hass.services.async_call(
+                DOMAIN, "delete_task", {"uid": ORPHAN_UID}, blocking=True
+            )
+        )
+        async with asyncio.timeout(5):
+            await removal_reached.wait()
+        adoption = asyncio.create_task(_adopt())
+        results = await asyncio.gather(deletion, adoption, return_exceptions=True)
+
+    # Anything that is not the one expected error — a product failure, or the
+    # gate's pytest.fail — must surface with its own message intact.
+    for result in results:
+        if isinstance(result, BaseException) and not isinstance(
+            result, ServiceValidationError
+        ):
+            raise result
+    # And the expected error is pinned by shape, not just by class: a regression
+    # that rejected this call during *validation* would never reach the lock, yet
+    # would still set adopt_done and leave both end-state assertions holding.
+    deletion_result, adoption_result = results
+    assert deletion_result is None
+    assert isinstance(adoption_result, ServiceValidationError)
+    assert "No task found with uid" in str(adoption_result)
+
+    assert await store.async_get_task_metadata(ORPHAN_UID) is None
+    assert ORPHAN_UID not in _uids(hass, "todo.anna")
+
+
+async def test_add_task_rollback_delete_stays_inside_the_uid_lock(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """`add_task`'s rollback delete is inside the lock, and that is load-bearing.
+
+    ``task_locks`` claims the lock covers creation, the INSERT, *and* the rollback
+    delete. The last of those is the error path, so nothing else here exercises
+    it — yet moving it out is a real #114 regression: the INSERT fails, the lock
+    releases, a racing ``update_task_metadata`` sees the still-present item and
+    adopts it as a routine, and the rollback then removes the item underneath the
+    row it just wrote.
+    """
+    _entry, store = await _setup(hass, tmp_path)
+
+    entity = _get_entity(hass, "todo.anna")
+    original_delete_items = entity.async_delete_todo_items
+    rollback_reached = asyncio.Event()
+    adopt_done = asyncio.Event()
+    new_uid = ""
+
+    async def _failing_add(*args: Any, **kwargs: Any) -> None:
+        nonlocal new_uid
+        new_uid = kwargs["item_uid"]
+        raise HomeAssistantError("insert boom")
+
+    async def _gated_delete_items(uids: list[str]) -> None:
+        rollback_reached.set()
+        await _hold_until_contender_settles(adopt_done, new_uid)
+        await original_delete_items(uids)
+
+    async def _adopt() -> None:
+        try:
+            await hass.services.async_call(
+                DOMAIN,
+                "update_task_metadata",
+                {"uid": new_uid, "type": "routine", "recurrence": "FREQ=DAILY"},
+                blocking=True,
+            )
+        finally:
+            adopt_done.set()
+
+    with (
+        patch.object(store, "async_add_task_metadata", _failing_add),
+        patch.object(entity, "async_delete_todo_items", _gated_delete_items),
+    ):
+        add = asyncio.create_task(
+            hass.services.async_call(
+                DOMAIN,
+                "add_task",
+                {"member": "anna", "summary": "Practice piano", "type": "routine"},
+                blocking=True,
+            )
+        )
+        async with asyncio.timeout(5):
+            await rollback_reached.wait()
+        adoption = asyncio.create_task(_adopt())
+        results = await asyncio.gather(add, adoption, return_exceptions=True)
+
+    # add_task re-raises the seeded INSERT failure after rolling back, and the
+    # adopter loses the item to that rollback. Anything else must surface.
+    add_result, adoption_result = results
+    for result in results:
+        if isinstance(result, BaseException) and not isinstance(
+            result, HomeAssistantError
+        ):
+            raise result
+    assert isinstance(add_result, HomeAssistantError)
+    assert "insert boom" in str(add_result)
+    # Pinned by message, not just class: a regression rejecting this call during
+    # *validation* would never contend for the lock, yet would still set
+    # adopt_done and satisfy both end-state assertions below.
+    assert isinstance(adoption_result, ServiceValidationError)
+    assert "No task found with uid" in str(adoption_result)
+
+    assert new_uid
+    assert await store.async_get_task_metadata(new_uid) is None
+    assert new_uid not in _uids(hass, "todo.anna")
+
+
+async def test_apple_backfill_re_read_stays_inside_the_uid_lock(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """The backfill's whole check → re-read → INSERT span must be under the lock.
+
+    Contender-first, unlike the other Apple test: gating the INSERT only ever
+    makes the delete *park*, so it cannot see a lock narrowed to the INSERT alone.
+    That narrowing is a real #114 regression — the delete removes the item between
+    the backfill's re-read and its INSERT, and the row lands on nothing.
+    """
+    _entry, store = await _setup(hass, tmp_path)
+    await _add_orphan(hass, "todo.anna", description="Synced [apple:abc-123]")
+
+    entity = _get_entity(hass, "todo.anna")
+    original_delete_items = entity.async_delete_todo_items
+    removal_reached = asyncio.Event()
+    backfill_done = asyncio.Event()
+
+    async def _gated_delete_items(uids: list[str]) -> None:
+        removal_reached.set()
+        await _hold_until_contender_settles(backfill_done)
+        await original_delete_items(uids)
+
+    async def _backfill() -> None:
+        try:
+            await async_backfill_apple_sentinel(
+                hass, store, "todo.anna", ORPHAN_UID, "anna"
+            )
+        finally:
+            backfill_done.set()
+
+    with patch.object(entity, "async_delete_todo_items", _gated_delete_items):
+        deletion = asyncio.create_task(
+            hass.services.async_call(
+                DOMAIN, "delete_task", {"uid": ORPHAN_UID}, blocking=True
+            )
+        )
+        async with asyncio.timeout(5):
+            await removal_reached.wait()
+        backfill = asyncio.create_task(_backfill())
+        results = await asyncio.gather(deletion, backfill, return_exceptions=True)
+
+    # Neither side should error: the backfill simply finds no item and declines.
+    for result in results:
+        if isinstance(result, BaseException):
+            raise result
+
+    assert await store.async_get_task_metadata(ORPHAN_UID) is None
+    assert ORPHAN_UID not in _uids(hass, "todo.anna")

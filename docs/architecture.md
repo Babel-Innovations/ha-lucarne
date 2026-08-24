@@ -335,11 +335,13 @@ mid-flight on one.
 Two windows this does **not** close. Deleting the todo item *outside* Lucarne
 (`todo.remove_item`, HA's to-do panel) goes straight to the entity and deletes no
 metadata row at all — the listener's disappeared branch only `continue`s — so it
-orphans an adopted task's row outright, no race required (#116). And a cancelled service
-call (HA shutdown, a dropped WebSocket) releases the lock while its INSERT may
-still be running, because `async_add_executor_job` cannot cancel a worker that has
-already started. The second needs the worker starved across the delete's two
-executor round-trips; the first is a separate reconciliation gap.
+orphans an adopted task's row outright, no race required (#116). And a cancelled
+service call releases the lock while its INSERT may still be running, because
+`async_add_executor_job` cannot cancel a worker that has already started. Only
+shutdown and an explicit caller cancellation do that — a dropped WebSocket does
+*not* cancel a service call, since `async_response` dispatches each command as a
+background task. That second window needs the worker starved across the delete's
+two executor round-trips and is tracked in #118.
 
 **Adoption is deliberately not automatic.** `update_task_metadata` is its only
 caller — it needs a row to write to, and reaching it means the user edited the task

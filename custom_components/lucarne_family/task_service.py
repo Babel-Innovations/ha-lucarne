@@ -389,20 +389,40 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         # (issue #114). See task_locks.
         #
         # Metadata first, item second, so that being cancelled between the two —
-        # each is an executor hop, and HA cancels service calls on shutdown and on
-        # a dropped WebSocket — leaves the *benign* half-state: an item with no
-        # row, which is exactly what every un-adopted item already is and which
-        # the cards render via buildRenderableTasks' fallback. The reverse order
-        # leaves the unreapable orphan this whole change exists to prevent. No
-        # inserter can observe the intermediate state; the lock excludes them.
+        # each is an executor hop, and HA cancels service-call tasks at shutdown
+        # (a dropped WebSocket does *not* cancel them: async_response dispatches
+        # each command as a background task, and connection teardown cancels only
+        # the connection's own handler and writer) — leaves the *benign* half-state:
+        # an item with no row, which is exactly what every un-adopted item already
+        # is and which the cards render via buildRenderableTasks' fallback. The
+        # reverse order leaves the unreapable orphan this whole change exists to
+        # prevent. No inserter can observe the intermediate state; the lock
+        # excludes them.
         #
-        # An item delete that *raises* (ical's store raises on a missing uid; the
-        # ics write can fail) lands in that same half-state, and the metadata is
-        # not recoverable — but the caller sees the error, the card gates its
-        # optimistic removal on success, and a retry resolves the item through
-        # find_managed_item and finishes the job with no residue. It also reaps a
-        # row whose item was already removed outside Lucarne (#116), which the
-        # reverse order could never do: the raise came first.
+        # An item delete that *raises* splits two ways.
+        #
+        # ical's store raises on a missing uid. That is the common case, and it
+        # is the #116 row whose item was already removed outside Lucarne: nothing
+        # is left to clean up, and this order reaps the row where the reverse
+        # order never could, since the raise came first. A retry just reports
+        # "No task found" — find_managed_item has no list holding the uid.
+        #
+        # A failed ics *write* is the narrower branch, and its cost is real: the
+        # row is gone while the item survives, so until the user re-edits the task
+        # in Lucarne (which re-adopts it), a routine reads back as the fallback
+        # chore and drops out of both routine_uids and the streak evaluator.
+        # Accepted because that state is *visible* — the item is still listed and
+        # the caller got the error, the card gating its optimistic removal on
+        # success — where the reverse order's residue is neither visible nor
+        # recoverable. Note it is not retry-fixable either: local_todo mutates the
+        # in-memory calendar before it saves and skips the state refresh when the
+        # save raises, so todo_items stays stale, and the retry re-raises
+        # missing-uid until the local_todo entry reloads.
+        #
+        # Restoring the row on failure was considered and rejected: the commonest
+        # raise *is* the missing-uid case, so a blanket restore would re-create
+        # exactly the #116 orphan, and a conditional one would need its own
+        # cancellation handling in the except (#118).
         async with async_task_uid_lock(uid):
             # Unconditional: the DELETE is a no-op when the item was never adopted,
             # and gating it on the earlier read would leak a row for an item that
