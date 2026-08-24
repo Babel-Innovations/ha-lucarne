@@ -55,12 +55,14 @@ wider than it is:
   That is a separate reconciliation gap, tracked in issue #116, not this one.
 * **Cancellation of the task holding the lock.** ``async_add_executor_job``
   cannot cancel a worker that has already started, so a cancelled service call
-  (HA shutdown, a closed WebSocket connection) unwinds and releases the lock
+  (HA shutdown, or an explicit caller cancellation — note a dropped WebSocket
+  does not cancel one) unwinds and releases the lock
   while its INSERT is still in flight. A parked delete then runs, and the INSERT
   commits afterwards. Reaching it needs the worker to be starved across the
   delete's two executor round-trips, which is why it is left rather than papered
-  over with cancellation handling that nothing tests. ``handle_delete_task``'s
-  own halves are ordered to fail safe under the same cancellation — see there.
+  over with cancellation handling that nothing tests. Tracked in issue #118.
+  ``handle_delete_task``'s own halves are ordered to fail safe under the same
+  cancellation — see there.
 
 The registry is keyed by uid alone rather than per config entry: uids are UUIDs,
 and the alternative means threading ``entry_id`` into call sites that do not

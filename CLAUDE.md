@@ -350,8 +350,13 @@ Single HACS item — `integration` category only. The cards ride along inside th
   to-do panel) writes no metadata at all and orphans an adopted row outright — a separate
   reconciliation gap, tracked in #116 — and a **cancelled** task releases the lock while its
   executor INSERT may still be running, since a started `async_add_executor_job` worker cannot be
-  cancelled. `handle_delete_task` deletes metadata *before* the item so that a cancellation
-  between its halves fails safe; don't swap them back.
+  cancelled (#118). `handle_delete_task` deletes metadata *before* the item so that a
+  cancellation between its halves fails safe, and holds the lock across *both* —
+  narrowing it to the metadata DELETE alone reopens #114 from the other side.
+  `test_delete_task_removes_metadata_before_the_item` pins the order;
+  `test_item_removal_stays_inside_the_uid_lock`,
+  `test_add_task_rollback_delete_stays_inside_the_uid_lock`, and
+  `test_apple_backfill_re_read_stays_inside_the_uid_lock` each pin one holder's scope.
 - **Never adopt a todo item automatically**: `reset_logic` deletes completed `type="chore"`
   items at the daily-reset window, and `if metadata is None: continue` is the *only* thing
   keeping items Lucarne didn't create out of that sweep. Adopting on appearance would mean a
