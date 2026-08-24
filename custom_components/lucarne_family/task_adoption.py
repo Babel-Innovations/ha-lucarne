@@ -36,6 +36,7 @@ from homeassistant.core import HomeAssistant
 from .apple_sentinel_backfill import APPLE_SENTINEL_RE
 from .const import HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
 from .store import LucarneFamilyStore
+from .task_locks import async_task_uid_lock
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -131,69 +132,77 @@ async def async_adopt_item(
     todo item that no longer exists — nothing reaps such a row. Re-reading the
     list is a handful of in-memory comparisons; staleness is the expensive part.
 
-    This narrows that window rather than closing it: the INSERT below is an await,
-    so a ``delete_task`` completing entirely inside it still lands a metadata row
-    whose todo item is gone. ``handle_delete_task``'s unconditional metadata DELETE
-    covers the common ordering. Accepted rather than fixed — see issue #114 for the
-    full analysis and why an adoption-side guard cannot close it.
+    Re-reading alone narrows the window without closing it, which is why the whole
+    body runs under this uid's lock (``task_locks``): the INSERT is an await, so a
+    ``delete_task`` completing entirely inside it would otherwise land a metadata
+    row whose todo item is gone, and nothing reaps such a row (issue #114). Holding
+    the lock serializes check → re-read → INSERT against ``handle_delete_task``,
+    which takes the same lock across its item delete *and* its metadata delete. The
+    two possible orderings both end clean: adopt first and the delete removes item
+    and row together; delete first and the re-read above finds nothing, so no row is
+    written. Short of cancellation, that is — a cancelled task releases the lock
+    while its executor INSERT may still be running. See ``task_locks`` for that
+    residual window and for the unrelated one that ``todo.remove_item`` opens.
 
     Adoption enrolls the item into the daily-reset sweep (``reset_logic`` deletes
     completed ``chore`` rows), so it is deliberately *not* automatic: only an
     explicit ``update_task_metadata`` call adopts. See the comment in
     ``completion_listener``'s appeared branch.
     """
-    if await store.async_get_task_metadata(uid) is not None:
-        return False
+    async with async_task_uid_lock(uid):
+        if await store.async_get_task_metadata(uid) is not None:
+            return False
 
-    slug = member_slug or resolve_member_slug(entity_id, store)
-    if not slug:
-        return False
+        slug = member_slug or resolve_member_slug(entity_id, store)
+        if not slug:
+            return False
 
-    todo_component = hass.data.get(DATA_COMPONENT)
-    if todo_component is None:
-        return False
-    entity = todo_component.get_entity(entity_id)
-    if entity is None:
-        return False
-    item = next((i for i in entity.todo_items or [] if i.uid == uid), None)
-    if item is None:
-        return False
+        todo_component = hass.data.get(DATA_COMPONENT)
+        if todo_component is None:
+            return False
+        entity = todo_component.get_entity(entity_id)
+        if entity is None:
+            return False
+        item = next((i for i in entity.todo_items or [] if i.uid == uid), None)
+        if item is None:
+            return False
 
-    defaults = default_task_metadata(uid, slug, item)
-    source = defaults["source"]
+        defaults = default_task_metadata(uid, slug, item)
+        source = defaults["source"]
 
-    try:
-        # Every field passed explicitly, never left to async_add_task_metadata's
-        # parameter defaults: update_task_metadata validates against the dict
-        # default_task_metadata returns, so the row written here must be that dict
-        # and not merely happen to match it.
-        await store.async_add_task_metadata(
-            member_slug=defaults["member_slug"],
-            item_uid=defaults["item_uid"],
-            type=defaults["type"],
-            recurrence=defaults["recurrence"],
-            icon=defaults["icon"],
-            source=source,
-            apple_uid=defaults["apple_uid"],
-            assignee_slug=defaults["assignee_slug"],
-            summary=defaults["summary"],
-            time_of_day=defaults["time_of_day"],
-            rotation_owners=defaults["rotation_owners"],
-            current_owner=defaults["current_owner"],
+        try:
+            # Every field passed explicitly, never left to async_add_task_metadata's
+            # parameter defaults: update_task_metadata validates against the dict
+            # default_task_metadata returns, so the row written here must be that dict
+            # and not merely happen to match it.
+            await store.async_add_task_metadata(
+                member_slug=defaults["member_slug"],
+                item_uid=defaults["item_uid"],
+                type=defaults["type"],
+                recurrence=defaults["recurrence"],
+                icon=defaults["icon"],
+                source=source,
+                apple_uid=defaults["apple_uid"],
+                assignee_slug=defaults["assignee_slug"],
+                summary=defaults["summary"],
+                time_of_day=defaults["time_of_day"],
+                rotation_owners=defaults["rotation_owners"],
+                current_owner=defaults["current_owner"],
+            )
+        except sqlite3.IntegrityError:
+            # The uid lock keeps another *locked* inserter out of the gap between
+            # the check above and this INSERT, but item_uid is the PRIMARY KEY and
+            # this is a service-call path: anything that ever writes the table
+            # without taking the lock would surface here. Losing that race is the
+            # same outcome as finding the row already there — someone adopted it —
+            # so report "not inserted" rather than raising out of a service call.
+            _LOGGER.debug("Adoption of %s lost a race; row already present", uid)
+            return False
+        _LOGGER.debug(
+            "Adopted orphan todo item: entity=%s uid=%s member=%s source=%s",
+            entity_id,
+            uid,
+            slug,
+            source,
         )
-    except sqlite3.IntegrityError:
-        # The check above and this INSERT are two awaits apart, so a concurrent
-        # adoption of the same uid can land in between and win the item_uid
-        # PRIMARY KEY. Losing that race is the same outcome as finding the row
-        # already there: someone adopted it, so report "not inserted" rather than
-        # raising out of a service call.
-        _LOGGER.debug("Adoption of %s lost a race; row already present", uid)
-        return False
-    _LOGGER.debug(
-        "Adopted orphan todo item: entity=%s uid=%s member=%s source=%s",
-        entity_id,
-        uid,
-        slug,
-        source,
-    )
-    return True
+        return True

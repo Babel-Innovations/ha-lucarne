@@ -31,6 +31,7 @@ from .models import Member, RoutinePreset
 from .presets import BUILTIN_PRESETS
 from .store import LucarneFamilyStore
 from .task_adoption import managed_todo_entity_ids
+from .task_locks import async_task_uid_lock
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -490,20 +491,23 @@ async def seed_preset_routines(
 
     for template in preset.routines:
         item_uid = str(uuid.uuid4())
-        await entity.async_create_todo_item(
-            TodoItem(
-                uid=item_uid,
-                summary=template.summary,
-                status=TodoItemStatus.NEEDS_ACTION,
+        # Same create-then-INSERT gap as add_task, so the same uid lock — see
+        # task_locks (issue #114).
+        async with async_task_uid_lock(item_uid):
+            await entity.async_create_todo_item(
+                TodoItem(
+                    uid=item_uid,
+                    summary=template.summary,
+                    status=TodoItemStatus.NEEDS_ACTION,
+                )
             )
-        )
-        await store.async_add_task_metadata(
-            member_slug=member.slug,
-            item_uid=item_uid,
-            type="routine",
-            recurrence=template.recurrence,
-            icon=template.icon,
-            source="template",
-            summary=template.summary,
-            time_of_day=template.time_of_day,
-        )
+            await store.async_add_task_metadata(
+                member_slug=member.slug,
+                item_uid=item_uid,
+                type="routine",
+                recurrence=template.recurrence,
+                icon=template.icon,
+                source="template",
+                summary=template.summary,
+                time_of_day=template.time_of_day,
+            )

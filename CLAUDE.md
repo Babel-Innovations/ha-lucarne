@@ -39,6 +39,7 @@ custom_components/
     member_service.py         set_member_avatar service: emoji or path avatar, fires member_updated
     websocket_api.py          WS handler for lucarne_family/get_family command
     apple_sentinel_backfill.py Extracts [apple:UUID] from item descriptions → source=apple metadata
+    task_locks.py             Per-uid asyncio lock shared by every task_metadata INSERT + delete_task (#114)
     presets.py                Routine preset definitions (school-age kid, toddler, adult)
     models.py, const.py       Dataclasses and constants
     frontend/ha-lucarne.js    Built card bundle (committed; SERVED by async_setup, never registered)
@@ -330,6 +331,27 @@ Single HACS item — `integration` category only. The cards ride along inside th
   `update_task_metadata` adopts first because it needs a row to write to. Tell-tale sign of an
   un-adopted item: the uid is a **UUID1** (`…-9db6-11f1-…`, what `local_todo` mints);
   `add_task` mints UUID4.
+- **Every caller of `store.async_add_task_metadata` must hold that uid's lock** (`async_task_uid_lock`
+  in `task_locks.py`), and so must `delete_task` across its item delete *and* its metadata delete.
+  The INSERT is an executor hop, so without the lock a concurrent `delete_task` completes
+  entirely inside it and the row lands on an item that no longer exists — nothing reaps it
+  (`reset_logic`'s deletes all sit inside a loop over `entity.todo_items`, so they can never
+  reach a row with no item). A routine-typed orphan (what `update_task_metadata {type: routine}`
+  leaves, since it applies the caller's fields straight after adopting) then sits in
+  `routine_uids` forever, silently suppressing that member's `all_routines_done`, and with an
+  RRULE it pins the streak at 0 (#114). No check *before* the INSERT helps — the window is the
+  await itself. Holders: `async_adopt_item`, `async_backfill_apple_sentinel`,
+  `handle_delete_task`, and both create-then-INSERT paths (`add_task`, preset seeding) across
+  the create as well — a fresh uuid4 is **not** private, because `async_create_todo_item`
+  publishes the item to WS subscribers before it returns. Lucarne's other `task_metadata` DELETE
+  paths (`reset_logic`, `config_flow`'s member removal) need no lock — they delete only rows they
+  have already read, so no inserter can be mid-flight on one. Two windows stay open by design and
+  are documented in `task_locks.py`: deleting the item *outside* Lucarne (`todo.remove_item`, HA's
+  to-do panel) writes no metadata at all and orphans an adopted row outright — a separate
+  reconciliation gap, tracked in #116 — and a **cancelled** task releases the lock while its
+  executor INSERT may still be running, since a started `async_add_executor_job` worker cannot be
+  cancelled. `handle_delete_task` deletes metadata *before* the item so that a cancellation
+  between its halves fails safe; don't swap them back.
 - **Never adopt a todo item automatically**: `reset_logic` deletes completed `type="chore"`
   items at the daily-reset window, and `if metadata is None: continue` is the *only* thing
   keeping items Lucarne didn't create out of that sweep. Adopting on appearance would mean a

@@ -17,10 +17,13 @@ import pytest
 from homeassistant.components.todo import TodoItem
 from homeassistant.components.todo.const import DATA_COMPONENT, TodoItemStatus
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.lucarne_family.apple_sentinel_backfill import (
+    async_backfill_apple_sentinel,
+)
 from custom_components.lucarne_family.completion_listener import (
     async_start_completion_listener,
 )
@@ -34,6 +37,7 @@ from custom_components.lucarne_family.task_adoption import (
     managed_todo_entity_ids,
     resolve_member_slug,
 )
+from custom_components.lucarne_family.task_locks import lock_holders
 from custom_components.lucarne_family.task_service import async_setup_services
 
 # A real uid from the reported failure: local_todo mints UUID1, add_task mints UUID4.
@@ -737,3 +741,216 @@ async def test_household_orphan_completion_is_logged(
 
     rows = await hass.async_add_executor_job(_rows)
     assert [(r["member_slug"], r["action"]) for r in rows] == [("household", "completed")]
+
+
+# ---------------------------------------------------------------------------
+# Orphan race: a delete landing inside the adopting INSERT (issue #114)
+# ---------------------------------------------------------------------------
+
+
+async def _hold_insert_until_delete_settles(
+    delete_done: asyncio.Event, uid: str = ORPHAN_UID
+) -> None:
+    """Block until the concurrent delete either finished or parked on the lock.
+
+    Both outcomes are observable without a timeout, which is what keeps these
+    tests deterministic in *both* directions: unserialized, the delete runs to
+    completion inside the INSERT (the bug); serialized, it parks on the uid lock
+    and ``lock_holders`` counts it. A plain "run the delete inside the patched
+    INSERT" — the pattern the rest of this file uses — would deadlock the moment
+    the lock exists, since the delete could never complete.
+
+    Treating *any* second holder as "the delete" is only sound because ``_setup``
+    does not start the completion listener: with it running, the appeared-branch
+    ``async_backfill_apple_sentinel`` would take the same uid's lock and release
+    this gate before the deletion task even exists, so the race tests would pass
+    vacuously. If the listener ever moves into ``_setup``, replace this with a
+    delete-specific signal.
+    """
+    for _ in range(2000):
+        if delete_done.is_set() or lock_holders(uid) > 1:
+            return
+        await asyncio.sleep(0.001)
+    pytest.fail("delete_task neither completed nor took the uid lock")
+
+
+async def test_delete_during_adoption_insert_leaves_no_orphan_row(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A delete completing inside the adopting INSERT must not leave a row behind.
+
+    The INSERT is an executor hop, so ``delete_task`` can remove the todo item
+    *and* run its unconditional metadata DELETE entirely within it — the INSERT
+    then lands afterwards on an item that no longer exists. Nothing reaps such a
+    row, and ``update_task_metadata`` applies ``type: "routine"`` to it straight
+    after adopting, which permanently suppresses that member's
+    ``all_routines_done`` (issue #114).
+    """
+    _entry, store = await _setup(hass, tmp_path)
+    await _add_orphan(hass, "todo.anna")
+
+    original_add = store.async_add_task_metadata
+    insert_reached = asyncio.Event()
+    delete_done = asyncio.Event()
+
+    async def _gated_add(*args: Any, **kwargs: Any) -> None:
+        insert_reached.set()
+        await _hold_insert_until_delete_settles(delete_done)
+        await original_add(*args, **kwargs)
+
+    async def _delete() -> None:
+        try:
+            await hass.services.async_call(
+                DOMAIN, "delete_task", {"uid": ORPHAN_UID}, blocking=True
+            )
+        finally:
+            delete_done.set()
+
+    with patch.object(store, "async_add_task_metadata", _gated_add):
+        update = asyncio.create_task(
+            hass.services.async_call(
+                DOMAIN,
+                "update_task_metadata",
+                {"uid": ORPHAN_UID, "type": "routine", "recurrence": "FREQ=DAILY"},
+                blocking=True,
+            )
+        )
+        await insert_reached.wait()
+        deletion = asyncio.create_task(_delete())
+        results = await asyncio.gather(update, deletion, return_exceptions=True)
+    # Both calls must succeed on their own terms: the empty end state is reached
+    # either way, so without this a regression that *raised* would still pass.
+    assert not [r for r in results if isinstance(r, BaseException)]
+
+    assert await store.async_get_task_metadata(ORPHAN_UID) is None
+    assert ORPHAN_UID not in _uids(hass, "todo.anna")
+
+
+async def test_delete_during_apple_backfill_insert_leaves_no_orphan_row(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """The sentinel backfill has adoption's shape, so it needs adoption's guard."""
+    _entry, store = await _setup(hass, tmp_path)
+    await _add_orphan(hass, "todo.anna", description="Synced [apple:abc-123]")
+
+    original_add = store.async_add_task_metadata
+    insert_reached = asyncio.Event()
+    delete_done = asyncio.Event()
+
+    async def _gated_add(*args: Any, **kwargs: Any) -> None:
+        insert_reached.set()
+        await _hold_insert_until_delete_settles(delete_done)
+        await original_add(*args, **kwargs)
+
+    async def _delete() -> None:
+        try:
+            await hass.services.async_call(
+                DOMAIN, "delete_task", {"uid": ORPHAN_UID}, blocking=True
+            )
+        finally:
+            delete_done.set()
+
+    with patch.object(store, "async_add_task_metadata", _gated_add):
+        backfill = asyncio.create_task(
+            async_backfill_apple_sentinel(hass, store, "todo.anna", ORPHAN_UID, "anna")
+        )
+        await insert_reached.wait()
+        deletion = asyncio.create_task(_delete())
+        results = await asyncio.gather(backfill, deletion, return_exceptions=True)
+    assert not [r for r in results if isinstance(r, BaseException)]
+
+    assert await store.async_get_task_metadata(ORPHAN_UID) is None
+    assert ORPHAN_UID not in _uids(hass, "todo.anna")
+
+
+async def test_delete_during_add_task_insert_leaves_no_orphan_row(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A fresh uuid4 is not private: the item is published before the INSERT.
+
+    ``async_create_todo_item`` pushes the new item — uid included — to every
+    WebSocket subscriber before it returns, so ``delete_task`` can name it while
+    ``add_task``'s own metadata INSERT is still in flight. Same orphan, same fix.
+    """
+    _entry, store = await _setup(hass, tmp_path)
+
+    original_add = store.async_add_task_metadata
+    insert_reached = asyncio.Event()
+    delete_done = asyncio.Event()
+    new_uid = ""
+
+    async def _gated_add(*args: Any, **kwargs: Any) -> None:
+        nonlocal new_uid
+        new_uid = kwargs["item_uid"]
+        insert_reached.set()
+        await _hold_insert_until_delete_settles(delete_done, new_uid)
+        await original_add(*args, **kwargs)
+
+    async def _delete() -> None:
+        try:
+            await hass.services.async_call(
+                DOMAIN, "delete_task", {"uid": new_uid}, blocking=True
+            )
+        finally:
+            delete_done.set()
+
+    with patch.object(store, "async_add_task_metadata", _gated_add):
+        add = asyncio.create_task(
+            hass.services.async_call(
+                DOMAIN,
+                "add_task",
+                {"member": "anna", "summary": "Practice piano", "type": "routine"},
+                blocking=True,
+            )
+        )
+        await insert_reached.wait()
+        deletion = asyncio.create_task(_delete())
+        results = await asyncio.gather(add, deletion, return_exceptions=True)
+    assert not [r for r in results if isinstance(r, BaseException)]
+
+    assert new_uid
+    assert await store.async_get_task_metadata(new_uid) is None
+    assert new_uid not in _uids(hass, "todo.anna")
+
+
+async def test_delete_task_removes_metadata_before_the_item(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """The two halves are ordered metadata-first, and the order is load-bearing.
+
+    Both are executor hops, so a cancellation (HA shutdown, a dropped WebSocket)
+    or a raising item delete can land between them. Metadata-first leaves an item
+    with no row — what every un-adopted item already is, and what the cards render
+    via their fallback. The reverse leaves the unreapable orphan of #114. Pinned
+    by making the item delete fail, since nothing else would notice a swap.
+    """
+    _entry, store = await _setup(hass, tmp_path)
+    response = await hass.services.async_call(
+        DOMAIN,
+        "add_task",
+        {"member": "anna", "summary": "Feed the cat", "type": "routine"},
+        blocking=True,
+        return_response=True,
+    )
+    assert response is not None
+    uid = response["uid"]
+    assert await store.async_get_task_metadata(uid) is not None
+
+    entity = _get_entity(hass, "todo.anna")
+
+    async def _failing_delete(_uids: list[str]) -> None:
+        raise HomeAssistantError("ics write failed")
+
+    with patch.object(entity, "async_delete_todo_items", _failing_delete):
+        with pytest.raises(HomeAssistantError, match="ics write failed"):
+            await hass.services.async_call(
+                DOMAIN, "delete_task", {"uid": uid}, blocking=True
+            )
+
+    # Metadata went first, so it is already gone; the item survives the failure
+    # and a retry can still remove it via find_managed_item.
+    assert await store.async_get_task_metadata(uid) is None
+    assert uid in _uids(hass, "todo.anna")
+
+    await hass.services.async_call(DOMAIN, "delete_task", {"uid": uid}, blocking=True)
+    assert uid not in _uids(hass, "todo.anna")
