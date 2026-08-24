@@ -27,6 +27,7 @@ from .task_adoption import (
     find_managed_item,
     resolve_member_slug,
 )
+from .task_locks import async_task_uid_lock
 
 _LOGGER = logging.getLogger(__name__)
 # Aliases to the shared constants in const.py (single source of truth).
@@ -187,32 +188,37 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         entity = _get_todo_entity(hass, todo_entity_id)
 
         item_uid = str(uuid.uuid4())
-        await entity.async_create_todo_item(
-            TodoItem(
-                uid=item_uid,
-                summary=summary,
-                status=TodoItemStatus.NEEDS_ACTION,
-                due=due,
+        # Create and INSERT under the uid lock. The uid is freshly minted, but
+        # async_create_todo_item publishes the item — uid included — to every
+        # WebSocket subscriber before it returns, so a delete_task naming it can
+        # arrive before the INSERT lands and orphan the row (issue #114).
+        async with async_task_uid_lock(item_uid):
+            await entity.async_create_todo_item(
+                TodoItem(
+                    uid=item_uid,
+                    summary=summary,
+                    status=TodoItemStatus.NEEDS_ACTION,
+                    due=due,
+                )
             )
-        )
-        try:
-            await store.async_add_task_metadata(
-                member_slug=member_slug,
-                item_uid=item_uid,
-                type=task_type,
-                recurrence=recurrence,
-                icon=icon,
-                source=source,
-                assignee_slug=assignee,
-                summary=summary,
-                time_of_day=time_of_day,
-                rotation_owners=rotation_owners_str,
-                current_owner=resolved_current_owner,
-            )
-        except Exception:
-            # Best-effort rollback: remove the orphaned todo item.
-            await entity.async_delete_todo_items([item_uid])
-            raise
+            try:
+                await store.async_add_task_metadata(
+                    member_slug=member_slug,
+                    item_uid=item_uid,
+                    type=task_type,
+                    recurrence=recurrence,
+                    icon=icon,
+                    source=source,
+                    assignee_slug=assignee,
+                    summary=summary,
+                    time_of_day=time_of_day,
+                    rotation_owners=rotation_owners_str,
+                    current_owner=resolved_current_owner,
+                )
+            except Exception:
+                # Best-effort rollback: remove the orphaned todo item.
+                await entity.async_delete_todo_items([item_uid])
+                raise
         hass.bus.async_fire(
             "lucarne_family_task_added",
             {"member": member_slug, "uid": item_uid, "type": task_type, "summary": summary},
@@ -377,11 +383,32 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         todo_entity_id, _metadata = await _resolve_task_target(hass, store, uid)
         entity = _get_todo_entity(hass, todo_entity_id)
 
-        await entity.async_delete_todo_items([uid])
-        # Unconditional: the DELETE is a no-op when the item was never adopted, and
-        # gating it on the earlier read would leak a row for an item that gets
-        # adopted between that read and this call.
-        await store.async_delete_task_metadata(uid)
+        # Both deletes under the uid lock: an adopting INSERT is an executor hop,
+        # so a delete slipping between the metadata DELETE and the item removal
+        # would let that INSERT land afterwards and orphan a row nothing reaps
+        # (issue #114). See task_locks.
+        #
+        # Metadata first, item second, so that being cancelled between the two —
+        # each is an executor hop, and HA cancels service calls on shutdown and on
+        # a dropped WebSocket — leaves the *benign* half-state: an item with no
+        # row, which is exactly what every un-adopted item already is and which
+        # the cards render via buildRenderableTasks' fallback. The reverse order
+        # leaves the unreapable orphan this whole change exists to prevent. No
+        # inserter can observe the intermediate state; the lock excludes them.
+        #
+        # An item delete that *raises* (ical's store raises on a missing uid; the
+        # ics write can fail) lands in that same half-state, and the metadata is
+        # not recoverable — but the caller sees the error, the card gates its
+        # optimistic removal on success, and a retry resolves the item through
+        # find_managed_item and finishes the job with no residue. It also reaps a
+        # row whose item was already removed outside Lucarne (#116), which the
+        # reverse order could never do: the raise came first.
+        async with async_task_uid_lock(uid):
+            # Unconditional: the DELETE is a no-op when the item was never adopted,
+            # and gating it on the earlier read would leak a row for an item that
+            # gets adopted between that read and this call.
+            await store.async_delete_task_metadata(uid)
+            await entity.async_delete_todo_items([uid])
         hass.bus.async_fire("lucarne_family_task_deleted", {"uid": uid})
 
     async def handle_toggle_task(call: ServiceCall) -> None:

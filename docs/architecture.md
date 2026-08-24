@@ -310,6 +310,37 @@ row that looked normal but could not be deleted, toggled, or edited (issue #111)
   description carrying the bridge's `[apple:UUID]` sentinel adopts as `source=apple`
   with the extracted `apple_uid`; everything else as a manual chore.
 
+**Every metadata INSERT for a pre-existing item is serialized against
+`delete_task`.** `async_adopt_item` re-reads the item and then awaits the INSERT —
+an executor hop, so a concurrent `delete_task` could remove the todo item *and*
+run its unconditional metadata DELETE entirely inside it, leaving the INSERT to
+land on an item that no longer exists. Nothing reaps such a row: `reset_logic`'s
+deletes all sit inside a loop over `entity.todo_items`. Worse, `update_task_metadata`
+applies the caller's fields straight after adopting, so a racing call carrying
+`type: "routine"` leaves a routine-typed orphan that permanently suppresses that
+member's `all_routines_done` and — with an RRULE — pins the streak at 0 (issue #114).
+
+No check before the INSERT closes that, because the window *is* the INSERT await.
+`task_locks.async_task_uid_lock` does, and the rule is unconditional for per-item
+writes: every caller of `store.async_add_task_metadata` holds it. `async_adopt_item` and `apple_sentinel_backfill`
+hold it across check → re-read → INSERT; `add_task` and preset seeding hold it
+across item creation *and* the INSERT — the uid is fresh, but
+`async_create_todo_item` publishes it to WebSocket subscribers before returning,
+so a `delete_task` can name it first; `handle_delete_task` holds it across the
+item delete *and* the metadata delete. Lucarne's other `task_metadata` DELETE
+paths — `reset_logic`'s sweep and `config_flow`'s member-removal cleanup — need
+no lock: both delete only rows they have already read, so no inserter can be
+mid-flight on one.
+
+Two windows this does **not** close. Deleting the todo item *outside* Lucarne
+(`todo.remove_item`, HA's to-do panel) goes straight to the entity and deletes no
+metadata row at all — the listener's disappeared branch only `continue`s — so it
+orphans an adopted task's row outright, no race required (#116). And a cancelled service
+call (HA shutdown, a dropped WebSocket) releases the lock while its INSERT may
+still be running, because `async_add_executor_job` cannot cancel a worker that has
+already started. The second needs the worker starved across the delete's two
+executor round-trips; the first is a separate reconciliation gap.
+
 **Adoption is deliberately not automatic.** `update_task_metadata` is its only
 caller — it needs a row to write to, and reaching it means the user edited the task
 in Lucarne. The completion listener does *not* adopt every uid that appears; it
