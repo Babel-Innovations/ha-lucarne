@@ -20,14 +20,14 @@
     "lit": "^3.0.0"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
-    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@types/node": "^26.2.0",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.0.0",
     "acorn": "^8.18.0",
-    "eslint": "^10.4.1",
-    "happy-dom": "^20.10.2",
-    "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.16"
+    "eslint": "^10.9.0",
+    "happy-dom": "^20.11.6",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
   }
 }
