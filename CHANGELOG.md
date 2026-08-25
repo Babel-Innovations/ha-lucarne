@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.5.0 — 2026-08-25
+
+**Features:**
+-  show task notes and keep completed tasks crossed out
+-  add create-prerelease.sh + delete-prerelease.sh
+
+**Fixes:**
+-  serialize task metadata inserts against delete_task
+-  import the card bundle after HA replaces the element registry
+-  let write services act on todo items with no metadata row
+-  pin the day-name and all-day rows while the grid scrolls
+-  tag pre-releases with the next version, not the stored one
+-  pin browser target so cards parse on iPadOS 15 / Tizen (fixes #101)
+
+
 ## v1.4.3 — 2026-06-12
 
 **Fixes:**
