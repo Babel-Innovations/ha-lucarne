@@ -1,5 +1,6 @@
 import type { HomeAssistant, MemberSummary, TaskMetadata, RenderableTask } from './types.js';
-import { subscribeEntityState, subscribeTodoItems } from './ha-subscriptions.js';
+import { fetchTodoItems, subscribeEntityStates } from './ha-subscriptions.js';
+import type { EntityStatePhase } from './ha-subscriptions.js';
 import type { TodoItem } from './types.js';
 
 export interface FamilyState {
@@ -25,12 +26,14 @@ interface GetFamilyResponse {
   household_entity_id: string;
 }
 
+const HOUSEHOLD_ENTITY_ID = 'todo.lucarne_household';
+
 export const SYNTHETIC_HOUSEHOLD: MemberSummary = {
   slug: 'household',
   name: 'Household',
   color: 'var(--primary-color)',
   avatar: null,
-  todo_entity_id: 'todo.lucarne_household',
+  todo_entity_id: HOUSEHOLD_ENTITY_ID,
   streak_counter_id: '',
 };
 
@@ -96,13 +99,27 @@ export function subscribeFamilyState(
   callback: (state: FamilyState) => void,
 ): () => void {
   let cancelled = false;
-  const unsubFns: (() => void)[] = [];
   let metadataByUid = new Map<string, TaskMetadata>();
   let allMembers: MemberSummary[] = [];
   const todoItemsByEntity = new Map<string, TodoItem[]>();
   let streakBySlug = new Map<string, number>();
   let resetTime = '';
   let streakCheckTime = '';
+
+  /**
+   * The entity subscription is rebuilt only when the watched set changes.
+   *
+   * `doRefreshOnce` used to tear down and re-create every per-entity
+   * subscription on each pass of the 20s fallback poll — 2N+1 subscribe
+   * round-trips every 20 seconds for a set that changes about once a month.
+   * `watchedKey` is the fingerprint of the current set; an unchanged key keeps
+   * the existing subscription alive, so steady state is one subscription for
+   * the lifetime of this handle.
+   */
+  let unsubEntities: (() => void) | null = null;
+  let watchedKey = '';
+  let watchedTodoIds: string[] = [];
+  let streakSlugByCounter = new Map<string, string>();
 
   let metadataRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -118,7 +135,7 @@ export function subscribeFamilyState(
       tasksByMember.set(m.slug, buildRenderableTasks(items, m.slug, metadataByUid));
     }
     // Always include household tasks regardless of whether household is a configured column
-    const householdItems = todoItemsByEntity.get('todo.lucarne_household') ?? [];
+    const householdItems = todoItemsByEntity.get(HOUSEHOLD_ENTITY_ID) ?? [];
     tasksByMember.set('household', buildRenderableTasks(householdItems, 'household', metadataByUid));
     callback({
       members: allMembers,
@@ -133,9 +150,11 @@ export function subscribeFamilyState(
 
   /**
    * Coalesce overlapping refreshes: the event, poll, and visibility paths can
-   * all fire close together, and each refresh tears down + re-subscribes every
-   * todo entity — concurrent runs would race those re-subscriptions and could
-   * drop a todo update. While one refresh is in flight, additional callers get
+   * all fire close together, and each refresh re-reads every todo list —
+   * concurrent runs would race those fetches and could drop a todo update.
+   * (This covers the refresh paths only; a pushed state change calls
+   * `refreshTodo` directly, which carries its own per-entity ordering guard.)
+   * While one refresh is in flight, additional callers get
    * the same promise and flag a single trailing refresh, so no request is lost
    * (the latest state is always captured) and callers that reschedule off the
    * returned promise (the poll) only do so once the work has actually settled.
@@ -195,40 +214,41 @@ export function subscribeFamilyState(
 
       allMembers = realMembers;
       currentError = null;
-      streakBySlug = new Map();
 
-      unsubFns.forEach((fn) => fn());
-      unsubFns.length = 0;
-
+      // Seed streaks we have no value for yet, so a card renders the right
+      // number without waiting for a push. Deliberately NOT a wholesale reset:
+      // `hass` is the snapshot captured when this handle was created, so its
+      // `states` map is frozen at that moment. Re-seeding from it on every poll
+      // would overwrite values pushed since — harmless while the push path was
+      // broken (see subscribeEntityStates), a visible bug now that it works: an
+      // incremented streak would appear and then revert 20s later.
+      const liveSlugs = new Set(allMembers.map((m) => m.slug));
+      for (const slug of [...streakBySlug.keys()]) {
+        if (!liveSlugs.has(slug)) streakBySlug.delete(slug);
+      }
       for (const m of allMembers) {
-        const todoUnsub = subscribeTodoItems(hass, m.todo_entity_id, (items) => {
-          todoItemsByEntity.set(m.todo_entity_id, items);
-          emitState();
-        });
-        unsubFns.push(todoUnsub);
-
-        if (m.streak_counter_id) {
-          // Seed current streak value before subscribing to changes
-          const currentState = hass.states?.[m.streak_counter_id]?.state;
-          if (currentState !== undefined) {
-            const v = parseInt(currentState, 10);
-            streakBySlug.set(m.slug, isNaN(v) ? 0 : v);
-          }
-          const streakUnsub = subscribeEntityState(hass, m.streak_counter_id, (entity) => {
-            const v = parseInt(entity.state, 10);
-            streakBySlug.set(m.slug, isNaN(v) ? 0 : v);
-            emitState();
-          });
-          unsubFns.push(streakUnsub);
+        if (!m.streak_counter_id || streakBySlug.has(m.slug)) continue;
+        const currentState = hass.states?.[m.streak_counter_id]?.state;
+        if (currentState !== undefined) {
+          const v = parseInt(currentState, 10);
+          streakBySlug.set(m.slug, isNaN(v) ? 0 : v);
         }
       }
 
-      // Always subscribe household todo; household tasks go into tasksByMember['household']
-      const householdTodoUnsub = subscribeTodoItems(hass, 'todo.lucarne_household', (items) => {
-        todoItemsByEntity.set('todo.lucarne_household', items);
-        emitState();
-      });
-      unsubFns.push(householdTodoUnsub);
+      // Household tasks are always fetched; they go into tasksByMember['household']
+      // whether or not household is a configured column.
+      const todoIds = [...allMembers.map((m) => m.todo_entity_id), HOUSEHOLD_ENTITY_ID];
+      const streaks = new Map(
+        allMembers
+          .filter((m) => m.streak_counter_id)
+          .map((m) => [m.streak_counter_id, m.slug] as const),
+      );
+      resubscribeIfChanged(todoIds, streaks);
+
+      // This is the fallback path for clients that don't deliver inbound pushes,
+      // so re-read every list on each pass even when nothing was re-subscribed.
+      await Promise.all(todoIds.map((id) => refreshTodo(id)));
+      if (cancelled) return;
 
       emitState();
     } catch (err) {
@@ -238,8 +258,7 @@ export function subscribeFamilyState(
       console.debug('[lucarne] get_family failed — integration may not be installed:', err);
       if (!cancelled) {
         currentError = err instanceof Error ? err : new Error(String(err));
-        unsubFns.forEach((fn) => fn());
-        unsubFns.length = 0;
+        teardownEntities();
         allMembers = [];
         metadataByUid = new Map();
         streakBySlug = new Map();
@@ -249,6 +268,92 @@ export function subscribeFamilyState(
         emitState();
       }
     }
+  }
+
+  function teardownEntities() {
+    unsubEntities?.();
+    unsubEntities = null;
+    watchedKey = '';
+    watchedTodoIds = [];
+    streakSlugByCounter = new Map();
+  }
+
+  /**
+   * Point the single entity subscription at `todoIds` + the streak counters,
+   * re-creating it only when that set differs from the one already watched.
+   */
+  function resubscribeIfChanged(todoIds: string[], streaks: Map<string, string>) {
+    watchedTodoIds = todoIds;
+    streakSlugByCounter = streaks;
+    // Drop cached items for lists nobody watches any more (e.g. a removed
+    // member) so a later emitState can't resurrect them.
+    for (const entityId of [...todoItemsByEntity.keys()]) {
+      if (!todoIds.includes(entityId)) todoItemsByEntity.delete(entityId);
+    }
+    for (const entityId of [...todoFetchSeq.keys()]) {
+      if (!todoIds.includes(entityId)) todoFetchSeq.delete(entityId);
+    }
+
+    const watched = [...todoIds, ...streaks.keys()];
+    const key = [...watched].sort().join('|');
+    if (key === watchedKey && unsubEntities) return;
+
+    watchedKey = key;
+    unsubEntities?.();
+    unsubEntities = subscribeEntityStates(hass, watched, onEntityState, {
+      // Clear the fingerprint so the next poll retries. Without this a single
+      // rejected subscribe would silently cost live updates for the lifetime of
+      // the handle: `unsubEntities` is still set, so the key check short-circuits.
+      onError: () => {
+        watchedKey = '';
+      },
+    });
+  }
+
+  function onEntityState(entityId: string, state: string, phase: EntityStatePhase) {
+    if (cancelled) return;
+    const slug = streakSlugByCounter.get(entityId);
+    if (slug !== undefined) {
+      // Snapshots included: a counter that has just entered the watched set
+      // (member added or renamed) is not in the frozen `hass.states` the
+      // seeding loop reads, so the snapshot is the only place its current
+      // value ever appears.
+      const v = parseInt(state, 10);
+      streakBySlug.set(slug, isNaN(v) ? 0 : v);
+      emitState();
+      return;
+    }
+    if (!watchedTodoIds.includes(entityId)) return;
+    // `'snapshot'` marks a subscription's opening frame and nothing else, so
+    // this skips exactly the frame that duplicates the fetch doRefreshOnce runs
+    // right after subscribing. A post-reconnect replay arrives as `'change'`
+    // (the closure's snapshot flag survives the reconnect) and does re-fetch,
+    // which is what a client that has been off the socket needs.
+    if (phase === 'snapshot') return;
+    void refreshTodo(entityId).then(emitState);
+  }
+
+  /**
+   * Per-entity fetch sequence, so a slow response cannot overwrite a newer one.
+   *
+   * Two paths call `refreshTodo` concurrently — the poll's `Promise.all` and a
+   * pushed state change — and neither goes through `refreshMetadata`'s
+   * coalescer. Without a generation guard a fetch issued first but answered
+   * second wins, and the card shows a stale list until the next cycle.
+   */
+  const todoFetchSeq = new Map<string, number>();
+
+  async function refreshTodo(entityId: string) {
+    const seq = (todoFetchSeq.get(entityId) ?? 0) + 1;
+    todoFetchSeq.set(entityId, seq);
+    const items = await fetchTodoItems(hass, entityId);
+    if (cancelled) return;
+    // A newer fetch for this entity has since been issued; its answer wins.
+    if (todoFetchSeq.get(entityId) !== seq) return;
+    // Re-check membership too: a fetch in flight when a member is removed would
+    // otherwise re-insert the key that resubscribeIfChanged just pruned.
+    if (!watchedTodoIds.includes(entityId)) return;
+    todoItemsByEntity.set(entityId, items);
   }
 
   function scheduleMetadataRefresh() {
@@ -341,7 +446,7 @@ export function subscribeFamilyState(
     if (typeof window !== 'undefined') {
       window.removeEventListener('pageshow', refreshIfVisible);
     }
-    unsubFns.forEach((fn) => fn());
+    teardownEntities();
     eventUnsubs.forEach((fn) => fn());
   };
 }

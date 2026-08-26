@@ -1,6 +1,7 @@
 """WebSocket API commands for the Lucarne Family integration."""
 from __future__ import annotations
 
+import logging
 from typing import cast
 
 import voluptuous as vol
@@ -8,6 +9,10 @@ from homeassistant.components import websocket_api
 from homeassistant.core import Event, HomeAssistant, callback
 
 from .const import DOMAIN
+from .models import Member
+from .store import LucarneFamilyStore
+
+_LOGGER = logging.getLogger(__name__)
 
 _WS_REGISTERED_KEY = "__ws_registered__"
 
@@ -24,6 +29,62 @@ LUCARNE_FRONTEND_EVENTS: tuple[str, ...] = (
     "lucarne_family_member_updated",
     "lucarne_family_avatar_uploaded",
 )
+
+
+# hass.data key holding the slugs already reported as skipped, so a card polling
+# every 20s doesn't emit a log line per request. A slug is dropped again once its
+# entity comes back. Kept on hass.data rather than at module scope so it dies
+# with the HomeAssistant instance.
+_SKIPPED_SLUGS_KEY = f"{DOMAIN}_skipped_member_slugs"
+
+
+def _members_with_live_todo(
+    hass: HomeAssistant, store: LucarneFamilyStore
+) -> list[Member]:
+    """Return members whose todo entity actually exists and is enabled.
+
+    A member pointing at a deleted entity is worse than absent: every card that
+    receives it issues a `todo.get_items` against the missing entity on every
+    poll, which HA logs as an error — one per card per cycle, forever. The
+    reconciler tries to repair this state at setup, but this is the backstop for
+    the window in between (and for a repair that could not complete): it is
+    re-evaluated against live registry state on every request, unlike anything
+    the frontend can cache.
+
+    Registry presence + not-disabled, deliberately NOT `hass.states.get()`: a
+    card can call this during startup before the `local_todo` platform has added
+    its entities, and filtering on state would blank the card until the next
+    poll. A registered, enabled entity whose config entry merely failed to load
+    is a different (transient, visible) problem that should not be hidden here.
+    """
+    from homeassistant.helpers.entity_registry import async_get as er_get
+
+    er = er_get(hass)
+    reported: set[str] = hass.data.setdefault(_SKIPPED_SLUGS_KEY, set())
+    members = store.get_members()
+    # Forget slugs that are no longer members, so the set can't grow without
+    # bound and a slug that is re-added and breaks again still warns once.
+    reported &= {m.slug for m in members}
+    hass.data[_SKIPPED_SLUGS_KEY] = reported
+
+    live: list[Member] = []
+    for member in members:
+        entity_id = member.todo_entity_id or f"todo.{member.slug}"
+        registry_entry = er.async_get(entity_id)
+        if registry_entry is not None and registry_entry.disabled_by is None:
+            reported.discard(member.slug)
+            live.append(member)
+            continue
+        if member.slug not in reported:
+            reported.add(member.slug)
+            _LOGGER.warning(
+                "Skipping member %r in get_family: todo entity %s does not exist. "
+                "Restart Home Assistant to let it be recreated, or remove the member "
+                "from the integration options.",
+                member.slug,
+                entity_id,
+            )
+    return live
 
 
 @websocket_api.websocket_command({vol.Required("type"): "lucarne_family/get_family"})  # type: ignore[attr-defined]
@@ -49,7 +110,7 @@ async def ws_get_family(
     )
     entry = hass.config_entries.async_get_entry(entry_id)
 
-    members = [m.to_dict() for m in store.get_members()]
+    members = [m.to_dict() for m in _members_with_live_todo(hass, store)]
     tasks = await store.async_get_all_task_metadata()
 
     payload = {

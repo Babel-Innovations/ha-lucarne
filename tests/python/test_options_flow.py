@@ -16,6 +16,7 @@ from custom_components.lucarne_family.const import (
     DEFAULT_STREAK_CHECK_TIME,
     DOMAIN,
 )
+from custom_components.lucarne_family.entity_manager import MemberEntityDeletion
 from custom_components.lucarne_family.models import Member
 from custom_components.lucarne_family.rename import RenameImpact
 
@@ -38,6 +39,7 @@ def _patch_entity_ops():
         patch(
             "custom_components.lucarne_family.entity_manager.async_delete_member_entities",
             new_callable=AsyncMock,
+            return_value=MemberEntityDeletion(todo_removed=True, counter_removed=True),
         ),
         patch(
             "custom_components.lucarne_family.entity_manager.async_rename_member_entities",

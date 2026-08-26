@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_registry import async_get as er_get
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lucarne_family.const import DOMAIN
@@ -51,7 +52,11 @@ async def test_get_family_returns_documented_shape(
     tmp_path: Path,
 ) -> None:
     """get_family returns members, task_metadata, reset_time, streak_check_time, household_entity_id."""  # noqa: E501
-    # No need to set up local_todo/todo — the WS command reads from store + config entry only.
+    # The WS command reads from store + config entry, but it also drops members
+    # whose todo entity is not registered, so the entity has to exist.
+    er_get(hass).async_get_or_create(
+        "todo", "local_todo", "anna-uid", suggested_object_id="anna"
+    )
     member = Member(
         slug="anna",
         name="Anna",
@@ -230,3 +235,56 @@ async def test_subscribe_works_for_non_admin(
     await ws.send_json({"id": 7, "type": "lucarne_family/subscribe"})
     msg = await ws.receive_json()
     assert msg["success"] is True
+
+
+async def test_get_family_skips_members_whose_todo_entity_is_missing(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    tmp_path: Path,
+) -> None:
+    """A member pointing at a deleted todo entity must not reach the cards.
+
+    Regression test for the `molant` flood: a half-deleted member stayed in the
+    config entry with `todo_entity_id: todo.molant` after that entity was gone.
+    Every card that received it then called `todo.get_items` against the missing
+    entity on every 20s poll, so HA logged an error per card per cycle for weeks.
+    The reconciler repairs this at setup; this is the backstop that keeps a
+    broken member from being served in the meantime.
+    """
+    live = Member(
+        slug="anna",
+        name="Anna",
+        color="#ff0000",
+        avatar=None,
+        created_at=datetime.now(UTC),
+        preset="school-age",
+        todo_entity_id="todo.anna",
+        streak_counter_id="counter.anna_streak",
+    )
+    ghost = Member(
+        slug="molant",
+        name="Molant",
+        color="#00ff00",
+        avatar=None,
+        created_at=datetime.now(UTC),
+        preset="school-age",
+        todo_entity_id="todo.molant",
+        streak_counter_id="counter.molant_streak",
+    )
+    er_get(hass).async_get_or_create(
+        "todo", "local_todo", "anna-uid", suggested_object_id="anna"
+    )
+
+    entry = _make_entry(hass, members=[live.to_dict(), ghost.to_dict()])
+    store = await _make_store(hass, entry.entry_id, tmp_path)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store}
+
+    async_register_websocket_commands(hass)
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "lucarne_family/get_family"})
+    msg = await ws.receive_json()
+
+    assert msg["success"] is True
+    slugs = [m["slug"] for m in msg["result"]["members"]]
+    assert slugs == ["anna"], "the member with a missing todo entity is filtered out"

@@ -214,7 +214,7 @@ describe('subscribeFamilyState', () => {
       cb: (msg: unknown) => void,
       payload: Record<string, unknown>,
     ) => {
-      if (payload.type === 'subscribe_trigger') {
+      if (payload.type === 'subscribe_entities') {
         todoCallback = cb as unknown as (items: unknown[]) => void;
       }
       return async () => {};
@@ -234,9 +234,9 @@ describe('subscribeFamilyState', () => {
 
     // Simulate a state change after unsubscribe — should NOT fire callback
     if (todoCallback) {
-      (todoCallback as unknown as (msg: unknown) => void)({
-        variables: { trigger: { to_state: { state: 'on', attributes: {} } } },
-      });
+      const push = todoCallback as unknown as (msg: unknown) => void;
+      push({ a: { 'todo.anna': { s: '0' } } }); // initial snapshot
+      push({ c: { 'todo.anna': { '+': { s: '1' } } } });
     }
     await new Promise((r) => setTimeout(r, 20));
 
@@ -307,10 +307,10 @@ describe('subscribeFamilyState', () => {
       cb: (msg: unknown) => void,
       payload: Record<string, unknown>,
     ) => {
-      // Capture the subscription for the streak counter entity
+      // One subscription covers every watched entity, streak counters included.
       if (
-        payload.type === 'subscribe_trigger' &&
-        (payload.trigger as { entity_id?: string })?.entity_id === 'counter.anna_streak'
+        payload.type === 'subscribe_entities' &&
+        (payload.entity_ids as string[] | undefined)?.includes('counter.anna_streak')
       ) {
         streakCallback = cb;
       }
@@ -326,9 +326,8 @@ describe('subscribeFamilyState', () => {
 
     // Simulate a counter state change
     assert.ok(streakCallback !== null, 'streak counter subscribeMessage was called');
-    streakCallback!({
-      variables: { trigger: { to_state: { state: '7', attributes: {} } } },
-    });
+    streakCallback!({ a: { 'counter.anna_streak': { s: '3' } } }); // initial snapshot
+    streakCallback!({ c: { 'counter.anna_streak': { '+': { s: '7' } } } });
 
     await new Promise((r) => setTimeout(r, 20));
     unsub();
@@ -460,7 +459,7 @@ describe('subscribeFamilyState fallback refresh', () => {
 
   /** Flush pending microtasks so an in-flight async refresh settles. */
   const flush = async () => {
-    for (let i = 0; i < 5; i++) await new Promise((r) => process.nextTick(r));
+    for (let i = 0; i < 25; i++) await new Promise((r) => process.nextTick(r));
   };
 
   it('re-fetches on the poll interval, then stops after unsub', async () => {
@@ -576,6 +575,373 @@ describe('subscribeFamilyState fallback refresh', () => {
       mock.timers.tick(5 * 60 * 1000 - 20_000);
       await flush();
       assert.equal(getFamily, 2, 'retries at the backed-off interval');
+      unsub();
+    } finally {
+      mock.timers.reset();
+    }
+  });
+});
+
+describe('subscribeFamilyState entity subscription lifecycle', () => {
+  const HA = (h: unknown) => h as unknown as import('../../src/shared/types.js').HomeAssistant;
+  const flush = async () => {
+    for (let i = 0; i < 25; i++) await new Promise((r) => process.nextTick(r));
+  };
+
+  function makeSubCountingHass(members: MemberSummary[]) {
+    const subs: Array<Record<string, unknown>> = [];
+    let unsubs = 0;
+    const fakeHass = makeFakeHass();
+    fakeHass.connection.sendMessagePromise = async (payload: Record<string, unknown>) => {
+      if (payload.type === 'lucarne_family/get_family') {
+        return {
+          members,
+          task_metadata: [],
+          reset_time: '07:00',
+          streak_check_time: '22:00',
+          household_entity_id: 'todo.lucarne_household',
+        };
+      }
+      if (payload.type === 'call_service' && payload.domain === 'todo') {
+        const entityId = (payload.target as { entity_id: string })?.entity_id ?? '';
+        return { response: { [entityId]: { items: [] } } };
+      }
+      return undefined;
+    };
+    fakeHass.connection.subscribeMessage = async (
+      _cb: (msg: unknown) => void,
+      payload: Record<string, unknown>,
+    ) => {
+      const isEntitySub = payload.type === 'subscribe_entities';
+      if (isEntitySub) subs.push(payload);
+      return async () => {
+        // Count only entity-subscription teardowns; the lucarne_family/subscribe
+        // relay is a separate, unrelated subscription on the same channel.
+        if (isEntitySub) unsubs++;
+      };
+    };
+    return { fakeHass, subs, unsubCount: () => unsubs };
+  }
+
+  it('opens ONE subscription covering every member todo, streak counter and the household list', async () => {
+    const { fakeHass, subs } = makeSubCountingHass([MEMBER_ANNA]);
+    const unsub = subscribeFamilyState(HA(fakeHass), () => {});
+    await flush();
+    unsub();
+
+    assert.equal(subs.length, 1, 'a single subscription, not one per entity');
+    assert.deepEqual(subs[0].entity_ids, [
+      'todo.anna',
+      'todo.lucarne_household',
+      'counter.anna_streak',
+    ]);
+  });
+
+  // Regression guard. doRefreshOnce used to tear down and rebuild every
+  // subscription on each pass of the 20s fallback poll. With N members that is
+  // 2N+1 subscribe round-trips every 20 seconds for a set that changes about
+  // once a month — and while those subscriptions were being rejected it was
+  // 2N+1 server-side errors every 20 seconds, indefinitely.
+  it('regression: an unchanged member set across polls does NOT re-subscribe', async () => {
+    const { fakeHass, subs, unsubCount } = makeSubCountingHass([MEMBER_ANNA]);
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      const unsub = subscribeFamilyState(HA(fakeHass), () => {});
+      await flush();
+      assert.equal(subs.length, 1, 'initial subscription');
+
+      mock.timers.tick(20_000);
+      await flush();
+      mock.timers.tick(20_000);
+      await flush();
+
+      assert.equal(subs.length, 1, 'two more polls, still the same one subscription');
+      assert.equal(unsubCount(), 0, 'nothing was torn down');
+      unsub();
+      assert.equal(unsubCount(), 1, 'released once, on teardown');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  // Regression guard. doRefreshOnce reset streakByMember and re-seeded it from
+  // `hass.states` on every pass — but `hass` is the snapshot captured when the
+  // handle was created, so its states map is frozen. That clobbered any streak
+  // pushed since. It was invisible while the push path was admin-blocked; with
+  // subscribe_entities working, an incremented streak would revert after 20s.
+  it('regression: a polled refresh does not clobber a pushed streak value', async () => {
+    const { fakeHass, subs } = makeSubCountingHass([MEMBER_ANNA]);
+    // The captured snapshot says 5 — it will never change, exactly like the
+    // real frozen `hass` object a card hands over at subscribe time.
+    (fakeHass as unknown as Record<string, unknown>).states = {
+      'counter.anna_streak': { state: '5', attributes: {} },
+    };
+    let pushEntities!: (msg: unknown) => void;
+    const realSubscribe = fakeHass.connection.subscribeMessage;
+    fakeHass.connection.subscribeMessage = async (
+      cb: (msg: unknown) => void,
+      payload: Record<string, unknown>,
+    ) => {
+      if (payload.type === 'subscribe_entities') pushEntities = cb;
+      return realSubscribe(cb, payload);
+    };
+
+    const states: import('../../src/shared/family-subscription.js').FamilyState[] = [];
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      const unsub = subscribeFamilyState(HA(fakeHass), (st) => states.push(st));
+      await flush();
+      assert.equal(states[states.length - 1].streakByMember.get('anna'), 5, 'seeded from the snapshot');
+      assert.equal(subs.length, 1);
+
+      pushEntities({ a: { 'counter.anna_streak': { s: '5' } } }); // snapshot frame
+      pushEntities({ c: { 'counter.anna_streak': { '+': { s: '9' } } } });
+      await flush();
+      assert.equal(states[states.length - 1].streakByMember.get('anna'), 9, 'push applied');
+
+      mock.timers.tick(20_000);
+      await flush();
+      assert.equal(
+        states[states.length - 1].streakByMember.get('anna'),
+        9,
+        'the poll must not revert the streak to the stale snapshot value',
+      );
+      unsub();
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  // Regression guard for the fix to the fix: `subscribeEntityStates` used to
+  // swallow every opening snapshot. That is right for a reconnect replay (the
+  // closure survives) but wrong for a deliberate re-subscribe — a member added
+  // while a card is open gets a brand-new subscription whose snapshot is the
+  // ONLY place its streak value ever appears, since the seeding loop reads the
+  // `hass.states` snapshot frozen at subscribe time.
+  it('regression: a counter added mid-session gets its value from the snapshot', async () => {
+    const MEMBER_BOB: MemberSummary = {
+      slug: 'bob',
+      name: 'Bob',
+      color: '#9cc8f5',
+      avatar: null,
+      todo_entity_id: 'todo.bob',
+      streak_counter_id: 'counter.bob_streak',
+    };
+    const members: MemberSummary[] = [MEMBER_ANNA];
+    const { fakeHass, subs } = makeSubCountingHass(members);
+    // The frozen snapshot knows nothing about Bob — he did not exist yet.
+    (fakeHass as unknown as Record<string, unknown>).states = {
+      'counter.anna_streak': { state: '1', attributes: {} },
+    };
+    const pushes: Array<(msg: unknown) => void> = [];
+    const realSubscribe = fakeHass.connection.subscribeMessage;
+    fakeHass.connection.subscribeMessage = async (
+      cb: (msg: unknown) => void,
+      payload: Record<string, unknown>,
+    ) => {
+      if (payload.type === 'subscribe_entities') pushes.push(cb);
+      return realSubscribe(cb, payload);
+    };
+
+    const states: import('../../src/shared/family-subscription.js').FamilyState[] = [];
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      const unsub = subscribeFamilyState(HA(fakeHass), (st) => states.push(st));
+      await flush();
+
+      members.push(MEMBER_BOB);
+      mock.timers.tick(20_000);
+      await flush();
+      assert.equal(subs.length, 2, 'the new member forced a fresh subscription');
+
+      // The new subscription opens with a snapshot carrying Bob's real value.
+      pushes[1]({
+        a: {
+          'counter.anna_streak': { s: '1' },
+          'counter.bob_streak': { s: '6' },
+          'todo.anna': { s: '0' },
+          'todo.bob': { s: '0' },
+          'todo.lucarne_household': { s: '0' },
+        },
+      });
+      await flush();
+
+      assert.equal(
+        states[states.length - 1].streakByMember.get('bob'),
+        6,
+        "the snapshot is the only source for a counter that isn't in the frozen hass.states",
+      );
+      unsub();
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  // The opening snapshot repeats what doRefreshOnce fetches right after
+  // subscribing; reacting to it would double every todo read on re-subscribe.
+  it('does not re-fetch todo lists in response to the opening snapshot', async () => {
+    const { fakeHass, subs } = makeSubCountingHass([MEMBER_ANNA]);
+    let getItems = 0;
+    const realSend = fakeHass.connection.sendMessagePromise;
+    fakeHass.connection.sendMessagePromise = async (payload: Record<string, unknown>) => {
+      if (payload.type === 'call_service' && payload.domain === 'todo') getItems++;
+      return realSend(payload);
+    };
+    let push!: (msg: unknown) => void;
+    const realSubscribe = fakeHass.connection.subscribeMessage;
+    fakeHass.connection.subscribeMessage = async (
+      cb: (msg: unknown) => void,
+      payload: Record<string, unknown>,
+    ) => {
+      if (payload.type === 'subscribe_entities') push = cb;
+      return realSubscribe(cb, payload);
+    };
+
+    const unsub = subscribeFamilyState(HA(fakeHass), () => {});
+    await flush();
+    assert.equal(subs.length, 1);
+    const afterInitialFetch = getItems;
+    assert.equal(afterInitialFetch, 2, 'todo.anna + todo.lucarne_household, once each');
+
+    push({ a: { 'todo.anna': { s: '0' }, 'todo.lucarne_household': { s: '0' } } });
+    await flush();
+    assert.equal(getItems, afterInitialFetch, 'the snapshot did not duplicate the fetch');
+
+    push({ c: { 'todo.anna': { '+': { s: '1' } } } });
+    await flush();
+    assert.equal(getItems, afterInitialFetch + 1, 'a real change does re-fetch');
+    unsub();
+  });
+
+  // Regression guard. `subscribeEntityStates` always returns a truthy unsub
+  // wrapper, and `resubscribeIfChanged` has already committed `watchedKey` by
+  // the time a rejection lands — so without routing the failure back, the
+  // `key === watchedKey && unsubEntities` short-circuit made every later poll
+  // believe the subscription was live. One rejected subscribe would have cost
+  // pushes for the lifetime of the card.
+  it('regression: retries on the next poll after a rejected subscribe', async () => {
+    const { fakeHass, subs } = makeSubCountingHass([MEMBER_ANNA]);
+    let rejectNext = true;
+    const realSubscribe = fakeHass.connection.subscribeMessage;
+    fakeHass.connection.subscribeMessage = async (
+      cb: (msg: unknown) => void,
+      payload: Record<string, unknown>,
+    ) => {
+      if (payload.type === 'subscribe_entities' && rejectNext) {
+        rejectNext = false;
+        throw new Error('Unauthorized');
+      }
+      return realSubscribe(cb, payload);
+    };
+
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      const unsub = subscribeFamilyState(HA(fakeHass), () => {});
+      await flush();
+      assert.equal(subs.length, 0, 'the first subscribe was rejected');
+
+      mock.timers.tick(20_000);
+      await flush();
+      assert.equal(subs.length, 1, 'the next poll retried rather than giving up');
+      unsub();
+    } finally {
+      mock.timers.reset();
+      console.warn = originalWarn;
+    }
+  });
+
+  // The poll's Promise.all and a pushed change both call refreshTodo directly,
+  // outside refreshMetadata's coalescer. Without a per-entity generation guard
+  // a fetch issued first but answered second wins, and the card shows a stale
+  // list until the next cycle.
+  it('regression: a slow earlier todo fetch cannot clobber a newer one', async () => {
+    const fakeHass = makeFakeHass();
+    const gates: Array<() => void> = [];
+    let getItems = 0;
+    fakeHass.connection.sendMessagePromise = async (payload: Record<string, unknown>) => {
+      if (payload.type === 'lucarne_family/get_family') {
+        return {
+          members: [MEMBER_ANNA],
+          task_metadata: [],
+          reset_time: '07:00',
+          streak_check_time: '22:00',
+          household_entity_id: 'todo.lucarne_household',
+        };
+      }
+      if (payload.type === 'call_service' && payload.domain === 'todo') {
+        const entityId = (payload.target as { entity_id: string })?.entity_id ?? '';
+        if (entityId !== 'todo.anna') return { response: { [entityId]: { items: [] } } };
+        getItems += 1;
+        const n = getItems;
+        // Fetch #2 answers immediately; fetch #1 is held open and released last.
+        if (n === 1) {
+          await new Promise<void>((r) => gates.push(r));
+          return { response: { 'todo.anna': { items: [{ uid: 'stale', summary: 'Stale', status: 'needs_action' }] } } };
+        }
+        return { response: { 'todo.anna': { items: [{ uid: 'fresh', summary: 'Fresh', status: 'needs_action' }] } } };
+      }
+      return undefined;
+    };
+    let push!: (msg: unknown) => void;
+    fakeHass.connection.subscribeMessage = async (
+      cb: (msg: unknown) => void,
+      payload: Record<string, unknown>,
+    ) => {
+      if (payload.type === 'subscribe_entities') push = cb;
+      return async () => {};
+    };
+
+    const states: import('../../src/shared/family-subscription.js').FamilyState[] = [];
+    const unsub = subscribeFamilyState(HA(fakeHass), (st) => states.push(st));
+    await flush();
+    assert.equal(getItems, 1, 'the initial fetch is in flight, held on its gate');
+
+    // A pushed change issues fetch #2, which answers first with the new items.
+    push({ a: {} });
+    push({ c: { 'todo.anna': { '+': { s: '1' } } } });
+    await flush();
+    assert.equal(getItems, 2);
+    assert.deepEqual(
+      (states[states.length - 1].tasksByMember.get('anna') ?? []).map((t) => t.uid),
+      ['fresh'],
+    );
+
+    // Now the stale first fetch finally answers. It must be discarded.
+    gates.forEach((release) => release());
+    await flush();
+    assert.deepEqual(
+      (states[states.length - 1].tasksByMember.get('anna') ?? []).map((t) => t.uid),
+      ['fresh'],
+      'the superseded fetch does not overwrite the newer result',
+    );
+    unsub();
+  });
+
+  it('re-subscribes when the member set actually changes', async () => {
+    const MEMBER_BOB: MemberSummary = {
+      slug: 'bob',
+      name: 'Bob',
+      color: '#9cc8f5',
+      avatar: null,
+      todo_entity_id: 'todo.bob',
+      streak_counter_id: 'counter.bob_streak',
+    };
+    const members: MemberSummary[] = [MEMBER_ANNA];
+    const { fakeHass, subs } = makeSubCountingHass(members);
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      const unsub = subscribeFamilyState(HA(fakeHass), () => {});
+      await flush();
+      assert.equal(subs.length, 1);
+
+      members.push(MEMBER_BOB); // a member is added between polls
+      mock.timers.tick(20_000);
+      await flush();
+
+      assert.equal(subs.length, 2, 'the new member forces a fresh subscription');
+      assert.ok((subs[1].entity_ids as string[]).includes('todo.bob'));
       unsub();
     } finally {
       mock.timers.reset();

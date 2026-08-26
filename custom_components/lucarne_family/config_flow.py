@@ -684,7 +684,19 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
     async def async_step_manage_members(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        from .issues import (
+            async_clear_orphaned_entities,
+            async_prune_resolved_orphan_issues,
+        )
+
         members = self._get_members()
+        # Re-evaluate the orphan issues here as well as at setup: the user may
+        # have deleted the leftover helper (or re-added the slug as a member)
+        # while HA kept running, and otherwise a persistent Repairs entry would
+        # outlive the problem until the next reload.
+        for member in members:
+            async_clear_orphaned_entities(self.hass, member.slug)
+        async_prune_resolved_orphan_issues(self.hass)
         menu: list[str] = ["add_member"]
         if members:
             menu += ["edit_member", "remove_member"]
@@ -1030,32 +1042,68 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
             if target is None or confirm != target.name:
                 errors["confirm_name"] = "confirm_mismatch"
             else:
-                # Delete entities first; only remove member record when deletion succeeds
-                # so the user can retry via "remove member" if deletion fails.
-                if target.todo_entity_id or target.streak_counter_id:
-                    from .entity_manager import async_delete_member_entities
+                from .issues import (
+                    async_clear_broken_member,
+                    async_report_orphaned_entities,
+                )
 
-                    try:
-                        await async_delete_member_entities(
-                            self.hass,
-                            target.todo_entity_id,
-                            target.streak_counter_id,
-                        )
-                    except Exception as exc:
-                        _LOGGER.warning(
-                            "Failed to delete entities for member %r: %s", target.slug, exc
-                        )
-                        errors["base"] = "entity_delete_failed"
+                removed_slug = self._selected_member_slug or ""
+                remaining = [m for m in members if m.slug != removed_slug]
 
-                if not errors:
-                    removed_slug = self._selected_member_slug
-                    remaining = [m for m in members if m.slug != removed_slug]
-                    await self._save_members(remaining)
-                    await self._sanitize_rotating_tasks_after_removal(
-                        removed_slug, remaining
+                # Persist the removal FIRST, then delete the helpers.
+                #
+                # The two states this can end in are not equally bad. A member
+                # record pointing at an entity that no longer exists is the
+                # failure this branch exists to prevent: every card polls it
+                # forever, and the removal can never be retried to completion
+                # (the already-deleted side is skipped, the failing side fails
+                # again). An orphaned helper is inert and deletable from
+                # Settings. Saving first means every failure path — a reported
+                # delete failure, a raised one, or the flow task being cancelled
+                # between the awaits — lands on the harmless side.
+                await self._save_members(remaining)
+
+                # This issue's own text tells the user to remove the member,
+                # which they just did; it must not linger as an unactionable
+                # warning until the next restart.
+                async_clear_broken_member(self.hass, removed_slug)
+
+                from .entity_manager import async_delete_member_entities
+
+                # Fall back to the canonical ids rather than gating on the
+                # stored ones. A member record predating `todo_entity_id`
+                # carries empty strings and is never backfilled, so gating on
+                # them skipped deletion entirely — leaving real helpers behind
+                # with no orphan issue and no log line, which is exactly the
+                # invisible-orphan case this branch exists to prevent.
+                # `async_delete_member_entities` already no-ops on an id that is
+                # not in the registry.
+                result = await async_delete_member_entities(
+                    self.hass,
+                    target.todo_entity_id or f"todo.{target.slug}",
+                    target.streak_counter_id or f"counter.{target.slug}_streak",
+                )
+                leftovers = result.leftovers
+
+                if leftovers:
+                    _LOGGER.warning(
+                        "Removed member %r but could not delete %s; "
+                        "delete the leftover helper(s) from Settings",
+                        removed_slug,
+                        ", ".join(sorted(leftovers)),
                     )
-                    self._selected_member_slug = None
-                    return await self.async_step_manage_members()
+                    async_report_orphaned_entities(
+                        self.hass, removed_slug, sorted(leftovers)
+                    )
+
+                # Last, because it is the only step whose failure costs nothing
+                # that cannot be fixed later: the member is already gone and the
+                # repairs bookkeeping is already done.
+                await self._sanitize_rotating_tasks_after_removal(
+                    removed_slug, remaining
+                )
+                self._selected_member_slug = None
+                return await self.async_step_manage_members()
 
         if self._selected_member_slug is None:
             member_options = {m.slug: m.name for m in members}
@@ -1114,31 +1162,42 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                 parse_owners(row.get("rotation_owners", "")), remaining_slugs
             )
 
-            if not owners_prime:
-                # No owners left — delete the task entirely.
-                if entity is not None:
-                    try:
-                        await entity.async_delete_todo_items([uid])
-                    except Exception as exc:
-                        _LOGGER.warning(
-                            "Failed to delete rotating todo item %s: %s", uid, exc
-                        )
-                await store.async_delete_task_metadata(uid)
-                self.hass.bus.async_fire(
-                    "lucarne_family_task_deleted", {"uid": uid}
-                )
-            else:
-                new_current = current
-                if current == removed_slug or current not in owners_prime:
-                    # Advance to the next remaining owner.
-                    new_current = (
-                        next_owner(owners_prime, removed_slug or "", remaining_slugs)
-                        or owners_prime[0]
+            # Per row, best-effort: a locked or full SQLite must not abort the
+            # remaining rows. The member record is already gone by the time this
+            # runs, so a skipped row is a stale rotation entry, not a ghost member.
+            try:
+                if not owners_prime:
+                    # No owners left — delete the task entirely.
+                    if entity is not None:
+                        try:
+                            await entity.async_delete_todo_items([uid])
+                        except Exception as exc:
+                            _LOGGER.warning(
+                                "Failed to delete rotating todo item %s: %s", uid, exc
+                            )
+                    await store.async_delete_task_metadata(uid)
+                    self.hass.bus.async_fire(
+                        "lucarne_family_task_deleted", {"uid": uid}
                     )
-                await store.async_update_task_metadata(
+                else:
+                    new_current = current
+                    if current == removed_slug or current not in owners_prime:
+                        # Advance to the next remaining owner.
+                        new_current = (
+                            next_owner(owners_prime, removed_slug or "", remaining_slugs)
+                            or owners_prime[0]
+                        )
+                    await store.async_update_task_metadata(
+                        uid,
+                        rotation_owners=serialize_owners(owners_prime),
+                        current_owner=new_current,
+                    )
+            except Exception as exc:
+                _LOGGER.warning(
+                    "Failed to sanitize rotating task %s after removing %r: %s",
                     uid,
-                    rotation_owners=serialize_owners(owners_prime),
-                    current_owner=new_current,
+                    removed_slug,
+                    exc,
                 )
 
     async def async_step_edit_schedule(

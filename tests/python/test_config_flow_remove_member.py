@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 from homeassistant.components.todo import TodoItem
 from homeassistant.components.todo.const import DATA_COMPONENT, TodoItemStatus
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_registry import async_get as er_get
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -244,3 +245,111 @@ async def test_remove_last_owner_deletes_task(
         row = await store.async_get_task_metadata("uid-rot-r3")
         assert row is None, "Task should have been deleted"
         assert any(e.data["uid"] == "uid-rot-r3" for e in delete_events)
+
+
+# ---------------------------------------------------------------------------
+# Removal must survive a member whose entities are already half-gone
+# ---------------------------------------------------------------------------
+
+
+async def test_remove_member_completes_when_todo_entity_is_already_gone(
+    hass: HomeAssistant,
+    tmp_path: Path,
+) -> None:
+    """The `molant` trap: the todo entity is already deleted, the record is not.
+
+    Regression test. The old flow removed the todo config entry first and let any
+    exception abort the whole step, keeping the member record "so the user can
+    retry" — but a retry skips the already-deleted todo and fails on the same
+    side again, so the member could never be removed through the UI. It stayed in
+    the config entry pointing at `todo.molant`, and every card issued a failing
+    `todo.get_items` against it every 20 seconds for weeks.
+    """
+    entry, _store = await _setup(hass, tmp_path, ["anna", "bob"])
+
+    # Simulate the half-deleted state: drop anna's todo config entry, keep the
+    # member record (exactly what the wall-tablet instance was left in).
+    todo_entry = next(
+        ce
+        for ce in hass.config_entries.async_entries("local_todo")
+        if ce.title == "anna"
+    )
+    await hass.config_entries.async_remove(todo_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await _run_remove_member(hass, entry, "anna")
+
+    slugs = [m["slug"] for m in entry.data[CONF_MEMBERS]]
+    assert slugs == ["bob"], "the member record is removed even though its todo entity was gone"
+
+
+async def test_remove_member_drops_record_and_reports_orphan_when_a_delete_fails(
+    hass: HomeAssistant,
+    tmp_path: Path,
+) -> None:
+    """A helper that refuses to delete must not block removing the member record.
+
+    A member pointing at nothing is worse than an orphaned helper: the first
+    costs an error per card per poll forever, the second is inert. So the record
+    goes and the leftover is surfaced in Settings > Repairs.
+    """
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.lucarne_family.entity_manager import MemberEntityDeletion
+
+    entry, _store = await _setup(hass, tmp_path, ["anna", "bob"])
+
+    with patch(
+        "custom_components.lucarne_family.entity_manager.async_delete_member_entities",
+        new_callable=AsyncMock,
+        return_value=MemberEntityDeletion(
+            todo_removed=False,
+            counter_removed=True,
+            leftovers={"todo.anna": "storage locked"},
+        ),
+    ):
+        await _run_remove_member(hass, entry, "anna")
+
+    slugs = [m["slug"] for m in entry.data[CONF_MEMBERS]]
+    assert slugs == ["bob"], "member record removed despite the failed entity delete"
+
+    issue = ir.async_get(hass).async_get_issue("lucarne_family", "orphaned_entities_anna")
+    assert issue is not None, "the leftover helper is reported in Settings > Repairs"
+    assert "todo.anna" in issue.translation_placeholders["entity_ids"]
+
+
+async def test_remove_legacy_member_with_no_stored_entity_ids_still_deletes_helpers(
+    hass: HomeAssistant,
+    tmp_path: Path,
+) -> None:
+    """A member record predating `todo_entity_id` must not skip helper deletion.
+
+    Those records carry empty strings and are never backfilled. Gating deletion
+    on them left real helpers behind with no orphan repairs issue and no log
+    line — an invisible orphan, which is the failure mode this whole path exists
+    to make impossible.
+    """
+    entry, _store = await _setup(hass, tmp_path, ["anna", "bob"])
+
+    # Rewrite anna's record the way a pre-migration entry looks on disk.
+    legacy = [
+        {**m, "todo_entity_id": "", "streak_counter_id": ""}
+        if m["slug"] == "anna"
+        else m
+        for m in entry.data[CONF_MEMBERS]
+    ]
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, CONF_MEMBERS: legacy}
+    )
+    await hass.async_block_till_done()
+
+    er = er_get(hass)
+    assert er.async_get("todo.anna") is not None, "the helper really is there"
+
+    await _run_remove_member(hass, entry, "anna")
+    await hass.async_block_till_done()
+
+    assert [m["slug"] for m in entry.data[CONF_MEMBERS]] == ["bob"]
+    assert er.async_get("todo.anna") is None, (
+        "the canonical-id fallback deleted the helper instead of silently orphaning it"
+    )
