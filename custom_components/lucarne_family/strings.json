@@ -158,10 +158,23 @@
       "invalid_time": "Time must be in HH:MM format (e.g. 04:00).",
       "entity_rename_failed": "Failed to rename the member's entities. Check the logs and try again.",
       "entity_create_failed": "Failed to create the member's entities. Check the logs and try again.",
-      "entity_delete_failed": "Failed to delete the member's entities. Check the logs and try again.",
       "invalid_url": "Enter a valid URL starting with http:// or https://",
       "secret_too_short": "Secret must be at least 32 characters.",
       "invalid_rrule": "Not a valid recurrence rule. Example: FREQ=DAILY or FREQ=WEEKLY;BYDAY=MO"
+    }
+  },
+  "issues": {
+    "broken_member_todo": {
+      "title": "Lucarne Family: member “{name}” has no task list",
+      "description": "The to-do list `{entity_id}` for member **{name}** (`{slug}`) does not exist and could not be recreated automatically: {detail}\n\nUntil this is resolved the member is skipped entirely — no tasks and no streak on any card. Remove the member from Settings → Devices & services → Lucarne Family → Configure → Manage members, or free up the conflicting entity id and restart Home Assistant to retry.\n\nNote: if a leftover `{entity_id}` helper is reported separately, delete it before adding a member with the same name — the id would collide."
+    },
+    "broken_member_counter": {
+      "title": "Lucarne Family: member “{name}” has no streak counter",
+      "description": "The streak counter `{entity_id}` for member **{name}** (`{slug}`) does not exist and could not be recreated automatically: {detail}\n\nThe member's tasks still work; only the streak is missing. Free up the conflicting entity id and restart Home Assistant to retry, or remove and re-add the member from Settings → Devices & services → Lucarne Family → Configure."
+    },
+    "orphaned_entities": {
+      "title": "Lucarne Family: helpers left over from a removed member",
+      "description": "Member `{slug}` was removed, but these helpers could not be deleted and are still present: `{entity_ids}`\n\nThey are no longer used by Lucarne Family. Delete them from Settings → Devices & services → Helpers. Do this before adding a member with the same name, or creating that member's entities will fail on the id collision."
     }
   }
 }

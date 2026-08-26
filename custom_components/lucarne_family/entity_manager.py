@@ -5,6 +5,7 @@ that back each family member and the shared household list.
 """
 from __future__ import annotations
 
+import dataclasses
 import logging
 from typing import Any
 
@@ -181,32 +182,173 @@ async def async_create_member_entities(
     return (canonical_todo_id, canonical_counter_id)
 
 
+@dataclasses.dataclass(frozen=True)
+class MemberEntityDeletion:
+    """Outcome of deleting one member's entities.
+
+    ``todo_removed`` / ``counter_removed`` mean *the entity is gone* — an entity
+    that was already absent counts as removed, because the goal state already
+    holds. ``leftovers`` maps entity_id -> error text for sides that still exist
+    and could not be deleted.
+    """
+
+    todo_removed: bool
+    counter_removed: bool
+    leftovers: dict[str, str] = dataclasses.field(default_factory=dict)
+
+    @property
+    def complete(self) -> bool:
+        """True when nothing of the member's entities is left behind."""
+        return not self.leftovers
+
+
 async def async_delete_member_entities(
     hass: HomeAssistant,
     todo_entity_id: str,
     counter_entity_id: str,
-) -> None:
-    """Delete the todo config entry and counter helper for a member."""
+) -> MemberEntityDeletion:
+    """Delete the todo config entry and counter helper for a member.
+
+    Each side is attempted independently and failures are *reported*, not
+    raised, so a partial failure never leaves the caller keeping a member
+    record that points at a deleted entity. An entity that is already absent
+    counts as removed, which makes a retry converge.
+
+    The counter is deleted first: it is the failure-prone side (it reaches into
+    the counter component's storage collection), and while the todo list still
+    exists the member is fully reconstructable.
+    """
     er = er_get(hass)
+    leftovers: dict[str, str] = {}
 
-    # Delete local_todo via its config entry
-    er_todo = er.async_get(todo_entity_id)
-    if er_todo is not None and er_todo.config_entry_id:
-        await hass.config_entries.async_remove(er_todo.config_entry_id)
-    elif er_todo is not None:
-        _LOGGER.warning(
-            "todo entity %s has no config_entry_id; skipping config entry removal",
-            todo_entity_id,
-        )
-
-    # Delete counter via storage collection — propagate on failure so the caller
-    # knows deletion did not complete and can preserve the member record.
-    er_counter = er.async_get(counter_entity_id)
+    # --- Counter, via the storage collection ---
+    counter_removed = True
+    er_counter = er.async_get(counter_entity_id) if counter_entity_id else None
     if er_counter is not None:
         counter_item_id = er_counter.unique_id
-        if counter_item_id:
-            sc = _get_counter_storage_collection(hass)
-            await sc.async_delete_item(counter_item_id)
+        if not counter_item_id:
+            counter_removed = False
+            leftovers[counter_entity_id] = "counter entity has no unique_id"
+            _LOGGER.warning(
+                "counter entity %s has no unique_id; cannot delete it",
+                counter_entity_id,
+            )
+        else:
+            try:
+                sc = _get_counter_storage_collection(hass)
+                await sc.async_delete_item(counter_item_id)
+            except Exception as exc:
+                # Reported, not raised — see this function's docstring.
+                counter_removed = False
+                leftovers[counter_entity_id] = str(exc)
+                _LOGGER.warning(
+                    "Failed to delete counter entity %s: %s", counter_entity_id, exc
+                )
+
+    # --- Todo, via its config entry ---
+    todo_removed = True
+    er_todo = er.async_get(todo_entity_id) if todo_entity_id else None
+    if er_todo is not None:
+        if not er_todo.config_entry_id:
+            todo_removed = False
+            leftovers[todo_entity_id] = "todo entity has no config_entry_id"
+            _LOGGER.warning(
+                "todo entity %s has no config_entry_id; skipping config entry removal",
+                todo_entity_id,
+            )
+        else:
+            try:
+                await hass.config_entries.async_remove(er_todo.config_entry_id)
+            except Exception as exc:
+                # Reported, not raised — see this function's docstring.
+                todo_removed = False
+                leftovers[todo_entity_id] = str(exc)
+                _LOGGER.warning(
+                    "Failed to delete todo entity %s: %s", todo_entity_id, exc
+                )
+
+    return MemberEntityDeletion(
+        todo_removed=todo_removed,
+        counter_removed=counter_removed,
+        leftovers=leftovers,
+    )
+
+
+async def async_recreate_member_todo(hass: HomeAssistant, member: Member) -> str:
+    """Recreate only the todo list for *member*, returning its entity_id.
+
+    Per-side recovery for a member whose todo entity went missing while its
+    counter survived — the half-state left behind by a partially-completed
+    member removal, or by deleting the Local To-do config entry by hand.
+    """
+    canonical_todo_id = f"todo.{member.slug}"
+    er = er_get(hass)
+
+    if er.async_get(canonical_todo_id) is not None:
+        raise HomeAssistantError(
+            f"Cannot recreate {canonical_todo_id}: an entity with this id already exists."
+        )
+
+    todo_entry = await _create_local_todo(hass, member.name)
+    actual_todo_id = _find_todo_entity_id(hass, todo_entry.entry_id)
+    if actual_todo_id is None:
+        await hass.config_entries.async_remove(todo_entry.entry_id)
+        raise HomeAssistantError(
+            f"No todo entity found after creating local_todo for {member.name!r}."
+        )
+
+    if actual_todo_id != canonical_todo_id:
+        try:
+            er.async_update_entity(actual_todo_id, new_entity_id=canonical_todo_id)
+        except Exception as exc:
+            await hass.config_entries.async_remove(todo_entry.entry_id)
+            raise HomeAssistantError(
+                f"Cannot recreate {canonical_todo_id}: an entity with this id already exists. "
+                "Delete or rename the conflicting helper before recovering this member."
+            ) from exc
+        if er.async_get(canonical_todo_id) is None:
+            await hass.config_entries.async_remove(todo_entry.entry_id)
+            raise HomeAssistantError(
+                f"Cannot recreate {canonical_todo_id}: rename did not produce the expected id."
+            )
+
+    return canonical_todo_id
+
+
+async def async_recreate_member_counter(hass: HomeAssistant, member: Member) -> str:
+    """Recreate only the streak counter for *member*, returning its entity_id.
+
+    The mirror of :func:`async_recreate_member_todo` for the other half-state.
+    The streak restarts at 0 — the old value died with the old helper.
+    """
+    canonical_counter_id = f"counter.{member.slug}_streak"
+    er = er_get(hass)
+
+    if er.async_get(canonical_counter_id) is not None:
+        raise HomeAssistantError(
+            f"Cannot recreate {canonical_counter_id}: an entity with this id already exists."
+        )
+
+    sc = _get_counter_storage_collection(hass)
+    item = await sc.async_create_item(
+        {
+            "name": f"{member.slug}_streak",
+            "initial": 0,
+            "step": 1,
+            "minimum": 0,
+            "restore": True,
+        }
+    )
+
+    registry_counter_id = er.async_get_entity_id("counter", "counter", item["id"])
+    if registry_counter_id != canonical_counter_id:
+        await sc.async_delete_item(item["id"])
+        raise HomeAssistantError(
+            f"Cannot recreate {canonical_counter_id}: registry assigned {registry_counter_id!r}. "
+            "Delete or rename the conflicting helper before recovering this member."
+        )
+
+    return canonical_counter_id
 
 
 async def async_rename_member_entities(

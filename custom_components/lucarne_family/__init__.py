@@ -314,15 +314,32 @@ async def _async_reconcile_member_entities(
 ) -> None:
     """Reconcile per-member todo+counter entities with stored member data.
 
-    - Member exists in data but todo or counter entity is missing → warn and recreate both.
+    - Member exists in data but both entities are missing → recreate both.
+    - Exactly one of the two is missing → recreate that side only.
+    - Recreation fails → raise a repairs issue so it is visible and actionable.
     - Local-todo entity not tracked by any member → warn (possible orphan from deleted member).
 
+    Every branch either restores the member or surfaces it in Settings → Repairs.
+    Leaving a member pointing at an entity that does not exist is never an
+    acceptable resting state: `ws_get_family` hands that member to every open
+    card, and each one then issues a `todo.get_items` against a missing entity on
+    every poll — an error per card per 20s, indefinitely.
+
     Does not reseed preset routines for recreated entities — seeding is one-time on member add.
-    Phase 3 replaces this with an explicit seven-step setup order.
     """
     from homeassistant.helpers.entity_registry import async_get as er_get
 
-    from .entity_manager import async_create_member_entities
+    from .entity_manager import (
+        async_create_member_entities,
+        async_recreate_member_counter,
+        async_recreate_member_todo,
+    )
+    from .issues import (
+        async_clear_broken_member,
+        async_clear_orphaned_entities,
+        async_prune_resolved_orphan_issues,
+        async_report_broken_member,
+    )
 
     er = er_get(hass)
     members = store.get_members()
@@ -336,27 +353,65 @@ async def _async_reconcile_member_entities(
         counter_present = er.async_get(expected_counter) is not None
 
         if todo_present and counter_present:
+            async_clear_broken_member(hass, member.slug)
             continue
 
-        # Partial state (one entity present, one missing): async_create_member_entities
-        # would fail because it guards against existing entity_ids and the IDManager
-        # would assign a suffixed id for the missing side. Warn and skip — Phase 3
-        # introduces explicit per-side recovery helpers.
+        # Partial state — recreate only the missing side. async_create_member_entities
+        # cannot be used here: it guards against existing entity_ids, so the surviving
+        # side would make it fail outright.
         if todo_present and not counter_present:
             _LOGGER.warning(
-                "Streak counter %s for member %r is missing but todo entity is present. "
-                "Re-add the counter helper manually or re-add the member to restore it.",
+                "Streak counter %s for member %r is missing; recreating it",
                 expected_counter,
                 member.slug,
             )
+            try:
+                new_counter_id = await async_recreate_member_counter(hass, member)
+            except Exception as exc:
+                _LOGGER.error(
+                    "Failed to recreate streak counter for member %r: %s",
+                    member.slug,
+                    exc,
+                )
+                async_report_broken_member(
+                    hass,
+                    member.slug,
+                    member.name,
+                    expected_counter,
+                    str(exc),
+                    side="counter",
+                )
+                continue
+            updated_members[i] = dataclasses.replace(
+                member, streak_counter_id=new_counter_id
+            )
+            dirty = True
+            async_clear_broken_member(hass, member.slug, side="counter")
             continue
+
         if not todo_present and counter_present:
             _LOGGER.warning(
-                "Todo entity %s for member %r is missing but streak counter is present. "
-                "Re-add the todo helper manually or re-add the member to restore it.",
+                "Todo entity %s for member %r is missing; recreating it",
                 expected_todo,
                 member.slug,
             )
+            try:
+                new_todo_id = await async_recreate_member_todo(hass, member)
+            except Exception as exc:
+                _LOGGER.error(
+                    "Failed to recreate todo entity for member %r: %s",
+                    member.slug,
+                    exc,
+                )
+                async_report_broken_member(
+                    hass, member.slug, member.name, expected_todo, str(exc), side="todo"
+                )
+                continue
+            updated_members[i] = dataclasses.replace(
+                member, todo_entity_id=new_todo_id
+            )
+            dirty = True
+            async_clear_broken_member(hass, member.slug, side="todo")
             continue
 
         # Both missing — safe to call async_create_member_entities.
@@ -368,21 +423,32 @@ async def _async_reconcile_member_entities(
         )
         try:
             new_todo_id, new_counter_id = await async_create_member_entities(hass, member)
-            updated_members[i] = dataclasses.replace(
-                member,
-                todo_entity_id=new_todo_id,
-                streak_counter_id=new_counter_id,
-            )
-            dirty = True
         except Exception as exc:
             _LOGGER.error(
                 "Failed to recreate entities for member %r during reconciliation: %s",
                 member.slug,
                 exc,
             )
+            async_report_broken_member(
+                hass, member.slug, member.name, expected_todo, str(exc), side="todo"
+            )
+            continue
+        updated_members[i] = dataclasses.replace(
+            member,
+            todo_entity_id=new_todo_id,
+            streak_counter_id=new_counter_id,
+        )
+        dirty = True
+        async_clear_broken_member(hass, member.slug)
 
     if dirty:
         await store.async_save_members(updated_members)
+
+    # A slug that is a member again is not an orphan; and a leftover helper the
+    # user has since deleted should stop warning.
+    for member in updated_members:
+        async_clear_orphaned_entities(hass, member.slug)
+    async_prune_resolved_orphan_issues(hass)
 
     # Warn about local_todo entities not tracked by any member (possible orphans).
     # Use the same fallback as the loop above so legacy members without stored entity_ids
