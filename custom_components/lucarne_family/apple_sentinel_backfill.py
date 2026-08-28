@@ -52,7 +52,8 @@ async def async_backfill_apple_sentinel(
     Runs under this uid's lock. Check → re-read → INSERT has the same shape as
     ``task_adoption.async_adopt_item``, and so the same failure: the INSERT is an
     executor hop, and a ``delete_task`` completing inside it would leave a metadata
-    row for a todo item that no longer exists, which nothing reaps (issue #114).
+    row for a todo item that no longer exists, which nothing reaps until the next
+    daily reset (``reconcile``) (issue #114).
     """
     async with async_task_uid_lock(uid):
         return await _async_backfill_locked(hass, store, entity_id, uid, member_slug)

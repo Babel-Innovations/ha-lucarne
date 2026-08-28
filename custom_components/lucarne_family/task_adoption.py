@@ -129,13 +129,15 @@ async def async_adopt_item(
     The item is resolved from the entity *here*, never accepted from the caller.
     ``update_task_metadata`` locates it before running its validation, and a
     concurrent delete in between would otherwise leave a metadata row behind for a
-    todo item that no longer exists — nothing reaps such a row. Re-reading the
-    list is a handful of in-memory comparisons; staleness is the expensive part.
+    todo item that no longer exists — a row nothing reaps before the next daily
+    reset (``reconcile``). Re-reading the list is a handful of in-memory
+    comparisons; staleness is the expensive part.
 
     Re-reading alone narrows the window without closing it, which is why the whole
     body runs under this uid's lock (``task_locks``): the INSERT is an await, so a
     ``delete_task`` completing entirely inside it would otherwise land a metadata
-    row whose todo item is gone, and nothing reaps such a row (issue #114). Holding
+    row whose todo item is gone — one that nothing reaps until the next daily reset
+    (``reconcile``), by which time it has already cost a day's streak (issue #114). Holding
     the lock serializes check → re-read → INSERT against ``handle_delete_task``,
     which takes the same lock across its item delete *and* its metadata delete. The
     two possible orderings both end clean: adopt first and the delete removes item

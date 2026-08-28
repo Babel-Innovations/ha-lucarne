@@ -34,6 +34,7 @@ custom_components/
     completion_listener.py    State-change listener → logs completions + fires events
     automation_writer.py      Registers async_track_time_change listeners (daily reset + streak check)
     reset_logic.py            Performs the daily routine reset (flips routine items → needs_action)
+    reconcile.py              Reaps task_metadata rows whose todo item is gone; runs at daily reset (#116)
     streak_logic.py           Recomputes per-member streaks from completion_log
     avatar_service.py         Avatar upload: validates, writes to /local/lucarne/avatars/, fires event
     member_service.py         set_member_avatar service: emoji or path avatar, fires member_updated
@@ -334,21 +335,21 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Every caller of `store.async_add_task_metadata` must hold that uid's lock** (`async_task_uid_lock`
   in `task_locks.py`), and so must `delete_task` across its item delete *and* its metadata delete.
   The INSERT is an executor hop, so without the lock a concurrent `delete_task` completes
-  entirely inside it and the row lands on an item that no longer exists — nothing reaps it
-  (`reset_logic`'s deletes all sit inside a loop over `entity.todo_items`, so they can never
-  reach a row with no item). A routine-typed orphan (what `update_task_metadata {type: routine}`
+  entirely inside it and the row lands on an item that no longer exists — nothing in the reset
+  loop reaps it (`reset_logic`'s deletes all sit inside a loop over `entity.todo_items`, so they
+  can never reach a row with no item), and `reconcile.py`, which does, runs only at the
+  daily-reset window. A routine-typed orphan (what `update_task_metadata {type: routine}`
   leaves, since it applies the caller's fields straight after adopting) then sits in
   `routine_uids` forever, silently suppressing that member's `all_routines_done`, and with an
   RRULE it pins the streak at 0 (#114). No check *before* the INSERT helps — the window is the
   await itself. Holders: `async_adopt_item`, `async_backfill_apple_sentinel`,
   `handle_delete_task`, and both create-then-INSERT paths (`add_task`, preset seeding) across
   the create as well — a fresh uuid4 is **not** private, because `async_create_todo_item`
-  publishes the item to WS subscribers before it returns. Lucarne's other `task_metadata` DELETE
-  paths (`reset_logic`, `config_flow`'s member removal) need no lock — they delete only rows they
-  have already read, so no inserter can be mid-flight on one. Two windows stay open by design and
-  are documented in `task_locks.py`: deleting the item *outside* Lucarne (`todo.remove_item`, HA's
-  to-do panel) writes no metadata at all and orphans an adopted row outright — a separate
-  reconciliation gap, tracked in #116 — and a **cancelled** task releases the lock while its
+  publishes the item to WS subscribers before it returns. Two of Lucarne's other `task_metadata`
+  DELETE paths (`reset_logic`, `config_flow`'s member removal) need no lock — they delete only rows
+  they have already read, so no inserter can be mid-flight on one; the third, `reconcile.py`, takes
+  it for the opposite reason (see the reconciliation pitfall below). One window stays open by
+  design and is documented in `task_locks.py`: a **cancelled** task releases the lock while its
   executor INSERT may still be running, since a started `async_add_executor_job` worker cannot be
   cancelled (#118). `handle_delete_task` deletes metadata *before* the item so that a
   cancellation between its halves fails safe, and holds the lock across *both* —
@@ -357,6 +358,34 @@ Single HACS item — `integration` category only. The cards ride along inside th
   `test_item_removal_stays_inside_the_uid_lock`,
   `test_add_task_rollback_delete_stays_inside_the_uid_lock`, and
   `test_apple_backfill_re_read_stays_inside_the_uid_lock` each pin one holder's scope.
+- **Orphaned `task_metadata` is reaped by reading the lists, never by diffing snapshots**
+  (#116): every removal path except `lucarne_family.delete_task` — HA's to-do panel,
+  `todo.remove_item` from an automation/voice/agent, the Companion app — deletes the todo item
+  and leaves the row, and a routine-typed leftover permanently suppresses that member's
+  `all_routines_done` (it joins `routine_uids`, which is compared against a `completed` set built
+  from the entity's own items) and — with an RRULE — pins the streak at 0 (no recurrence means
+  never due, so it costs only the event). `reconcile.async_reconcile_task_metadata` runs at the
+  end of `async_perform_daily_reset` — so at the configured `reset_time` (04:00 by default), or on
+  demand via the `lucarne_family.perform_daily_reset` service. **Do not move it onto the
+  completion listener's disappeared branch**: `_read_entity_snapshot` returns `{}` for an entity
+  missing from `DATA_COMPONENT`, so a `local_todo` reload diffs a full list to `{}` and every uid
+  in it looks deleted at once — a reaper there drops the whole list's metadata on every reload,
+  strictly worse than the bug. Reading the lists is immune only because a list that cannot be read
+  is **skipped** rather than treated as empty: no entity, an unavailable state, or `todo_items is None` (not yet
+  loaded, as against `[]` for genuinely empty) means that slug is never reconciled at all. Each of
+  those three guards has a test that fails without it. The delete then re-checks the lists under
+  `async_task_uid_lock` before dropping a row, because `add_task` and preset seeding hold that lock
+  across item creation *and* the INSERT — without the re-check, a task created after the scan is
+  indistinguishable from an orphan and loses the row it just wrote
+  (`test_a_task_created_after_the_list_scan_keeps_its_row`). That re-check re-runs the same
+  readability pass rather than a bare "is this uid listed" scan, so a list that stops being
+  readable in between is skipped there too
+  (`test_a_list_that_stops_being_readable_mid_pass_keeps_its_rows`). Not covered, and not coverable
+  here: rows left behind by *removing a member*. Their list is gone, so the slug is never
+  readable again and the pass refuses to act on it, while the only rows `config_flow`'s removal
+  cleanup ever deletes are household `rotating` rows that lost their last owner — so re-adding the
+  same slug hits `seed_preset_routines`' `source == "template"` early return and the new member's
+  list is never seeded. That fix belongs in the removal path, which knows the slug is going away.
 - **Never adopt a todo item automatically**: `reset_logic` deletes completed `type="chore"`
   items at the daily-reset window, and `if metadata is None: continue` is the *only* thing
   keeping items Lucarne didn't create out of that sweep. Adopting on appearance would mean a

@@ -6,8 +6,12 @@ then awaits the INSERT. That await is an executor hop, so a concurrent
 ``lucarne_family.delete_task`` for the same uid can complete entirely inside it —
 todo-item delete **and** its unconditional metadata DELETE — leaving the INSERT
 to land afterwards. The result is a ``task_metadata`` row whose todo item is
-gone, and nothing reaps it: ``reset_logic``'s deletes all sit inside a loop over
-``entity.todo_items``, so they can never reach a row with no item.
+gone. Nothing in the reset loop reaps it — ``reset_logic``'s deletes all sit
+inside a loop over ``entity.todo_items``, so they can never reach a row with no
+item — and ``reconcile.async_reconcile_task_metadata`` (issue #116), which does,
+only runs at the daily-reset window. Serializing here is what keeps the row from
+existing at all; the reconciliation is a backstop for the removal paths that
+never take this lock, not a licence to drop it.
 
 Such an orphan is worse than dead weight. ``update_task_metadata`` applies the
 caller's fields right after adopting, so a racing call carrying
@@ -40,19 +44,21 @@ table-rebuild ``INSERT … SELECT`` in ``store.async_init`` is not a per-item wr
 * ``task_service.handle_delete_task`` — across the item delete *and* the
   metadata delete, so a delete is never half-applied from an inserter's view.
 
-Lucarne's other ``task_metadata`` DELETE paths — ``reset_logic``'s sweep and
-``config_flow``'s member-removal cleanup — need no lock: both delete only rows
-they have already read non-``None``, and every inserter above either holds this
-lock or acts only when no row exists, so the two are mutually exclusive.
+Two of Lucarne's other ``task_metadata`` DELETE paths — ``reset_logic``'s sweep
+and ``config_flow``'s member-removal cleanup — need no lock: both delete only
+rows they have already read non-``None``, and every inserter above either holds
+this lock or acts only when no row exists, so the two are mutually exclusive.
 
-Two windows this deliberately does **not** close, so don't read the invariant
+The third, :func:`reconcile.async_reconcile_task_metadata`, does hold it, and for
+the opposite reason to everyone else here: it deletes rows *because* it found no
+todo item, so it must not run against a uid whose item is being created. Both
+create-then-INSERT paths above hold this lock across the create, so taking it and
+re-reading the lists inside is what tells a genuine orphan from a task that was
+created a moment ago.
+
+One window this deliberately does **not** close, so don't read the invariant
 wider than it is:
 
-* **Deleting the todo item outside Lucarne.** ``todo.remove_item`` and HA's
-  to-do panel go straight to the entity, take no lock, and delete no metadata
-  row — and the completion listener's disappeared branch only ``continue``s. So
-  removing an adopted task that way orphans its row outright, no race required.
-  That is a separate reconciliation gap, tracked in issue #116, not this one.
 * **Cancellation of the task holding the lock.** ``async_add_executor_job``
   cannot cancel a worker that has already started, so a cancelled service call
   (HA shutdown, or an explicit caller cancellation — note a dropped WebSocket
