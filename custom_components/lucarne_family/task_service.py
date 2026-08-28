@@ -389,15 +389,19 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         # the next daily reset (issue #114). See task_locks and reconcile.
         #
         # Metadata first, item second, so that being cancelled between the two —
-        # each is an executor hop, and HA cancels service-call tasks at shutdown
-        # (a dropped WebSocket does *not* cancel them: async_response dispatches
-        # each command as a background task, and connection teardown cancels only
-        # the connection's own handler and writer) — leaves the *benign* half-state:
+        # HA cancels service-call tasks at shutdown (a dropped WebSocket does
+        # *not* cancel them: async_response dispatches each command as a
+        # background task, and connection teardown cancels only the connection's
+        # own handler and writer) — leaves the *benign* half-state:
         # an item with no row, which is exactly what every un-adopted item already
         # is and which the cards render via buildRenderableTasks' fallback. The
         # reverse order leaves the unreapable orphan this whole change exists to
         # prevent. No inserter can observe the intermediate state; the lock
-        # excludes them.
+        # excludes them. The metadata DELETE can no longer be split by a
+        # cancellation — store._async_write drains its executor job before
+        # unwinding (#118) — so *between* the halves is the split this order
+        # exists to decide. The item removal is local_todo's own executor hop and
+        # no store-level drain reaches it.
         #
         # An item delete that *raises* splits two ways.
         #
@@ -421,8 +425,7 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         #
         # Restoring the row on failure was considered and rejected: the commonest
         # raise *is* the missing-uid case, so a blanket restore would re-create
-        # exactly the #116 orphan, and a conditional one would need its own
-        # cancellation handling in the except (#118).
+        # exactly the #116 orphan.
         async with async_task_uid_lock(uid):
             # Unconditional: the DELETE is a no-op when the item was never adopted,
             # and gating it on the earlier read would leak a row for an item that

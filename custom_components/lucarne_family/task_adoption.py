@@ -142,9 +142,15 @@ async def async_adopt_item(
     which takes the same lock across its item delete *and* its metadata delete. The
     two possible orderings both end clean: adopt first and the delete removes item
     and row together; delete first and the re-read above finds nothing, so no row is
-    written. Short of cancellation, that is — a cancelled task releases the lock
-    while its executor INSERT may still be running. See ``task_locks`` for that
-    residual window and for the unrelated one that ``todo.remove_item`` opens.
+    written. Cancellation of *this* frame is covered too — ``store._async_write``
+    drains the INSERT before it unwinds, so the lock is still held when the row
+    lands (issue #118). One residual window is not the store's to close: a
+    ``handle_delete_task`` cancelled inside ``local_todo``'s own save unwinds with
+    the item already dropped from the calendar but ``entity.todo_items`` never
+    refreshed — that list is only rebuilt by the ``async_update_ha_state`` after
+    the save — so the re-read above can still see an item that is gone, and adopt
+    it. ``handle_delete_task`` carries that reasoning (``task_service``); the
+    unrelated orphan ``todo.remove_item`` leaves behind is ``reconcile``'s.
 
     Adoption enrolls the item into the daily-reset sweep (``reset_logic`` deletes
     completed ``chore`` rows), so it is deliberately *not* automatic: only an

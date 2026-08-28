@@ -56,19 +56,28 @@ create-then-INSERT paths above hold this lock across the create, so taking it an
 re-reading the lists inside is what tells a genuine orphan from a task that was
 created a moment ago.
 
-One window this deliberately does **not** close, so don't read the invariant
-wider than it is:
+Holding the lock is not on its own enough to survive **cancellation of the
+holder** (HA shutdown, or an explicit caller cancellation — note a dropped
+WebSocket does not cancel a service call). ``async_add_executor_job`` cannot
+cancel a worker that has already started, so a cancelled holder used to unwind
+and release this lock with its INSERT still in flight: a parked delete then ran
+both of its halves against a table with no row yet, and the INSERT committed
+afterwards. Same orphan, reached without any lock being skipped (issue #118).
 
-* **Cancellation of the task holding the lock.** ``async_add_executor_job``
-  cannot cancel a worker that has already started, so a cancelled service call
-  (HA shutdown, or an explicit caller cancellation — note a dropped WebSocket
-  does not cancel one) unwinds and releases the lock
-  while its INSERT is still in flight. A parked delete then runs, and the INSERT
-  commits afterwards. Reaching it needs the worker to be starved across the
-  delete's two executor round-trips, which is why it is left rather than papered
-  over with cancellation handling that nothing tests. Tracked in issue #118.
-  ``handle_delete_task``'s own halves are ordered to fail safe under the same
-  cancellation — see there.
+That is closed in the store rather than here, because the fix has to know when
+the statement has actually landed: :meth:`store.LucarneFamilyStore._async_write`
+waits on the executor job instead of awaiting it, and on cancellation drains it
+before re-raising. The caller's frame — and therefore this lock — stays open
+until the write is committed, so cancellation orders the write *before* the
+release instead of after. Every per-item ``task_metadata`` add/update/delete goes
+through it, as does the completion-log insert, and nothing is required of the call
+sites here. The two bulk writes stay out: ``async_init``, which runs before any
+service is registered, and ``async_rename_member_slug``, whose caller rolls it
+back in a later step that a ``CancelledError`` would skip — see its docstring.
+
+``handle_delete_task``'s halves are still ordered metadata-first to fail safe
+under a cancellation landing *between* them, which no store-level drain can
+cover — see there.
 
 The registry is keyed by uid alone rather than per config entry: uids are UUIDs,
 and the alternative means threading ``entry_id`` into call sites that do not

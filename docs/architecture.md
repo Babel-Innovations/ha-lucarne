@@ -336,12 +336,79 @@ need no lock: both delete only rows they have already read, so no inserter can b
 mid-flight on one. The third, `reconcile.py`, takes it for the opposite reason —
 see below.
 
-One window this does **not** close: a cancelled service call releases the lock
-while its INSERT may still be running, because `async_add_executor_job` cannot
-cancel a worker that has already started. Only shutdown and an explicit caller
-cancellation do that — a dropped WebSocket does *not* cancel a service call,
-since `async_response` dispatches each command as a background task. It needs the
-worker starved across the delete's two executor round-trips and is tracked in #118.
+The lock alone does not survive **cancellation of the holder** — only shutdown and
+an explicit caller cancellation do that, since a dropped WebSocket does *not* cancel
+a service call (`async_response` dispatches each command as a background task).
+`async_add_executor_job` cannot cancel a worker that has already started, so a
+cancelled holder used to unwind and release the lock with its INSERT still in
+flight: the parked delete ran both of its halves against a table with no row yet,
+and the INSERT committed afterwards — the same orphan, reached without any lock
+being skipped (issue #118).
+
+That is closed in the store, which is the only place that can tell when the
+statement has landed. `LucarneFamilyStore._async_write` wraps every per-item
+`task_metadata` add/update/delete, plus the completion-log insert. The two bulk writes
+stay out: `async_init`, which runs
+before any service is registered, and `async_rename_member_slug` — nothing about #118
+asks for it (no uid lock is held across it, and draining orders a write against its own
+caller's cancellation, which is not what the rename is exposed to) and draining it would *hurt*, since the
+config flow rolls that migration back in a later step which a `CancelledError` skips,
+leaving rows on the new slug and everything else on the old. It *waits on* the
+executor job rather than awaiting it (`await job` would cancel it, `asyncio.wait`
+only adds and removes its own done-callback), and on cancellation drains the job
+before re-raising. The caller's frame — and so the uid lock — stays open until the
+write is committed, which orders the write *before* the release instead of after.
+A write that fails while draining is logged, never raised over the `CancelledError`.
+Reads are left abandonable — dropping a `SELECT` costs nothing.
+
+Two details there are load-bearing rather than incidental:
+
+- **The job is submitted through the loop, not through `hass.async_add_executor_job`.**
+  That helper registers the future it returns in `hass._tasks` / `hass._background_tasks`,
+  and `async_stop` cancels *those futures directly* — every background entry at stage 2,
+  and again whatever of the pre-stage-2 `_tasks` snapshot is left at stage 4 (a bare
+  future has no `cancelling()`, so stage 4's skip does not spare it the way it spares a
+  draining task). Cancelling an executor future marks it `done()` and
+  `cancelled()` at once while the worker thread runs on regardless, so a tracked job
+  would pass straight through the drain and reopen #118 on the shutdown path — the very
+  one this exists for, and the commonest, since `async_response` dispatches each
+  WebSocket command as a background task. It is the same thread pool either way (HA
+  installs its executor as the loop's default); only the tracking differs, and the
+  awaiting task stays tracked.
+- **The drain loops**, because shutdown delivers more than one cancellation and a single
+  `await` would be abandoned by the next. Those swallowed cancellations are deliberately
+  *not* given back with `task.uncancel()`: asyncio cannot attribute a cancellation, so an
+  enclosing `asyncio.timeout` would then report a genuine external cancellation as its own
+  `TimeoutError`. Leaving the count inflated makes such a caller see `CancelledError`,
+  which is the truthful outcome; a timeout firing on its own still converts normally,
+  because the drain swallows nothing in that case.
+
+The drain waits only on a job already submitted, never on work still to come — but nothing
+times it out. "Submitted" is not "running", so the wait is queue time in HA's shared default
+executor plus the statement itself; `sqlite3.connect`'s five-second busy timeout bounds each
+lock acquisition once a worker runs, not the drain. A write of this size is sub-millisecond
+in practice, but under a saturated executor it is bounded by availability alone.
+
+It does not hold up `async_stop` at all, and the reason is the skipped `uncancel()` above:
+`cancelling()` stays at 1 for the whole drain, and HA skips such a task everywhere.
+`async_block_till_done` filters its wait set with `not cancelling(task)`, so stages 2, 3 and
+close never await it; stage 4 opens with `if task.done() or cancelling(task): continue`, so it
+is skipped rather than awaited — its `asyncio.timeout(0.1)` never applies and its `Task … could
+not be canceled during final shutdown stage` can never name us. (A WebSocket-dispatched caller
+is a *background* task, so it is not in stage 4's set to begin with.)
+
+`runner` picks it up once `async_stop` has returned: `_cancel_all_tasks_with_timeout(loop, 5)`
+cancels again — swallowed — and waits five seconds before logging `Task could not be canceled
+and was still running after shutdown`. Then `loop.shutdown_default_executor()` reaches
+`InterruptibleThreadPoolExecutor.shutdown`, whose `cancel_futures=True` drops a job still
+*queued* (its future is cancelled, which ends the drain loop — hence the `job.cancelled()`
+guard) and whose ten-second join budget interrupts a genuinely running worker. Nothing here
+can wedge shutdown.
+
+`handle_delete_task`'s two halves are still ordered metadata-first. The metadata DELETE
+can no longer be split by a cancellation, so the split the order exists to control is the
+one *between* the halves — the item removal is `local_todo`'s own executor hop and no
+store-level drain reaches it.
 
 ### Reconciling orphaned metadata (#116)
 

@@ -111,3 +111,34 @@ async def test_registry_is_cleaned_up_when_the_body_raises() -> None:
     # And the uid is usable again afterwards.
     async with async_task_uid_lock(UID_A):
         pass
+
+
+async def test_registry_is_cleaned_up_when_the_holder_is_cancelled() -> None:
+    """Cancellation releases too — the lock must never be left held forever.
+
+    ``CancelledError`` is a ``BaseException``, so it sails past every
+    ``except Exception`` on the way out and the ``finally`` is the only thing that
+    unwinds the refcount. What cancellation must *not* do is release before the
+    holder's own executor writes have landed; that is ``store._async_write``'s
+    job, pinned in ``test_write_cancellation.py`` (issue #118).
+    """
+    entered = asyncio.Event()
+
+    async def _hold() -> None:
+        async with async_task_uid_lock(UID_A):
+            entered.set()
+            await asyncio.Event().wait()
+
+    holder = asyncio.create_task(_hold())
+    await entered.wait()
+    assert lock_holders(UID_A) == 1
+
+    holder.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await holder
+
+    assert UID_A not in _LOCKS
+    assert UID_A not in _HOLDERS
+    # And the uid is usable again afterwards.
+    async with async_task_uid_lock(UID_A):
+        pass
