@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 
 from .completion_listener import _RESET_PENDING_KEY, _RESET_ROTATING_PREV_KEY
 from .const import EVENT_ROTATION_ADVANCED, HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
+from .reconcile import async_reconcile_task_metadata
 from .rotation import next_owner, parse_owners, sanitize_owners, serialize_owners
 from .store import LucarneFamilyStore
 
@@ -27,6 +28,12 @@ async def async_perform_daily_reset(hass: HomeAssistant, store: LucarneFamilySto
     the value stays a stable signal of "routines flipped today".
     Idempotent for routines: items already in needs_action are untouched, so a
     second call on the same day returns 0.
+
+    Finishes by reconciling task_metadata against the lists (see reconcile.py):
+    rows whose todo item was removed outside Lucarne — HA's to-do panel,
+    todo.remove_item — are reaped here, because nothing in this loop can reach
+    them and left alone they silently suppress all_routines_done and the streak
+    (issue #116). Reaped rows are not counted in the return value.
 
     Completion logging is delegated to completion_listener via the reset-pending
     mechanism: each routine UID is added to hass.data[_RESET_PENDING_KEY] before
@@ -164,5 +171,18 @@ async def async_perform_daily_reset(hass: HomeAssistant, store: LucarneFamilySto
 
     if total_deleted:
         _LOGGER.debug("Daily reset removed %d completed one-off chore(s)", total_deleted)
+
+    # Last, so rows this sweep just deleted alongside their items are already gone
+    # and are never rescanned as orphans. Failures here are logged, not raised: the
+    # reset itself is already complete and counted by this point, and the reaper is
+    # a maintenance backstop — letting a SQLite error out of it would report the
+    # whole service call as failed and discard total_reset. The next run retries.
+    try:
+        reaped = await async_reconcile_task_metadata(hass, store)
+    except Exception:
+        _LOGGER.exception("Reconciling orphaned task_metadata failed")
+    else:
+        if reaped:
+            _LOGGER.debug("Daily reset reaped %d orphaned task_metadata row(s)", reaped)
 
     return total_reset

@@ -52,6 +52,7 @@ Apple Reminders
 
 lucarne_family integration (time-change listeners)
   ├── reset_time  → perform_daily_reset  → flip type=routine items → needs_action
+  │                                      → reap task_metadata whose todo item is gone
   └── streak_check_time → evaluate_all_streaks → recompute streak → counter.<slug>_streak
 ```
 
@@ -314,8 +315,10 @@ row that looked normal but could not be deleted, toggled, or edited (issue #111)
 `delete_task`.** `async_adopt_item` re-reads the item and then awaits the INSERT —
 an executor hop, so a concurrent `delete_task` could remove the todo item *and*
 run its unconditional metadata DELETE entirely inside it, leaving the INSERT to
-land on an item that no longer exists. Nothing reaps such a row: `reset_logic`'s
-deletes all sit inside a loop over `entity.todo_items`. Worse, `update_task_metadata`
+land on an item that no longer exists. Nothing in the reset loop reaps such a row
+— `reset_logic`'s deletes all sit inside a loop over `entity.todo_items` — and the
+reconciliation below, which does, only runs at the daily-reset window. Worse,
+`update_task_metadata`
 applies the caller's fields straight after adopting, so a racing call carrying
 `type: "routine"` leaves a routine-typed orphan that permanently suppresses that
 member's `all_routines_done` and — with an RRULE — pins the streak at 0 (issue #114).
@@ -327,21 +330,66 @@ hold it across check → re-read → INSERT; `add_task` and preset seeding hold 
 across item creation *and* the INSERT — the uid is fresh, but
 `async_create_todo_item` publishes it to WebSocket subscribers before returning,
 so a `delete_task` can name it first; `handle_delete_task` holds it across the
-item delete *and* the metadata delete. Lucarne's other `task_metadata` DELETE
-paths — `reset_logic`'s sweep and `config_flow`'s member-removal cleanup — need
-no lock: both delete only rows they have already read, so no inserter can be
-mid-flight on one.
+item delete *and* the metadata delete. Two of Lucarne's other `task_metadata`
+DELETE paths — `reset_logic`'s sweep and `config_flow`'s member-removal cleanup —
+need no lock: both delete only rows they have already read, so no inserter can be
+mid-flight on one. The third, `reconcile.py`, takes it for the opposite reason —
+see below.
 
-Two windows this does **not** close. Deleting the todo item *outside* Lucarne
-(`todo.remove_item`, HA's to-do panel) goes straight to the entity and deletes no
-metadata row at all — the listener's disappeared branch only `continue`s — so it
-orphans an adopted task's row outright, no race required (#116). And a cancelled
-service call releases the lock while its INSERT may still be running, because
-`async_add_executor_job` cannot cancel a worker that has already started. Only
-shutdown and an explicit caller cancellation do that — a dropped WebSocket does
-*not* cancel a service call, since `async_response` dispatches each command as a
-background task. That second window needs the worker starved across the delete's
-two executor round-trips and is tracked in #118.
+One window this does **not** close: a cancelled service call releases the lock
+while its INSERT may still be running, because `async_add_executor_job` cannot
+cancel a worker that has already started. Only shutdown and an explicit caller
+cancellation do that — a dropped WebSocket does *not* cancel a service call,
+since `async_response` dispatches each command as a background task. It needs the
+worker starved across the delete's two executor round-trips and is tracked in #118.
+
+### Reconciling orphaned metadata (#116)
+
+The lock only binds writers that take it. Every *other* way to remove a todo item
+— HA's to-do panel, `todo.remove_item` from an automation, a script, voice or an
+agent/MCP call, the Companion app — goes straight to the entity and deletes no
+metadata row, so it orphans the row outright with no race involved and no
+adoption required (`add_task` always writes a row). Left there, a routine-typed
+row joins `routine_uids` where it can never be completed — `completed` is built
+from the entity's own items — so that member's `all_routines_done` never fires
+again, and if it carries a recurrence, `make_recurrence_evaluator` marks it due on
+every matching day with no completion ever logged, pinning the streak at 0 (with
+no RRULE it is never due, so it costs only the event). Both failures are silent
+and have no UI surface.
+
+`reconcile.async_reconcile_task_metadata` closes it, running at the end of
+`async_perform_daily_reset` — so at the configured `reset_time` (04:00 by
+default), or on demand through the `lucarne_family.perform_daily_reset` service. It reads the managed lists
+directly and deletes rows whose uid is in none of them.
+
+Two properties carry the whole design:
+
+- **A list that cannot be read is skipped, never treated as empty.** No entity in
+  `DATA_COMPONENT`, an unavailable state, or `todo_items is None` (`local_todo`
+  leaves it unset until its first update — as against `[]` for a genuinely empty
+  list) means that slug is not reconciled at all, and rows naming a slug Lucarne
+  manages no list for are left alone. This is why reconciliation reads lists
+  rather than reacting to the completion listener's disappeared branch:
+  `_read_entity_snapshot` returns `{}` for a missing entity, so a `local_todo`
+  reload diffs a full list to `{}` and makes every uid look deleted at once — a
+  reaper there would drop that list's entire metadata on every reload.
+- **Each delete re-checks the lists under that uid's lock.** `add_task` and preset
+  seeding hold the lock across item creation *and* the INSERT, so a task created
+  after the scan but before the metadata read is indistinguishable from an orphan;
+  without the re-check it would lose the row it had just written — the inverse
+  orphan. The re-check re-runs the same readability pass rather than a plain
+  "is this uid listed" scan, so a list that stops being readable in between (the
+  metadata read is an executor hop, and the lock can be contended) is skipped there
+  too.
+
+One case is deliberately out of reach: rows left by **removing a member**. Their
+list is gone, so the slug is never readable again and the pass will not act on it,
+while the only rows `config_flow`'s member-removal cleanup ever deletes are
+household `rotating` rows that lost their last owner. Re-adding the same slug then
+hits `seed_preset_routines`' `source ==
+"template"` early return and the list is never seeded. The fix belongs in the
+removal path, which knows the slug is going away; reconciliation cannot infer it,
+because "no list" is exactly the state it refuses to treat as empty.
 
 **Adoption is deliberately not automatic.** `update_task_metadata` is its only
 caller — it needs a row to write to, and reaching it means the user edited the task

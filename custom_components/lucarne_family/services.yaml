@@ -173,7 +173,7 @@ toggle_task:
 
 perform_daily_reset:
   name: Perform Daily Reset
-  description: Reset all completed routine items back to needs_action for every member, and append reset rows to the completion log. Called by the managed time-change listener at the configured reset_time.
+  description: Reset all completed routine items back to needs_action for every member, append reset rows to the completion log, and clean up task metadata left behind when a task was deleted outside Lucarne (for example from Home Assistant's own to-do panel). Called by the managed time-change listener at the configured reset_time.
   fields: {}
 
 evaluate_all_streaks:

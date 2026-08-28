@@ -385,8 +385,8 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
 
         # Both deletes under the uid lock: an adopting INSERT is an executor hop,
         # so a delete slipping between the metadata DELETE and the item removal
-        # would let that INSERT land afterwards and orphan a row nothing reaps
-        # (issue #114). See task_locks.
+        # would let that INSERT land afterwards and orphan a row nothing reaps until
+        # the next daily reset (issue #114). See task_locks and reconcile.
         #
         # Metadata first, item second, so that being cancelled between the two —
         # each is an executor hop, and HA cancels service-call tasks at shutdown

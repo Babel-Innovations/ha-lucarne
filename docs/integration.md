@@ -262,6 +262,14 @@ the integration process.
 - Idempotent: items already in `needs_action` are untouched (safe to trigger multiple times).
 - The completion listener detects the resulting state changes and appends `action="reset"` rows
   to the completion log (distinct from `action="undone"` for user-initiated unchecks).
+- Finally, reconciles task metadata against the lists: a task deleted from HA's own to-do panel
+  (or by `todo.remove_item`, voice, the Companion app) removes the item but not Lucarne's row for
+  it, and a leftover routine row would silently stop that member's "all routines done" event —
+  and, if that routine repeats, hold their streak at 0. Rows whose item is in none of the lists
+  are removed here. Lists that cannot be read at that moment — entity missing, unavailable, or
+  still loading — are skipped entirely rather than treated as empty, so a list that is temporarily
+  away never costs any rows. Calling the service by hand is the way to clean this up without
+  waiting for the next reset time.
 
 **Streak check** (`evaluate_all_streaks` service, fired at `streak_check_time`):
 
