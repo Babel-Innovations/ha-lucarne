@@ -45,6 +45,13 @@ async def _async_drain(job: asyncio.Future[Any]) -> None:
     otherwise abandon the job all over again — and shutdown delivers more than
     one.
 
+    It is not a poll and cannot spin: a delivered ``CancelledError`` is consumed,
+    and a non-zero ``cancelling()`` is an inert counter that does not re-interrupt
+    later awaits, so the ``await`` below suspends normally. The loop makes one
+    blocking wait, plus one more turn per *further* ``cancel()`` — of which
+    shutdown sends a small, fixed number. Measured against a one-second write:
+    one iteration with no further cancellation, two with one, and so on.
+
     Swallowed cancellations are deliberately **not** balanced with
     ``task.uncancel()``. That looks tidier, but asyncio cannot attribute a
     cancellation to whoever asked for it: an enclosing ``asyncio.timeout``
