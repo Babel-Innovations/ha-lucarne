@@ -243,7 +243,7 @@ Single HACS item — `integration` category only. The cards ride along inside th
 
 - **`node:test` not vitest**: Writing vitest imports silently prevents tests from running.
 - **No HA automation entities from this integration**: `automation_writer.py` registers in-process `async_track_time_change` listeners — it does **not** create `automation.*` HA entities. There are no `automation.lucarne_*` entities in the UI. To change reset/streak times, use the integration's Options flow (`CONF_RESET_TIME`, `CONF_STREAK_CHECK_TIME`), not the Automations UI.
-- **No blocking I/O in async HA code**: Use `hass.async_add_executor_job(...)` for blocking calls (heavy SQLite migrations, file I/O). Never block the event loop.
+- **No blocking I/O in async HA code**: Use `hass.async_add_executor_job(...)` for blocking calls (heavy SQLite migrations, file I/O). Never block the event loop. The one exception is `store._async_write`, which submits via `hass.loop.run_in_executor` on purpose — see the uid-lock cancellation pitfall below (#118).
 - **Entity rename has downstream impact**: Slug-changing renames go through `rename.py` which shows an impact preview before proceeding; never rename entities outside that flow.
 - **Integration uses `lucarne_family.*` services and `lucarne_family_*` events**: The older `ha_lucarne_chores_all_done` event is a deprecated compat shim still fired by `completion_listener.py` in v0.x alongside `lucarne_family_all_routines_done`. Migrate consumers to the new event; see `docs/events.md`.
 - **Browser floor is pinned in `vite.config.ts`**: never remove or raise `build.target`. Vite's
@@ -348,16 +348,59 @@ Single HACS item — `integration` category only. The cards ride along inside th
   publishes the item to WS subscribers before it returns. Two of Lucarne's other `task_metadata`
   DELETE paths (`reset_logic`, `config_flow`'s member removal) need no lock — they delete only rows
   they have already read, so no inserter can be mid-flight on one; the third, `reconcile.py`, takes
-  it for the opposite reason (see the reconciliation pitfall below). One window stays open by
-  design and is documented in `task_locks.py`: a **cancelled** task releases the lock while its
-  executor INSERT may still be running, since a started `async_add_executor_job` worker cannot be
-  cancelled (#118). `handle_delete_task` deletes metadata *before* the item so that a
-  cancellation between its halves fails safe, and holds the lock across *both* —
+  it for the opposite reason (see the reconciliation pitfall below).
+  **The lock alone does not survive cancellation of its holder** — a started
+  `async_add_executor_job` worker cannot be cancelled, so a cancelled holder used to unwind and
+  release with its INSERT still in flight, letting a parked delete run first (#118). That is
+  closed in `store._async_write`, which every per-item `task_metadata` add/update/delete goes
+  through, plus the
+  completion-log insert. The two bulk writes stay out, on purpose: `async_init` (runs before any
+  service is registered) and `async_rename_member_slug` — #118 asks nothing of it (no uid lock is held
+  across it, and draining orders a write against its own caller's cancellation, which is not what the
+  rename is exposed to), and draining it would *hurt*, because the config flow rolls that migration
+  back in a later step that a `CancelledError` skips. It waits on the executor
+  job (`asyncio.wait`) instead of awaiting it — `await job` cancels the job — and on cancellation
+  drains it before re-raising, so the caller's frame, and the lock, stay open until the row lands.
+  Three things there are load-bearing. **It submits via `hass.loop.run_in_executor`, never
+  `hass.async_add_executor_job`** — that helper registers the future in `hass._tasks` /
+  `hass._background_tasks`, and `async_stop` cancels *those futures directly* (stage 2 for
+  background, and again at stage 4 for what is left of the pre-stage-2 `_tasks` snapshot — a bare
+  future has no `cancelling()`, so stage 4's skip doesn't spare it); a cancelled executor future
+  is `done()` immediately while
+  the worker runs on, so a tracked job sails through the drain and reopens #118 on the shutdown
+  path, which is the commonest one (`async_response` dispatches each WS command as a background
+  task). Same thread pool either way — HA installs its executor as the loop default.
+  **The drain loops** (shutdown delivers more than one cancellation; a single `await` would be
+  abandoned by the next), and it deliberately does **not** hand those swallowed cancellations
+  back with `task.uncancel()` — asyncio can't attribute a cancellation, so an enclosing
+  `asyncio.timeout` would report a real external cancellation as its own `TimeoutError`;
+  leaving the count inflated yields `CancelledError`, which is truthful — and it is also what
+  keeps the drain clear of shutdown: `cancelling()` stays at 1, `async_block_till_done` filters
+  its wait set with `not cancelling(task)`, and stage 4 opens with
+  `if task.done() or cancelling(task): continue`, so `async_stop` never awaits a draining task.
+  After it returns, `runner`'s `_cancel_all_tasks_with_timeout(loop, 5)` and then
+  `shutdown_default_executor` (which drops still-*queued* jobs via `cancel_futures=True`, and
+  gives a running worker a 10s join before interrupting it) bound the rest. Nothing times the
+  drain itself out — the wait is executor queue time plus the statement, and sqlite's 5s busy
+  timeout bounds a lock acquisition, not the drain. And don't
+  swap the `asyncio.wait` for `asyncio.shield` — since 3.12 a cancelled shield attaches
+  `_log_on_exception` to the inner future, so a failed drained write reaches HA's loop exception
+  handler as well as our own log line, which the suite's cleanup check treats as a hard failure.
+  Don't route reads through it either (abandoning a `SELECT` is free).
+  `handle_delete_task` deletes metadata *before* the item so that a
+  cancellation between its halves fails safe — the metadata DELETE can no longer be split, so
+  between the halves is the only split left (the item removal is `local_todo`'s own executor hop,
+  which no store-level drain reaches) — and holds the lock across *both* —
   narrowing it to the metadata DELETE alone reopens #114 from the other side.
   `test_delete_task_removes_metadata_before_the_item` pins the order;
   `test_item_removal_stays_inside_the_uid_lock`,
   `test_add_task_rollback_delete_stays_inside_the_uid_lock`, and
   `test_apple_backfill_re_read_stays_inside_the_uid_lock` each pin one holder's scope.
+  `tests/python/test_write_cancellation.py` pins the drain — it is the only place in the suite
+  that gates a **real** executor job (patching `store._db_connect` so the block happens *in the
+  worker thread*) and cancels a real task awaiting it; patching the store coroutine, which every
+  other race test does, models the drain instead of exercising it.
+  `test_cancelling_an_adoption_mid_insert_leaves_no_orphan_row` is the same thing end to end.
 - **Orphaned `task_metadata` is reaped by reading the lists, never by diffing snapshots**
   (#116): every removal path except `lucarne_family.delete_task` — HA's to-do panel,
   `todo.remove_item` from an automation/voice/agent, the Companion app — deletes the todo item

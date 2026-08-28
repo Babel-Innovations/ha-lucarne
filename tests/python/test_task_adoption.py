@@ -8,6 +8,8 @@ them, while the cards rendered them normally.
 from __future__ import annotations
 
 import asyncio
+import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -1280,5 +1282,100 @@ async def test_apple_backfill_re_read_stays_inside_the_uid_lock(
         if isinstance(result, BaseException):
             raise result
 
+    assert await store.async_get_task_metadata(ORPHAN_UID) is None
+    assert ORPHAN_UID not in _uids(hass, "todo.anna")
+
+
+async def test_cancelling_an_adoption_mid_insert_leaves_no_orphan_row(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A cancelled adoption must still land its INSERT before releasing the lock.
+
+    The lock makes check → re-read → INSERT atomic only for a holder that runs to
+    completion. The INSERT is an executor hop and a started worker cannot be
+    cancelled, so cancelling the adopter used to release the lock with the
+    statement still in flight: the parked delete then ran both of its halves
+    against a table with no row yet, and the INSERT committed afterwards — the
+    unreapable #114 orphan, reached without any lock being skipped (issue #118).
+
+    Unlike every other race test here the gate blocks *inside the executor
+    thread*, which is the only place that window exists.
+    ``_hold_until_contender_settles`` is awaited on the loop and cannot reach it,
+    and neither can patching the store coroutine, which is what the rest of this
+    file gates on: that would model the drain instead of exercising it.
+    """
+    _entry, store = await _setup(hass, tmp_path)
+    await _add_orphan(hass, "todo.anna")
+
+    real_connect = store._db_connect
+    real_add = store.async_add_task_metadata
+    armed = False
+    insert_started = threading.Event()
+    release = threading.Event()
+
+    def _gated_connect() -> Any:
+        nonlocal armed
+        if armed:
+            # Once only. The parked delete's own metadata DELETE has to get
+            # through, or a regression would deadlock here instead of failing on
+            # the assertion that names it.
+            armed = False
+            insert_started.set()
+            if not release.wait(10):  # pragma: no cover - a hung test, not a path
+                raise TimeoutError("gate was never released")
+        return real_connect()
+
+    async def _arming_add(*args: Any, **kwargs: Any) -> None:
+        # Armed here, not at patch time, so the adopter's own existence check and
+        # item re-read run normally and only the INSERT is held.
+        nonlocal armed
+        armed = True
+        await real_add(*args, **kwargs)
+
+    async def _wait_until(predicate: Callable[[], bool]) -> None:
+        async with asyncio.timeout(5):
+            while not predicate():
+                await asyncio.sleep(0.001)
+
+    results: list[Any] = []
+    with (
+        patch.object(store, "_db_connect", _gated_connect),
+        patch.object(store, "async_add_task_metadata", _arming_add),
+    ):
+        adoption = asyncio.create_task(
+            hass.services.async_call(
+                DOMAIN,
+                "update_task_metadata",
+                {"uid": ORPHAN_UID, "type": "routine", "recurrence": "FREQ=DAILY"},
+                blocking=True,
+            )
+        )
+        deletion: asyncio.Task[Any] | None = None
+        try:
+            await _wait_until(insert_started.is_set)
+            deletion = asyncio.create_task(
+                hass.services.async_call(
+                    DOMAIN, "delete_task", {"uid": ORPHAN_UID}, blocking=True
+                )
+            )
+            await _wait_until(lambda: lock_holders(ORPHAN_UID) > 1)
+
+            adoption.cancel()
+            for _ in range(20):
+                await asyncio.sleep(0)
+            # Both spellings of the same claim: the cancelled adopter still owns
+            # the lock, so the delete cannot overtake the INSERT it must follow.
+            assert lock_holders(ORPHAN_UID) == 2, "the lock was released mid-INSERT"
+            assert not deletion.done()
+        finally:
+            release.set()
+            results = await asyncio.gather(
+                *[t for t in (adoption, deletion) if t is not None],
+                return_exceptions=True,
+            )
+
+    assert isinstance(results[0], asyncio.CancelledError)
+    assert results[1] is None
+    # INSERT first, then the delete's two halves — so neither is left behind.
     assert await store.async_get_task_metadata(ORPHAN_UID) is None
     assert ORPHAN_UID not in _uids(hass, "todo.anna")

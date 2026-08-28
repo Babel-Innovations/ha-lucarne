@@ -1,12 +1,13 @@
 """SQLite-backed store for the Lucarne Family integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import sqlite3
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -17,6 +18,87 @@ from .models import Member
 _LOGGER = logging.getLogger(__name__)
 
 _SCHEMA_SQL = Path(__file__).parent / "schema.sql"
+
+_T = TypeVar("_T")
+
+
+async def _async_settled(job: asyncio.Future[Any]) -> None:
+    """Await an executor job without ever cancelling it.
+
+    ``await job`` cancels it — a cancellation delivered to the awaiting task goes
+    straight to the future it is waiting on. ``asyncio.wait`` only ever adds and
+    removes its own done-callback, so the job runs on untouched.
+
+    ``asyncio.shield`` would also leave the job alone, but since 3.12 a shield
+    whose outer future is cancelled attaches ``_log_on_exception`` to the inner
+    one. A write that failed after its caller was cancelled would then reach the
+    loop exception handler as well as ``_async_drain``'s own log line — duplicate
+    ERRORs in the HA log, and a hard failure under the suite's cleanup checks.
+    """
+    await asyncio.wait({job})
+
+
+async def _async_drain(job: asyncio.Future[Any]) -> None:
+    """Wait out an executor job that can no longer be cancelled (issue #118).
+
+    Loops rather than awaiting once, because a *second* cancellation would
+    otherwise abandon the job all over again — and shutdown delivers more than
+    one.
+
+    Swallowed cancellations are deliberately **not** balanced with
+    ``task.uncancel()``. That looks tidier, but asyncio cannot attribute a
+    cancellation to whoever asked for it: an enclosing ``asyncio.timeout``
+    compares ``uncancel()`` against its own count, so handing one back lets a
+    genuine external cancellation come out as ``TimeoutError`` and be swallowed by
+    an ``except TimeoutError``. Leaving the count inflated means that caller sees
+    ``CancelledError``, which is the truthful answer for a task that really was
+    cancelled. A timeout firing on its own still converts normally — the drain
+    swallows nothing in that case.
+
+    How long this can take: only an already-submitted job is waited on, never work
+    still to come — but there is no timeout bounding it. "Submitted" is not
+    "running", so the wait is queue time in HA's shared default executor (behind
+    whatever other integrations are doing) plus the statement itself, and
+    ``sqlite3.connect``'s five-second busy timeout bounds each lock acquisition
+    once a worker runs, not the drain. In practice a write of this size is
+    sub-millisecond; under a saturated executor it is bounded by availability
+    alone.
+
+    It does not hold up ``async_stop`` at all, and the reason is the very
+    ``uncancel()`` left undone above: ``cancelling()`` stays at 1 for the whole
+    drain, and HA skips such a task everywhere. ``async_block_till_done`` filters
+    its wait set with ``not cancelling(task)``, so stages 2, 3 and close never
+    await this one; stage 4 opens with
+    ``if task.done() or cancelling(task): continue``, so it is skipped rather than
+    awaited — its ``asyncio.timeout(0.1)`` never applies and its "could not be
+    canceled during final shutdown stage" can never name us. (A WebSocket-dispatched
+    caller is a *background* task and is not in stage 4's set to begin with.)
+
+    What picks it up instead is ``runner``, once ``async_stop`` has returned:
+    ``_cancel_all_tasks_with_timeout(loop, 5)`` cancels again — swallowed here —
+    and waits five seconds before logging "Task could not be canceled and was
+    still running after shutdown". Then ``loop.shutdown_default_executor()``
+    reaches ``InterruptibleThreadPoolExecutor.shutdown``, whose
+    ``cancel_futures=True`` drops a job still *queued* (its future is cancelled,
+    which ends the loop above and is why the ``job.cancelled()`` guard below
+    exists) and whose ten-second join budget interrupts a worker that is genuinely
+    running. So nothing here can wedge shutdown.
+
+    A failure here belongs to nobody: the caller is being torn down and will
+    never see a return value. Log it and let the ``CancelledError`` propagate —
+    substituting the write's exception would tell the loop the task finished
+    normally. Retrieving it also keeps asyncio from reporting it again at
+    garbage-collection time.
+    """
+    while not job.done():
+        try:
+            await _async_settled(job)
+        except asyncio.CancelledError:
+            continue
+    if not job.cancelled() and (exc := job.exception()) is not None:
+        _LOGGER.error(
+            "SQLite write failed after its caller was cancelled", exc_info=exc
+        )
 
 
 def _init_db(db_path: str, schema_sql: str) -> None:
@@ -169,6 +251,62 @@ class LucarneFamilyStore:
         con.row_factory = sqlite3.Row
         return con
 
+    async def _async_write(self, func: Callable[[], _T]) -> _T:
+        """Run a blocking write in the executor without ever abandoning it (#118).
+
+        A plain ``await hass.async_add_executor_job(...)`` is abandonable:
+        cancelling the awaiting task cancels the asyncio future, but
+        ``concurrent.futures.Future.cancel()`` returns ``False`` for a worker that
+        has already started, so the statement runs to completion regardless.
+
+        For a write taken under ``task_locks.async_task_uid_lock`` that is issue
+        #118. The ``async with`` unwinds and its ``finally`` releases while the
+        INSERT is still in flight; a parked ``delete_task`` then runs both of its
+        halves against a table with no row yet, and the INSERT commits afterwards
+        — the unreapable #114 orphan, reached without any lock being skipped.
+
+        Waiting on the job instead of awaiting it keeps it alive across the
+        cancellation, and the drain holds this frame — and therefore whatever the
+        caller holds — open until the statement has landed. Cancellation then
+        orders the write *before* the lock release instead of after, which is the
+        whole guarantee.
+
+        **Submitted through the loop rather than ``hass.async_add_executor_job``,
+        deliberately.** That helper registers the future it returns in
+        ``hass._tasks`` or ``hass._background_tasks``, and ``async_stop`` cancels
+        those futures *directly* — every ``_background_tasks`` entry at stage 2,
+        and again whatever of the pre-stage-2 ``_tasks`` snapshot is left at stage
+        4 (a bare future has no ``cancelling()``, so stage 4's skip does not spare
+        it the way it spares a draining task). Cancelling an executor future marks it
+        ``done()`` and ``cancelled()`` immediately while the worker thread runs on
+        regardless, so a tracked job would sail straight through the drain's
+        ``while not job.done()`` and reopen #118 on the shutdown path — the very
+        one this exists for, and the commonest, since ``async_response`` dispatches
+        each WebSocket command as a background task. Keeping the future private
+        means nothing but this frame can cancel it, and ``asyncio.wait`` never
+        does. It is the same pool either way: HA installs its executor as the
+        loop's default. The awaiting task stays tracked, and on the uncancelled
+        path it cannot finish before the write lands, so nothing is lost by not
+        tracking the job too — with one caveat for future callers:
+        ``async_block_till_done`` now reaches the write only *through* that task,
+        so anything issuing one fire-and-forget must dispatch it with
+        ``hass.async_create_task`` (as every caller here already does) rather than
+        a bare ``asyncio.create_task``. Once cancelled the task drops out of
+        ``async_block_till_done`` altogether — see ``_async_drain``, where that is
+        the property that keeps a drain clear of shutdown.
+
+        Reads are deliberately not routed through here: abandoning a ``SELECT``
+        costs nothing, and neither does abandoning ``async_init``, which runs
+        before any service is registered.
+        """
+        job = self._hass.loop.run_in_executor(None, func)
+        try:
+            await _async_settled(job)
+        except asyncio.CancelledError:
+            await _async_drain(job)
+            raise
+        return job.result()
+
     async def async_add_task_metadata(
         self,
         member_slug: str,
@@ -204,7 +342,7 @@ class LucarneFamilyStore:
                     ),
                 )
 
-        await self._hass.async_add_executor_job(_insert)
+        await self._async_write(_insert)
 
     async def async_update_task_metadata(self, item_uid: str, **fields: Any) -> None:
         """UPDATE allowed fields on a task_metadata row."""
@@ -226,7 +364,7 @@ class LucarneFamilyStore:
                     values,
                 )
 
-        await self._hass.async_add_executor_job(_update)
+        await self._async_write(_update)
 
     async def async_delete_task_metadata(self, item_uid: str) -> None:
         """DELETE task_metadata row (leaves completion_log intact)."""
@@ -235,7 +373,7 @@ class LucarneFamilyStore:
             with self._db_connect() as con:
                 con.execute("DELETE FROM task_metadata WHERE item_uid = ?", (item_uid,))
 
-        await self._hass.async_add_executor_job(_delete)
+        await self._async_write(_delete)
 
     async def async_get_task_metadata(self, item_uid: str) -> dict[str, Any] | None:
         """Return task_metadata row as dict, or None if not found."""
@@ -292,7 +430,24 @@ class LucarneFamilyStore:
             return [dict(r) for r in rows]
 
     async def async_rename_member_slug(self, old_slug: str, new_slug: str) -> None:
-        """Update all slug-keyed rows in task_metadata and completion_log atomically."""
+        """Update all slug-keyed rows in task_metadata and completion_log atomically.
+
+        Pointedly **not** routed through ``_async_write``. Nothing about #118 asks
+        for it: no uid lock is held across it, and draining orders a write against
+        its own caller's cancellation, which is not what this one is exposed to.
+        (It *is* exposed to a writer — an ``add_task`` parked in
+        ``async_create_todo_item`` while this UPDATE commits inserts its row under
+        the old slug, which no member then reads. That window predates this change
+        and no drain closes it; it belongs to the rename flow.) Draining would
+        make things worse: the rename is step 1 of a three-step flow in
+        ``config_flow`` whose later steps roll it back, and ``CancelledError`` is
+        not caught by their ``except Exception``. Today a rename cancelled while
+        still queued is cancelled outright and leaves SQLite untouched, which is
+        the clean outcome the "SQLite first, so a failure is retryable" ordering
+        was built for. Forcing it to land would commit the migration and then skip
+        both the entity rename and the rollback, leaving rows on the new slug with
+        the member, its entities and the config entry still on the old one.
+        """
 
         def _rename() -> None:
             with self._db_connect() as con:
@@ -339,7 +494,7 @@ class LucarneFamilyStore:
                     ),
                 )
 
-        await self._hass.async_add_executor_job(_insert)
+        await self._async_write(_insert)
 
     async def async_get_streak(
         self,

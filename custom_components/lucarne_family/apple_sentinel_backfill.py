@@ -106,9 +106,9 @@ async def _async_backfill_locked(
         # Symmetric with task_adoption.async_adopt_item: the uid lock this runs
         # under excludes every other *locked* inserter from the gap between the
         # existence check above and this INSERT, but item_uid is the PRIMARY KEY
-        # and the exceptional paths remain (an unlocked writer, or a holder
-        # cancelled mid-INSERT). Losing that race means the row is there either
-        # way — don't raise out of a background listener task.
+        # and an unlocked writer would still surface here. Losing that race means
+        # the row is there either way — don't raise out of a background listener
+        # task.
         _LOGGER.debug("Apple sentinel backfill of %s lost a race; row present", uid)
         return False
     _LOGGER.debug(
