@@ -401,7 +401,11 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         # cancellation — store._async_write drains its executor job before
         # unwinding (#118) — so *between* the halves is the split this order
         # exists to decide. The item removal is local_todo's own executor hop and
-        # no store-level drain reaches it.
+        # no store-level drain reaches it. Cancelled inside local_todo's
+        # async_save, this handler leaves the same stale todo_items described
+        # below for the raising case — that list is only rebuilt by the
+        # async_update_ha_state after the save — so an adopter's re-read can still
+        # see the removed item. That is the residual window task_adoption names.
         #
         # An item delete that *raises* splits two ways.
         #

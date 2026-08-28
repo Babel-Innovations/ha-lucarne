@@ -374,19 +374,24 @@ Single HACS item — `integration` category only. The cards ride along inside th
   abandoned by the next), and it deliberately does **not** hand those swallowed cancellations
   back with `task.uncancel()` — asyncio can't attribute a cancellation, so an enclosing
   `asyncio.timeout` would report a real external cancellation as its own `TimeoutError`;
-  leaving the count inflated yields `CancelledError`, which is truthful — and it is also what
-  keeps the drain clear of shutdown: `cancelling()` stays at 1, `async_block_till_done` filters
+  leaving the count inflated yields `CancelledError`, which is truthful.
+  **It waits with `asyncio.wait`, never `asyncio.shield`** — since 3.12 a cancelled shield
+  attaches `_log_on_exception` to the inner future, so a failed drained write reaches HA's loop
+  exception handler as well as our own log line, which the suite's cleanup check treats as a hard
+  failure. Don't route reads through it either (abandoning a `SELECT` is free).
+  Two consequences worth knowing. The skipped `uncancel()` is also what keeps the drain clear of
+  shutdown: `cancelling()` stays at 1, `async_block_till_done` filters
   its wait set with `not cancelling(task)`, and stage 4 opens with
   `if task.done() or cancelling(task): continue`, so `async_stop` never awaits a draining task.
   After it returns, `runner`'s `_cancel_all_tasks_with_timeout(loop, 5)` and then
   `shutdown_default_executor` (which drops still-*queued* jobs via `cancel_futures=True`, and
-  gives a running worker a 10s join before interrupting it) bound the rest. Nothing times the
+  gives a running worker a 10s join before interrupting it) bound the rest. And nothing times the
   drain itself out — the wait is executor queue time plus the statement, and sqlite's 5s busy
-  timeout bounds a lock acquisition, not the drain. And don't
-  swap the `asyncio.wait` for `asyncio.shield` — since 3.12 a cancelled shield attaches
-  `_log_on_exception` to the inner future, so a failed drained write reaches HA's loop exception
-  handler as well as our own log line, which the suite's cleanup check treats as a hard failure.
-  Don't route reads through it either (abandoning a `SELECT` is free).
+  timeout bounds a lock acquisition, not the drain — but it is not a poll and cannot spin: a
+  delivered `CancelledError` is consumed and a non-zero `cancelling()` is an inert counter that
+  does not re-interrupt later awaits, so the loop makes one blocking wait plus one more turn per
+  *further* `cancel()` (measured across a one-second write: one iteration with no further
+  cancellation, two with one).
   `handle_delete_task` deletes metadata *before* the item so that a
   cancellation between its halves fails safe — the metadata DELETE can no longer be split, so
   between the halves is the only split left (the item removal is `local_todo`'s own executor hop,
