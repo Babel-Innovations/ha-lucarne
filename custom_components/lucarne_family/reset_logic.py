@@ -177,12 +177,10 @@ async def async_perform_daily_reset(hass: HomeAssistant, store: LucarneFamilySto
     # reset itself is already complete and counted by this point, and the reaper is
     # a maintenance backstop — letting a SQLite error out of it would report the
     # whole service call as failed and discard total_reset. The next run retries.
+    # It logs its own count; nothing here needs the return value.
     try:
-        reaped = await async_reconcile_task_metadata(hass, store)
+        await async_reconcile_task_metadata(hass, store)
     except Exception:
         _LOGGER.exception("Reconciling orphaned task_metadata failed")
-    else:
-        if reaped:
-            _LOGGER.debug("Daily reset reaped %d orphaned task_metadata row(s)", reaped)
 
     return total_reset

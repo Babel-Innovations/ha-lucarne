@@ -134,15 +134,17 @@ async def async_reconcile_task_metadata(
             live_now = _live_uids(hass, store)
             if slug not in live_now:
                 continue
-            if uid in {u for uids in live_now.values() for u in uids}:
+            if any(uid in uids for uids in live_now.values()):
                 continue
             if await store.async_get_task_metadata(uid) is None:
                 continue
             await store.async_delete_task_metadata(uid)
         reaped += 1
-        # No summary in the line: it is free-text household content, and uid +
-        # member + type is what a "my streak stopped working" report needs.
-        _LOGGER.info(
+        # Per row at debug, one aggregated line at info below: a bulk cleanup in
+        # HA's to-do panel can reap many rows at once. No summary in either line —
+        # it is free-text household content, and uid + member + type is what a "my
+        # streak stopped working" report needs.
+        _LOGGER.debug(
             "Removed task_metadata for %s (member=%s, type=%s): its todo item was "
             "deleted outside Lucarne",
             uid,
@@ -150,4 +152,14 @@ async def async_reconcile_task_metadata(
             row.get("type", ""),
         )
 
+    if reaped:
+        # Forward-looking on purpose: this pass's per-row detail was emitted at
+        # debug and is already gone by the time anyone reads this, and re-running
+        # finds nothing — the rows it would have named have been deleted.
+        _LOGGER.info(
+            "Removed %d task_metadata row(s) whose todo item was deleted outside "
+            "Lucarne; enable debug logging for this integration to see which rows "
+            "later passes remove",
+            reaped,
+        )
     return reaped
