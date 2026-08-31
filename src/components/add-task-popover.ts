@@ -5,6 +5,7 @@ import type { HomeAssistant, MemberSummary, RenderableTask, TaskType, TimeOfDay 
 import { addTask } from '../shared/integration-services.js';
 import { buildRRule, friendlySummary, WEEKDAY_CODES } from '../shared/recurrence.js';
 import type { RecurrenceMode, WeekdayCode } from '../shared/recurrence.js';
+import { serviceErrorMessage } from '../shared/service-errors.js';
 
 const QUICK_EMOJIS = ['🪥', '🛏️', '🎒', '💗', '📵', '🧸', '👕', '🧹', '🧺', '🍽️', '🐕', '🌱'];
 
@@ -479,7 +480,7 @@ export class LucarneAddTaskPopover extends LitElement {
       }
       this._close();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'Failed to add task';
+      this._error = serviceErrorMessage(err, 'Failed to add task');
       this._saving = false;
     }
   }

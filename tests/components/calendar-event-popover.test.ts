@@ -210,7 +210,9 @@ describe('LucarneCalendarEventPopover — Delete error path', () => {
     const events: CustomEvent[] = [];
     const hass = makeHass(3);
     (hass as unknown as { connection: { sendMessagePromise: () => Promise<unknown> } })
-      .connection.sendMessagePromise = async () => { throw new Error('uid not found'); };
+      // `sendMessagePromise` rejects with the server's plain `{ code, message }`
+      // payload, not an Error — rejecting with an Error here is what hid #128.
+      .connection.sendMessagePromise = async () => { throw { code: 'unknown_error', message: 'uid not found' }; };
     el = makeEl({ hass });
     el.addEventListener('lucarne-event-deleted', (e) => events.push(e as CustomEvent));
     await el.updateComplete;
@@ -234,7 +236,7 @@ describe('LucarneCalendarEventPopover — Delete error path', () => {
     const hass = makeHass(3);
     (hass as unknown as { connection: { sendMessagePromise: () => Promise<unknown> } })
       .connection.sendMessagePromise = async () => {
-        if (fail) throw new Error('boom');
+        if (fail) throw { code: 'unknown_error', message: 'boom' };
         return undefined;
       };
     el = makeEl({ hass });

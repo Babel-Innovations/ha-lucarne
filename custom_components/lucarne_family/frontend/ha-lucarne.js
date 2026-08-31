@@ -5064,9 +5064,23 @@ var ci, li = (ci = class extends H {
   `, ci);
 q([W({ type: Number })], li.prototype, "dayWidthPx", void 0), q([W({ type: Number })], li.prototype, "bufferDays", void 0), q([W({ type: Boolean })], li.prototype, "canPanBack", void 0), q([W({ type: Boolean })], li.prototype, "canPanForward", void 0), q([lt("slot")], li.prototype, "_slot", void 0), li = q([U("lucarne-calendar-day-pan")], li);
 //#endregion
-//#region src/components/calendar-event-popover.ts
-var ui;
+//#region src/shared/service-errors.ts
+function ui(e, t) {
+	if (e instanceof Error) return di(e.message) ?? t;
+	if (typeof e == "string") return di(e) ?? t;
+	if (typeof e == "object" && e && Object.prototype.hasOwnProperty.call(e, "message")) {
+		let { message: n } = e;
+		if (typeof n == "string") return di(n) ?? t;
+	}
+	return t;
+}
 function di(e) {
+	return e.trim() ? e : void 0;
+}
+//#endregion
+//#region src/components/calendar-event-popover.ts
+var fi;
+function pi(e) {
 	return new Date(e).toLocaleString("en-US", {
 		weekday: "short",
 		month: "short",
@@ -5076,7 +5090,7 @@ function di(e) {
 		hour12: !0
 	});
 }
-var fi = (ui = class extends H {
+var mi = (fi = class extends H {
 	constructor(...e) {
 		super(...e), this.event = null, this.color = "#a8d8b9", this.calendarLabel = "", this.entityId = "", this._confirmingDelete = !1, this._deleting = !1, this._deleteError = "";
 	}
@@ -5108,7 +5122,7 @@ var fi = (ui = class extends H {
 		try {
 			await gt(this.hass, this.entityId, t);
 		} catch (e) {
-			this._deleteError = e instanceof Error ? e.message : "Failed to delete event", this._deleting = !1, this._confirmingDelete = !1;
+			this._deleteError = ui(e, "Failed to delete event"), this._deleting = !1, this._confirmingDelete = !1;
 			return;
 		}
 		this.dispatchEvent(new CustomEvent("lucarne-event-deleted", {
@@ -5122,7 +5136,7 @@ var fi = (ui = class extends H {
 	}
 	render() {
 		if (!this.event) return L``;
-		let e = this.event, t = e.start.length === 10 && !e.start.includes("T") ? "All day" : `${di(e.start)} – ${new Date(e.end).toLocaleTimeString("en-US", {
+		let e = this.event, t = e.start.length === 10 && !e.start.includes("T") ? "All day" : `${pi(e.start)} – ${new Date(e.end).toLocaleTimeString("en-US", {
 			hour: "numeric",
 			minute: "2-digit",
 			hour12: !0
@@ -5191,7 +5205,7 @@ var fi = (ui = class extends H {
       </div>
     `;
 	}
-}, ui.styles = [K, M`
+}, fi.styles = [K, M`
       :host {
         display: block;
         position: fixed;
@@ -5321,22 +5335,22 @@ var fi = (ui = class extends H {
         font-size: var(--lucarne-fs-md);
         margin-top: var(--lucarne-spacing-sm);
       }
-    `], ui);
-q([W({ attribute: !1 })], fi.prototype, "hass", void 0), q([W({ type: Object })], fi.prototype, "event", void 0), q([W({ type: String })], fi.prototype, "color", void 0), q([W({ type: String })], fi.prototype, "calendarLabel", void 0), q([W({ type: String })], fi.prototype, "entityId", void 0), q([G()], fi.prototype, "_confirmingDelete", void 0), q([G()], fi.prototype, "_deleting", void 0), q([G()], fi.prototype, "_deleteError", void 0), fi = q([U("lucarne-calendar-event-popover")], fi);
+    `], fi);
+q([W({ attribute: !1 })], mi.prototype, "hass", void 0), q([W({ type: Object })], mi.prototype, "event", void 0), q([W({ type: String })], mi.prototype, "color", void 0), q([W({ type: String })], mi.prototype, "calendarLabel", void 0), q([W({ type: String })], mi.prototype, "entityId", void 0), q([G()], mi.prototype, "_confirmingDelete", void 0), q([G()], mi.prototype, "_deleting", void 0), q([G()], mi.prototype, "_deleteError", void 0), mi = q([U("lucarne-calendar-event-popover")], mi);
 //#endregion
 //#region src/components/create-event-popover.ts
-var pi;
-function mi(e, t) {
+var hi;
+function gi(e, t) {
 	let n = -(/* @__PURE__ */ new Date(`${e}T${t}:00`)).getTimezoneOffset();
 	return `${e}T${t}:00${n >= 0 ? "+" : "-"}${Math.floor(Math.abs(n) / 60).toString().padStart(2, "0")}:${(Math.abs(n) % 60).toString().padStart(2, "0")}`;
 }
-function hi(e) {
+function _i(e) {
 	return `${Math.floor(e).toString().padStart(2, "0")}:${e % 1 == .5 ? "30" : "00"}`;
 }
-function gi(e) {
+function vi(e) {
 	return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
 }
-var X = (pi = class extends H {
+var X = (hi = class extends H {
 	constructor(...e) {
 		super(...e), this.day = null, this.startHour = 9, this.calendars = [], this._title = "", this._calendarEntityId = "", this._date = "", this._startTime = "", this._endTime = "", this._allDay = !1, this._description = "", this._location = "", this._error = "", this._saving = !1;
 	}
@@ -5346,9 +5360,9 @@ var X = (pi = class extends H {
 	_initDefaults() {
 		var e;
 		let t = this.day ?? /* @__PURE__ */ new Date();
-		this._date = gi(t), this._startTime = hi(Math.max(0, Math.min(23, this.startHour)));
+		this._date = vi(t), this._startTime = _i(Math.max(0, Math.min(23, this.startHour)));
 		let n = Math.min(24, this.startHour + 1);
-		this._endTime = hi(n < 24 ? n : 23.5), this._calendarEntityId = ((e = this.calendars[0]) == null ? void 0 : e.entity) ?? "", this._title = "", this._allDay = !1, this._description = "", this._location = "", this._error = "", this._saving = !1;
+		this._endTime = _i(n < 24 ? n : 23.5), this._calendarEntityId = ((e = this.calendars[0]) == null ? void 0 : e.entity) ?? "", this._title = "", this._allDay = !1, this._description = "", this._location = "", this._error = "", this._saving = !1;
 	}
 	_close() {
 		this.dispatchEvent(new CustomEvent("popover-close", {
@@ -5374,16 +5388,16 @@ var X = (pi = class extends H {
 			e.start_date = this._date;
 			let r = /* @__PURE__ */ new Date(`${this._date}T00:00:00`);
 			r.setDate(r.getDate() + 1);
-			let i = gi(r);
+			let i = vi(r);
 			e.end_date = i, t = this._date, n = i;
 		} else {
-			let r = mi(this._date, this._startTime), i = mi(this._date, this._endTime);
+			let r = gi(this._date, this._startTime), i = gi(this._date, this._endTime);
 			e.start_date_time = r, e.end_date_time = i, t = r, n = i;
 		}
 		try {
 			await this.hass.callService("calendar", "create_event", e, { entity_id: this._calendarEntityId });
 		} catch (e) {
-			this._error = e instanceof Error ? e.message : "Failed to create event", this._saving = !1;
+			this._error = ui(e, "Failed to create event"), this._saving = !1;
 			return;
 		}
 		this.dispatchEvent(new CustomEvent("lucarne-event-created", {
@@ -5510,7 +5524,7 @@ var X = (pi = class extends H {
       </div>
     ` : L``;
 	}
-}, pi.styles = [K, M`
+}, hi.styles = [K, M`
       :host {
         display: block;
         position: fixed;
@@ -5689,18 +5703,18 @@ var X = (pi = class extends H {
         opacity: 0.5;
         cursor: not-allowed;
       }
-    `], pi);
+    `], hi);
 q([W({ attribute: !1 })], X.prototype, "hass", void 0), q([W({ type: Object })], X.prototype, "day", void 0), q([W({ type: Number })], X.prototype, "startHour", void 0), q([W({ type: Array })], X.prototype, "calendars", void 0), q([G()], X.prototype, "_title", void 0), q([G()], X.prototype, "_calendarEntityId", void 0), q([G()], X.prototype, "_date", void 0), q([G()], X.prototype, "_startTime", void 0), q([G()], X.prototype, "_endTime", void 0), q([G()], X.prototype, "_allDay", void 0), q([G()], X.prototype, "_description", void 0), q([G()], X.prototype, "_location", void 0), q([G()], X.prototype, "_error", void 0), q([G()], X.prototype, "_saving", void 0), X = q([U("lucarne-create-event-popover")], X);
 //#endregion
 //#region src/cards/lucarne-calendar-card.ts
-var _i, vi = 6e4, yi = 4, bi = 60;
+var yi, bi = 6e4, xi = 4, Si = 60;
 window.customCards = window.customCards || [], window.customCards.push({
 	type: "lucarne-calendar-card",
 	name: "Lucarne Calendar",
 	description: "Week view calendar with per-person color, visibility pills, and create-event flow",
 	preview: !0
 }), O("evaluating:lucarne-calendar-card");
-var Z = (_i = class extends dt {
+var Z = (yi = class extends dt {
 	constructor(...e) {
 		super(...e), this._layout = null, this._visibleIds = /* @__PURE__ */ new Set(), this._openEvent = null, this._openEventColor = "", this._openEventCalLabel = "", this._openEventEntityId = "", this._createDay = null, this._createStartHour = 9, this._creatableCalendars = [], this._dayWidthPx = 0, this._deletedUids = /* @__PURE__ */ new Set(), this._pendingEvents = [], this._lastVisibleCount = 3, this._didInitialScroll = !1, this._initialScrollScheduled = !1, this._initialScrollAttempts = 0, this._autoFollow = !0, this._lastAutoScrollTop = null;
 	}
@@ -5778,7 +5792,7 @@ var Z = (_i = class extends dt {
 	connectedCallback() {
 		super.connectedCallback(), this._previewOverrideRaf = requestAnimationFrame(() => {
 			this._previewOverrideRaf = void 0, this.isConnected && (this._previewOverride = Gt(this));
-		}), this._followTimer = setInterval(() => this._followNow(), vi), this._ensureGridMeasured();
+		}), this._followTimer = setInterval(() => this._followNow(), bi), this._ensureGridMeasured();
 	}
 	disconnectedCallback() {
 		var e;
@@ -5817,7 +5831,7 @@ var Z = (_i = class extends dt {
 				this._didInitialScroll = !0, this._initialScrollScheduled = !1;
 				return;
 			}
-			++this._initialScrollAttempts < bi ? this._scheduleInitialScroll() : this._initialScrollScheduled = !1;
+			++this._initialScrollAttempts < Si ? this._scheduleInitialScroll() : this._initialScrollScheduled = !1;
 		});
 	}
 	_performAutoScroll(e) {
@@ -5850,7 +5864,7 @@ var Z = (_i = class extends dt {
 		if (!this._autoFollow || !((e = this._rolling) != null && e.isAtToday) || typeof document < "u" && document.visibilityState === "hidden") return;
 		let t = this._gridAreaEl;
 		if (t) {
-			if (this._lastAutoScrollTop !== null && Math.abs(t.scrollTop - this._lastAutoScrollTop) > yi) {
+			if (this._lastAutoScrollTop !== null && Math.abs(t.scrollTop - this._lastAutoScrollTop) > xi) {
 				this._autoFollow = !1;
 				return;
 			}
@@ -6055,7 +6069,7 @@ var Z = (_i = class extends dt {
       </ha-card>
     `;
 	}
-}, _i.styles = [K, M`
+}, yi.styles = [K, M`
       :host {
         display: block;
         font-family: var(--primary-font-family, sans-serif);
@@ -6134,11 +6148,11 @@ var Z = (_i = class extends dt {
         touch-action: pan-y;
         -webkit-overflow-scrolling: touch;
       }
-    `], _i);
+    `], yi);
 q([W({ attribute: !1 })], Z.prototype, "hass", void 0), q([lt(".grid-area")], Z.prototype, "_gridAreaEl", void 0), q([G()], Z.prototype, "_config", void 0), q([G()], Z.prototype, "_layout", void 0), q([G()], Z.prototype, "_visibleIds", void 0), q([G()], Z.prototype, "_openEvent", void 0), q([G()], Z.prototype, "_openEventColor", void 0), q([G()], Z.prototype, "_openEventCalLabel", void 0), q([G()], Z.prototype, "_openEventEntityId", void 0), q([G()], Z.prototype, "_createDay", void 0), q([G()], Z.prototype, "_createStartHour", void 0), q([G()], Z.prototype, "_creatableCalendars", void 0), q([G()], Z.prototype, "_dayWidthPx", void 0), q([G()], Z.prototype, "_deletedUids", void 0), Z = q([U("lucarne-calendar-card")], Z);
 //#endregion
 //#region src/editors/lucarne-calendar-card-editor.ts
-var xi, Si = (xi = class extends H {
+var Ci, wi = (Ci = class extends H {
 	constructor(...e) {
 		super(...e), this._haReady = !1, this._invalid = {};
 	}
@@ -6376,22 +6390,22 @@ var xi, Si = (xi = class extends H {
       <button type="button" class="add" @click=${this._addCalendar}>+ Add calendar</button>
     `;
 	}
-}, xi.styles = [K, mr], xi);
-q([W({ attribute: !1 })], Si.prototype, "hass", void 0), q([G()], Si.prototype, "_config", void 0), q([G()], Si.prototype, "_haReady", void 0), q([G()], Si.prototype, "_invalid", void 0), Si = q([U("lucarne-calendar-card-editor")], Si);
+}, Ci.styles = [K, mr], Ci);
+q([W({ attribute: !1 })], wi.prototype, "hass", void 0), q([G()], wi.prototype, "_config", void 0), q([G()], wi.prototype, "_haReady", void 0), q([G()], wi.prototype, "_invalid", void 0), wi = q([U("lucarne-calendar-card-editor")], wi);
 //#endregion
 //#region src/shared/types.ts
-var Ci = [
+var Ti = [
 	"anytime",
 	"morning",
 	"afternoon",
 	"night"
 ];
-function wi(e) {
-	return typeof e == "string" && Ci.includes(e) ? e : "anytime";
+function Ei(e) {
+	return typeof e == "string" && Ti.includes(e) ? e : "anytime";
 }
 //#endregion
 //#region src/components/streak-display.ts
-var Ti, Ei = (Ti = class extends H {
+var Di, Oi = (Di = class extends H {
 	constructor(...e) {
 		super(...e), this.streak = 0;
 	}
@@ -6408,7 +6422,7 @@ var Ti, Ei = (Ti = class extends H {
       <div class="label">${t}</div>
     `;
 	}
-}, Ti.styles = M`
+}, Di.styles = M`
     :host {
       display: block;
       text-align: center;
@@ -6441,11 +6455,11 @@ var Ti, Ei = (Ti = class extends H {
       color: var(--secondary-text-color, #727272);
       margin-top: 2px;
     }
-  `, Ti);
-q([W({ type: Number })], Ei.prototype, "streak", void 0), Ei = q([U("lucarne-streak-display")], Ei);
+  `, Di);
+q([W({ type: Number })], Oi.prototype, "streak", void 0), Oi = q([U("lucarne-streak-display")], Oi);
 //#endregion
 //#region src/components/celebration-overlay.ts
-var Di, Oi = (Di = class extends H {
+var ki, Ai = (ki = class extends H {
 	constructor(...e) {
 		super(...e), this.kidSlug = "", this.active = !1, this._dots = [];
 	}
@@ -6478,7 +6492,7 @@ var Di, Oi = (Di = class extends H {
         `)}
     ` : L``;
 	}
-}, Di.styles = M`
+}, ki.styles = M`
     :host {
       position: absolute;
       inset: 0;
@@ -6499,53 +6513,53 @@ var Di, Oi = (Di = class extends H {
       60%  { opacity: 0.7; }
       100% { transform: translateY(-110%) scale(0.6); opacity: 0; }
     }
-  `, Di);
-q([W({ attribute: "kid-slug" })], Oi.prototype, "kidSlug", void 0), q([W({ type: Boolean })], Oi.prototype, "active", void 0), Oi = q([U("lucarne-celebration-overlay")], Oi);
+  `, ki);
+q([W({ attribute: "kid-slug" })], Ai.prototype, "kidSlug", void 0), q([W({ type: Boolean })], Ai.prototype, "active", void 0), Ai = q([U("lucarne-celebration-overlay")], Ai);
 //#endregion
 //#region src/components/member-column.ts
-var ki, Ai = [
+var ji, Mi = [
 	"morning",
 	"afternoon",
 	"night",
 	"anytime"
-], ji = {
+], Ni = {
 	morning: "Morning",
 	afternoon: "Afternoon",
 	night: "Night",
 	anytime: "Anytime"
-}, Mi = {
+}, Pi = {
 	morning: xn,
 	afternoon: Sn,
 	night: Cn
 };
-function Ni(e, t) {
+function Fi(e, t) {
 	return e.due && t.due ? e.due.localeCompare(t.due) : e.due ? -1 : t.due ? 1 : e.summary.localeCompare(t.summary);
 }
-function Pi(e) {
-	let t = e.filter((e) => e.metadata.type === "routine").sort((e, t) => e.summary.localeCompare(t.summary)), n = e.filter((e) => e.metadata.type !== "routine").sort(Ni);
-	return [...t, ...n];
-}
-function Fi(e) {
-	let t = Pi(e.filter((e) => e.status !== "completed")), n = Pi(e.filter((e) => e.status === "completed"));
-	return [...t, ...n];
-}
 function Ii(e) {
+	let t = e.filter((e) => e.metadata.type === "routine").sort((e, t) => e.summary.localeCompare(t.summary)), n = e.filter((e) => e.metadata.type !== "routine").sort(Fi);
+	return [...t, ...n];
+}
+function Li(e) {
+	let t = Ii(e.filter((e) => e.status !== "completed")), n = Ii(e.filter((e) => e.status === "completed"));
+	return [...t, ...n];
+}
+function Ri(e) {
 	let t = /* @__PURE__ */ new Map();
 	for (let n of e) {
-		let e = wi(n.metadata.time_of_day), r = t.get(e) ?? [];
+		let e = Ei(n.metadata.time_of_day), r = t.get(e) ?? [];
 		r.push(n), t.set(e, r);
 	}
 	let n = [];
-	for (let e of Ai) {
+	for (let e of Mi) {
 		let r = t.get(e);
 		!r || r.length === 0 || n.push({
 			bucket: e,
-			tasks: Fi(r)
+			tasks: Li(r)
 		});
 	}
 	return n;
 }
-var Li = (ki = class extends H {
+var zi = (ji = class extends H {
 	constructor(...e) {
 		super(...e), this.tasks = [], this.members = [], this.streak = 0, this.showRoutines = !0, this.showTasks = !0, this.showStreak = !0, this.hideName = !1, this.scrollToBucket = "", this._celebrating = !1, this._celebrationTimer = null, this._lastAllRoutinesDone = null, this._scrollRaf = null, this._pendingScrollBucket = !1;
 	}
@@ -6596,9 +6610,9 @@ var Li = (ki = class extends H {
 		t && (this._listsResizeObs || (this._listsResizeObs = new ResizeObserver(() => this._tryApplyScroll())), this._listsResizeObs.observe(t));
 	}
 	_sectionForBucket(e) {
-		let t = Ai.indexOf(this.scrollToBucket);
+		let t = Mi.indexOf(this.scrollToBucket);
 		if (t < 0) return null;
-		for (let n of Ai.slice(t)) {
+		for (let n of Mi.slice(t)) {
 			let t = e.querySelector(`.section[data-bucket="${n}"]`);
 			if (t) return t;
 		}
@@ -6606,7 +6620,7 @@ var Li = (ki = class extends H {
 	}
 	render() {
 		if (!this.member) return L``;
-		let e = Ii(this.tasks.filter((e) => e.metadata.type === "routine" ? this.showRoutines : e.metadata.type === "chore" || e.metadata.type === "rotating" ? this.showTasks : !1));
+		let e = Ri(this.tasks.filter((e) => e.metadata.type === "routine" ? this.showRoutines : e.metadata.type === "chore" || e.metadata.type === "rotating" ? this.showTasks : !1));
 		return L`
       <div class="column" style="--member-color:${this.member.color}">
         <lucarne-celebration-overlay
@@ -6633,8 +6647,8 @@ var Li = (ki = class extends H {
           ${e.map(({ bucket: e, tasks: t }) => L`
             <div class="section" data-bucket=${e}>
               <div class="section-header">
-                ${Mi[e] ? L`<span class="section-icon">${Mi[e]}</span>` : ""}
-                ${ji[e]}
+                ${Pi[e] ? L`<span class="section-icon">${Pi[e]}</span>` : ""}
+                ${Ni[e]}
               </div>
               ${t.map((e) => L`
                 <lucarne-task-row
@@ -6662,7 +6676,7 @@ var Li = (ki = class extends H {
 			composed: !0
 		}));
 	}
-}, ki.styles = M`
+}, ji.styles = M`
     :host {
       display: block;
       position: relative;
@@ -6756,23 +6770,23 @@ var Li = (ki = class extends H {
       margin-top: 8px;
       flex: 0 0 auto;
     }
-  `, ki);
-q([W({ attribute: !1 })], Li.prototype, "member", void 0), q([W({ attribute: !1 })], Li.prototype, "tasks", void 0), q([W({ attribute: !1 })], Li.prototype, "members", void 0), q([W({ type: Number })], Li.prototype, "streak", void 0), q([W({
+  `, ji);
+q([W({ attribute: !1 })], zi.prototype, "member", void 0), q([W({ attribute: !1 })], zi.prototype, "tasks", void 0), q([W({ attribute: !1 })], zi.prototype, "members", void 0), q([W({ type: Number })], zi.prototype, "streak", void 0), q([W({
 	type: Boolean,
 	attribute: "show-routines"
-})], Li.prototype, "showRoutines", void 0), q([W({
+})], zi.prototype, "showRoutines", void 0), q([W({
 	type: Boolean,
 	attribute: "show-tasks"
-})], Li.prototype, "showTasks", void 0), q([W({
+})], zi.prototype, "showTasks", void 0), q([W({
 	type: Boolean,
 	attribute: "show-streak"
-})], Li.prototype, "showStreak", void 0), q([W({
+})], zi.prototype, "showStreak", void 0), q([W({
 	type: Boolean,
 	attribute: "hide-name"
-})], Li.prototype, "hideName", void 0), q([W({ attribute: "scroll-to-bucket" })], Li.prototype, "scrollToBucket", void 0), q([G()], Li.prototype, "_celebrating", void 0), Li = q([U("lucarne-member-column")], Li);
+})], zi.prototype, "hideName", void 0), q([W({ attribute: "scroll-to-bucket" })], zi.prototype, "scrollToBucket", void 0), q([G()], zi.prototype, "_celebrating", void 0), zi = q([U("lucarne-member-column")], zi);
 //#endregion
 //#region src/shared/integration-services.ts
-async function Ri(e, t) {
+async function Bi(e, t) {
 	var n;
 	let r = {
 		member: t.member,
@@ -6783,14 +6797,14 @@ async function Ri(e, t) {
 	let i = await e.callService("lucarne_family", "add_task", r, void 0, !0, !0);
 	return (i == null || (n = i.response) == null ? void 0 : n.uid) ?? null;
 }
-async function zi(e, t, n) {
+async function Vi(e, t, n) {
 	let r = { uid: t };
 	n.type !== void 0 && (r.type = n.type), n.recurrence !== void 0 && (r.recurrence = n.recurrence), n.icon !== void 0 && (r.icon = n.icon), n.assignee !== void 0 && (r.assignee = n.assignee), n.time_of_day !== void 0 && (r.time_of_day = n.time_of_day), n.rotation_owners !== void 0 && (r.rotation_owners = n.rotation_owners), n.current_owner !== void 0 && (r.current_owner = n.current_owner), await e.callService("lucarne_family", "update_task_metadata", r);
 }
-async function Bi(e, t) {
+async function Hi(e, t) {
 	await e.callService("lucarne_family", "delete_task", { uid: t });
 }
-async function Vi(e, t, n) {
+async function Ui(e, t, n) {
 	let r = await n.arrayBuffer(), i = new Uint8Array(r), a = "";
 	for (let e of i) a += String.fromCharCode(e);
 	let o = btoa(a);
@@ -6800,7 +6814,7 @@ async function Vi(e, t, n) {
 		mime_type: n.type
 	});
 }
-async function Hi(e, t, n) {
+async function Wi(e, t, n) {
 	await e.callService("lucarne_family", "set_member_avatar", {
 		member: t,
 		avatar: n
@@ -6808,7 +6822,7 @@ async function Hi(e, t, n) {
 }
 //#endregion
 //#region src/components/add-task-popover.ts
-var Ui, Wi = [
+var Gi, Ki = [
 	"🪥",
 	"🛏️",
 	"🎒",
@@ -6821,7 +6835,7 @@ var Ui, Wi = [
 	"🍽️",
 	"🐕",
 	"🌱"
-], Q = (Ui = class extends H {
+], Q = (Gi = class extends H {
 	constructor(...e) {
 		super(...e), this.members = [], this._selectedMemberSlug = "", this._summary = "", this._type = "chore", this._icon = "", this._recurrenceMode = "none", this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._due = "", this._timeOfDay = "anytime", this._error = "", this._saving = !1, this._alsoAddSlugs = /* @__PURE__ */ new Set(), this._rotatingOwners = [];
 	}
@@ -6880,7 +6894,7 @@ var Ui, Wi = [
 		let e = this._summary.trim(), t = [];
 		try {
 			if (this._type === "rotating") {
-				let n = await Ri(this.hass, {
+				let n = await Bi(this.hass, {
 					member: "household",
 					summary: e,
 					type: "rotating",
@@ -6896,7 +6910,7 @@ var Ui, Wi = [
 			} else {
 				let n = this._type === "routine" ? this._buildRRule() : "", r = this._type === "chore" ? this._due : "", i = this._type === "routine" ? [this._selectedMemberSlug, ...Array.from(this._alsoAddSlugs).filter((e) => e !== this._selectedMemberSlug)] : [this._selectedMemberSlug];
 				for (let a of i) {
-					let i = await Ri(this.hass, {
+					let i = await Bi(this.hass, {
 						member: a,
 						summary: e,
 						type: this._type,
@@ -6915,7 +6929,7 @@ var Ui, Wi = [
 				composed: !0
 			})), this._close();
 		} catch (e) {
-			this._error = e instanceof Error ? e.message : "Failed to add task", this._saving = !1;
+			this._error = ui(e, "Failed to add task"), this._saving = !1;
 		}
 	}
 	_provisionalTask(e, t, n, r, i = {}) {
@@ -7030,7 +7044,7 @@ var Ui, Wi = [
         <div class="field">
           <label>Icon</label>
           <div class="emoji-picker">
-            ${Wi.map((e) => L`
+            ${Ki.map((e) => L`
               <button
                 class="emoji-btn ${this._icon === e ? "selected" : ""}"
                 @click=${() => this._icon = this._icon === e ? "" : e}
@@ -7296,7 +7310,7 @@ var Ui, Wi = [
       </div>
     `;
 	}
-}, Ui.styles = [K, M`
+}, Gi.styles = [K, M`
       :host {
         display: block;
         position: fixed;
@@ -7599,11 +7613,11 @@ var Ui, Wi = [
         font-style: italic;
         margin-top: 4px;
       }
-    `], Ui);
+    `], Gi);
 q([W({ attribute: !1 })], Q.prototype, "hass", void 0), q([W({ attribute: !1 })], Q.prototype, "member", void 0), q([W({ attribute: !1 })], Q.prototype, "members", void 0), q([G()], Q.prototype, "_selectedMemberSlug", void 0), q([G()], Q.prototype, "_summary", void 0), q([G()], Q.prototype, "_type", void 0), q([G()], Q.prototype, "_icon", void 0), q([G()], Q.prototype, "_recurrenceMode", void 0), q([G()], Q.prototype, "_recurrenceDays", void 0), q([G()], Q.prototype, "_recurrenceInterval", void 0), q([G()], Q.prototype, "_recurrenceMonthDay", void 0), q([G()], Q.prototype, "_recurrenceNth", void 0), q([G()], Q.prototype, "_recurrenceNthDay", void 0), q([G()], Q.prototype, "_recurrenceMonth", void 0), q([G()], Q.prototype, "_due", void 0), q([G()], Q.prototype, "_timeOfDay", void 0), q([G()], Q.prototype, "_error", void 0), q([G()], Q.prototype, "_saving", void 0), q([G()], Q.prototype, "_alsoAddSlugs", void 0), q([G()], Q.prototype, "_rotatingOwners", void 0), Q = q([U("lucarne-add-task-popover")], Q);
 //#endregion
 //#region src/components/edit-task-popover.ts
-var Gi, $ = (Gi = class extends H {
+var qi, $ = (qi = class extends H {
 	constructor(...e) {
 		super(...e), this.members = [], this._summary = "", this._type = "chore", this._icon = "", this._recurrenceMode = "none", this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._due = "", this._assignee = "", this._timeOfDay = "anytime", this._isCustomRecurrence = !1, this._rawRecurrence = "", this._error = "", this._saving = !1, this._confirmingDelete = !1, this._rotatingOwners = [], this._backdropPressActive = !1;
 	}
@@ -7612,7 +7626,7 @@ var Gi, $ = (Gi = class extends H {
 	}
 	_prefill() {
 		let e = this.task;
-		this._summary = e.summary, this._type = e.metadata.type, this._icon = e.metadata.icon, this._due = e.due ?? "", this._assignee = e.metadata.assignee_slug, this._timeOfDay = wi(e.metadata.time_of_day), this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._rawRecurrence = "", this._isCustomRecurrence = !1, this._rotatingOwners = e.metadata.rotation_owners ? [...e.metadata.rotation_owners] : [];
+		this._summary = e.summary, this._type = e.metadata.type, this._icon = e.metadata.icon, this._due = e.due ?? "", this._assignee = e.metadata.assignee_slug, this._timeOfDay = Ei(e.metadata.time_of_day), this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._rawRecurrence = "", this._isCustomRecurrence = !1, this._rotatingOwners = e.metadata.rotation_owners ? [...e.metadata.rotation_owners] : [];
 		let t = Qt(e.metadata.recurrence);
 		t.mode === "unknown" ? (this._isCustomRecurrence = !0, this._rawRecurrence = t.raw, this._recurrenceMode = "unknown") : (this._isCustomRecurrence = !1, this._recurrenceMode = t.mode, t.mode === "daily" ? this._recurrenceInterval = t.interval ?? 1 : t.mode === "weekly" ? (this._recurrenceDays = [...t.days], this._recurrenceInterval = t.interval ?? 1) : t.mode === "monthly-date" ? (this._recurrenceMonthDay = t.dayOfMonth, this._recurrenceInterval = t.interval ?? 1) : t.mode === "monthly-nth" ? (this._recurrenceNth = t.nth, this._recurrenceNthDay = t.day, this._recurrenceInterval = t.interval ?? 1) : t.mode === "yearly" && (this._recurrenceMonth = t.month, this._recurrenceMonthDay = t.dayOfMonth, this._recurrenceInterval = t.interval ?? 1));
 	}
@@ -7689,7 +7703,7 @@ var Gi, $ = (Gi = class extends H {
 						...r ? { due_datetime: this._due } : {}
 					}, { entity_id: t });
 				}
-				if (c && await zi(this.hass, this.task.uid, {
+				if (c && await Vi(this.hass, this.task.uid, {
 					...this._type === this.task.metadata.type ? {} : { type: this._type },
 					...this._icon === this.task.metadata.icon ? {} : { icon: this._icon },
 					...!i && this._buildRRule() !== this.task.metadata.recurrence ? { recurrence: this._buildRRule() } : {},
@@ -7723,7 +7737,7 @@ var Gi, $ = (Gi = class extends H {
 				}
 				this._close();
 			} catch (e) {
-				this._error = e instanceof Error ? e.message : "Failed to save", this._saving = !1;
+				this._error = ui(e, "Failed to save"), this._saving = !1;
 			}
 		}
 	}
@@ -7731,13 +7745,13 @@ var Gi, $ = (Gi = class extends H {
 		if (!this._saving) {
 			this._saving = !0, this._error = "";
 			try {
-				await Bi(this.hass, this.task.uid), this.dispatchEvent(new CustomEvent("task-deleted", {
+				await Hi(this.hass, this.task.uid), this.dispatchEvent(new CustomEvent("task-deleted", {
 					detail: { uid: this.task.uid },
 					bubbles: !0,
 					composed: !0
 				})), this._close();
 			} catch (e) {
-				this._error = e instanceof Error ? e.message : "Failed to delete", this._saving = !1, this._confirmingDelete = !1;
+				this._error = ui(e, "Failed to delete"), this._saving = !1, this._confirmingDelete = !1;
 			}
 		}
 	}
@@ -8089,7 +8103,7 @@ var Gi, $ = (Gi = class extends H {
       </div>
     `;
 	}
-}, Gi.styles = [K, M`
+}, qi.styles = [K, M`
       :host {
         display: block;
         position: fixed;
@@ -8393,12 +8407,12 @@ var Gi, $ = (Gi = class extends H {
         font-style: italic;
         margin-top: 4px;
       }
-    `], Gi);
+    `], qi);
 q([W({ attribute: !1 })], $.prototype, "hass", void 0), q([W({ attribute: !1 })], $.prototype, "task", void 0), q([W({ attribute: !1 })], $.prototype, "members", void 0), q([G()], $.prototype, "_summary", void 0), q([G()], $.prototype, "_type", void 0), q([G()], $.prototype, "_icon", void 0), q([G()], $.prototype, "_recurrenceMode", void 0), q([G()], $.prototype, "_recurrenceDays", void 0), q([G()], $.prototype, "_recurrenceInterval", void 0), q([G()], $.prototype, "_recurrenceMonthDay", void 0), q([G()], $.prototype, "_recurrenceNth", void 0), q([G()], $.prototype, "_recurrenceNthDay", void 0), q([G()], $.prototype, "_recurrenceMonth", void 0), q([G()], $.prototype, "_due", void 0), q([G()], $.prototype, "_assignee", void 0), q([G()], $.prototype, "_timeOfDay", void 0), q([G()], $.prototype, "_isCustomRecurrence", void 0), q([G()], $.prototype, "_rawRecurrence", void 0), q([G()], $.prototype, "_error", void 0), q([G()], $.prototype, "_saving", void 0), q([G()], $.prototype, "_confirmingDelete", void 0), q([G()], $.prototype, "_rotatingOwners", void 0), $ = q([U("lucarne-edit-task-popover")], $);
 //#endregion
 //#region src/cards/lucarne-chores-card.ts
-var Ki, qi = 1e4, Ji = 3e4;
-function Yi(e, t) {
+var Ji, Yi = 1e4, Xi = 3e4;
+function Zi(e, t) {
 	if (e.summary !== t.summary || (e.due ?? "") !== (t.due ?? "")) return !1;
 	let n = e.metadata, r = t.metadata;
 	return n.type === r.type && n.icon === r.icon && n.recurrence === r.recurrence && (n.time_of_day ?? "anytime") === (r.time_of_day ?? "anytime") && (n.assignee_slug ?? "") === (r.assignee_slug ?? "") && (n.current_owner ?? "") === (r.current_owner ?? "") && JSON.stringify(n.rotation_owners ?? []) === JSON.stringify(r.rotation_owners ?? []);
@@ -8409,7 +8423,7 @@ window.customCards = window.customCards || [], window.customCards.push({
 	description: "Family chore grid with streaks and celebration",
 	preview: !0
 }), O("evaluating:lucarne-chores-card");
-var Xi = (Ki = class extends dt {
+var Qi = (Ji = class extends dt {
 	constructor(...e) {
 		super(...e), this._familyState = null, this._addTaskMember = null, this._editTask = null, this._optimistic = /* @__PURE__ */ new Map(), this._optimisticAdds = /* @__PURE__ */ new Map(), this._deletedUids = /* @__PURE__ */ new Set(), this._optimisticEdits = /* @__PURE__ */ new Map(), this._addTimers = /* @__PURE__ */ new Map(), this._editTimers = /* @__PURE__ */ new Map(), this._onFamilyState = (e) => {
 			var t;
@@ -8434,7 +8448,7 @@ var Xi = (Ki = class extends dt {
 					let e = new Map(this._optimisticEdits), t = !1;
 					for (let [r, i] of e) {
 						let a = n.get(r);
-						(!a || Yi(a, i)) && (e.delete(r), this._clearEditTimeout(r), t = !0);
+						(!a || Zi(a, i)) && (e.delete(r), this._clearEditTimeout(r), t = !0);
 					}
 					t && (this._optimisticEdits = e);
 				}
@@ -8518,7 +8532,7 @@ var Xi = (Ki = class extends dt {
 				let t = new Map(this._optimisticEdits);
 				t.delete(e), this._optimisticEdits = t;
 			}
-		}, Ji));
+		}, Xi));
 	}
 	_clearEditTimeout(e) {
 		let t = this._editTimers.get(e);
@@ -8530,7 +8544,7 @@ var Xi = (Ki = class extends dt {
 				let t = new Map(this._optimisticAdds);
 				t.delete(e), this._optimisticAdds = t;
 			}
-		}, qi));
+		}, Yi));
 	}
 	_clearAddTimeout(e) {
 		let t = this._addTimers.get(e);
@@ -8689,7 +8703,7 @@ var Xi = (Ki = class extends dt {
           `}
     `;
 	}
-}, Ki.styles = [K, M`
+}, Ji.styles = [K, M`
       :host {
         display: block;
         font-family: var(--primary-font-family, sans-serif);
@@ -8774,11 +8788,11 @@ var Xi = (Ki = class extends dt {
         font-size: var(--lucarne-fs-sm);
         text-align: center;
       }
-    `], Ki);
-q([W({ attribute: !1 })], Xi.prototype, "hass", void 0), q([G()], Xi.prototype, "_config", void 0), q([G()], Xi.prototype, "_familyState", void 0), q([G()], Xi.prototype, "_addTaskMember", void 0), q([G()], Xi.prototype, "_editTask", void 0), q([G()], Xi.prototype, "_optimistic", void 0), q([G()], Xi.prototype, "_optimisticAdds", void 0), q([G()], Xi.prototype, "_deletedUids", void 0), q([G()], Xi.prototype, "_optimisticEdits", void 0), Xi = q([U("lucarne-chores-card")], Xi);
+    `], Ji);
+q([W({ attribute: !1 })], Qi.prototype, "hass", void 0), q([G()], Qi.prototype, "_config", void 0), q([G()], Qi.prototype, "_familyState", void 0), q([G()], Qi.prototype, "_addTaskMember", void 0), q([G()], Qi.prototype, "_editTask", void 0), q([G()], Qi.prototype, "_optimistic", void 0), q([G()], Qi.prototype, "_optimisticAdds", void 0), q([G()], Qi.prototype, "_deletedUids", void 0), q([G()], Qi.prototype, "_optimisticEdits", void 0), Qi = q([U("lucarne-chores-card")], Qi);
 //#endregion
 //#region src/shared/cropper-styles.ts
-var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
+var $i = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	(function(n, r) {
 		typeof e == "object" && t !== void 0 ? t.exports = r() : typeof define == "function" && define.amd ? define(r) : (n = typeof globalThis < "u" ? globalThis : n || self, n.Cropper = r());
 	})(e, (function() {
@@ -9948,11 +9962,11 @@ var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		}();
 		return I(St.prototype, ht, gt, _t, vt, yt, bt), St;
 	}));
-})))(), 1), Qi = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", $i, ea = 2 * 1024 * 1024, ta = new Set([
+})))(), 1), ea = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", ta, na = 2 * 1024 * 1024, ra = new Set([
 	"image/png",
 	"image/jpeg",
 	"image/webp"
-]), na = 512, ra = /* @__PURE__ */ "👶.🧒.👧.🧑.👦.👩.👨.🧓.👴.👵.🐶.🐱.🐻.🐼.🐨.🦊.🦁.🐯.🐸.🦄.🌟.⭐.🌈.🌸.🌺.🌻.🍀.🎈.🎨.🎯.🏃.⚽.🎸.🎤.📚.🎮.🏆.❤️.💙.💚".split("."), ia = ($i = class extends H {
+]), ia = 512, aa = /* @__PURE__ */ "👶.🧒.👧.🧑.👦.👩.👨.🧓.👴.👵.🐶.🐱.🐻.🐼.🐨.🦊.🦁.🐯.🐸.🦄.🌟.⭐.🌈.🌸.🌺.🌻.🍀.🎈.🎨.🎯.🏃.⚽.🎸.🎤.📚.🎮.🏆.❤️.💙.💚".split("."), oa = (ta = class extends H {
 	constructor(...e) {
 		super(...e), this._mode = "emoji", this._selectedEmoji = null, this._sourceUrl = null, this._error = null, this._submitting = !1, this._cropper = null;
 	}
@@ -9966,11 +9980,11 @@ var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		var t;
 		let n = e.target, r = (t = n.files) == null ? void 0 : t[0];
 		if (n.value = "", r) {
-			if (!ta.has(r.type)) {
+			if (!ra.has(r.type)) {
 				this._error = "Only PNG, JPEG, and WebP images are accepted.";
 				return;
 			}
-			if (r.size > ea) {
+			if (r.size > na) {
 				this._error = "Image must be 2 MB or smaller.";
 				return;
 			}
@@ -9982,7 +9996,7 @@ var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	}
 	_onCropImageLoad() {
 		let e = this._cropImage;
-		e && (this._cropper && this._cropper.destroy(), this._cropper = new Zi.default(e, {
+		e && (this._cropper && this._cropper.destroy(), this._cropper = new $i.default(e, {
 			aspectRatio: 1,
 			viewMode: 1,
 			dragMode: "move",
@@ -10007,9 +10021,9 @@ var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				}
 				this._submitting = !0;
 				try {
-					await Hi(this.hass, this.memberSlug, this._selectedEmoji), this.dispatchEvent(new CustomEvent("avatar-changed", { detail: { avatar: this._selectedEmoji } })), this._close();
+					await Wi(this.hass, this.memberSlug, this._selectedEmoji), this.dispatchEvent(new CustomEvent("avatar-changed", { detail: { avatar: this._selectedEmoji } })), this._close();
 				} catch (e) {
-					this._error = e instanceof Error ? e.message : String(e);
+					this._error = ui(e, "Failed to save avatar");
 				} finally {
 					this._submitting = !1;
 				}
@@ -10022,9 +10036,9 @@ var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			this._submitting = !0;
 			try {
 				let e = await this._getCroppedFile();
-				await Vi(this.hass, this.memberSlug, e), this.dispatchEvent(new CustomEvent("avatar-changed")), this._close();
+				await Ui(this.hass, this.memberSlug, e), this.dispatchEvent(new CustomEvent("avatar-changed")), this._close();
 			} catch (e) {
-				this._error = e instanceof Error ? e.message : String(e);
+				this._error = ui(e, "Failed to upload avatar");
 			} finally {
 				this._submitting = !1;
 			}
@@ -10037,8 +10051,8 @@ var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				return;
 			}
 			let n = this._cropper.getCroppedCanvas({
-				width: na,
-				height: na,
+				width: ia,
+				height: ia,
 				imageSmoothingQuality: "high"
 			});
 			if (!n) {
@@ -10102,7 +10116,7 @@ var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	_renderEmojiMode() {
 		return L`
       <div class="emoji-grid">
-        ${ra.map((e) => L`
+        ${aa.map((e) => L`
             <button
               class="emoji-btn ${this._selectedEmoji === e ? "selected" : ""}"
               @click=${() => this._selectEmoji(e)}
@@ -10148,9 +10162,9 @@ var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		let e = this.renderRoot.querySelector("#avatar-file-input");
 		e == null || e.click();
 	}
-}, $i.styles = [
+}, ta.styles = [
 	K,
-	oe(Qi),
+	oe(ea),
 	M`
       :host {
         display: block;
@@ -10335,11 +10349,11 @@ var Zi = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
         color: var(--lucarne-on-surface);
       }
     `
-], $i);
-q([W({ attribute: !1 })], ia.prototype, "hass", void 0), q([W()], ia.prototype, "memberSlug", void 0), q([W()], ia.prototype, "memberName", void 0), q([G()], ia.prototype, "_mode", void 0), q([G()], ia.prototype, "_selectedEmoji", void 0), q([G()], ia.prototype, "_sourceUrl", void 0), q([G()], ia.prototype, "_error", void 0), q([G()], ia.prototype, "_submitting", void 0), q([lt("#crop-image")], ia.prototype, "_cropImage", void 0), ia = q([U("lucarne-avatar-upload-modal")], ia);
+], ta);
+q([W({ attribute: !1 })], oa.prototype, "hass", void 0), q([W()], oa.prototype, "memberSlug", void 0), q([W()], oa.prototype, "memberName", void 0), q([G()], oa.prototype, "_mode", void 0), q([G()], oa.prototype, "_selectedEmoji", void 0), q([G()], oa.prototype, "_sourceUrl", void 0), q([G()], oa.prototype, "_error", void 0), q([G()], oa.prototype, "_submitting", void 0), q([lt("#crop-image")], oa.prototype, "_cropImage", void 0), oa = q([U("lucarne-avatar-upload-modal")], oa);
 //#endregion
 //#region src/editors/lucarne-chores-card-editor.ts
-var aa, oa = (aa = class extends H {
+var sa, ca = (sa = class extends H {
 	constructor(...e) {
 		super(...e), this._familyState = null, this._avatarModalMember = null;
 	}
@@ -10539,7 +10553,7 @@ var aa, oa = (aa = class extends H {
       </div>
     `;
 	}
-}, aa.styles = [K, M`
+}, sa.styles = [K, M`
       :host {
         display: flex;
         flex-direction: column;
@@ -10715,8 +10729,8 @@ var aa, oa = (aa = class extends H {
       .error-block a {
         color: var(--primary-color);
       }
-    `], aa);
+    `], sa);
 //#endregion
 //#region src/index.ts
-q([W({ attribute: !1 })], oa.prototype, "hass", void 0), q([G()], oa.prototype, "_config", void 0), q([G()], oa.prototype, "_familyState", void 0), q([G()], oa.prototype, "_avatarModalMember", void 0), oa = q([U("lucarne-chores-card-editor")], oa), O("bundle-complete");
+q([W({ attribute: !1 })], ca.prototype, "hass", void 0), q([G()], ca.prototype, "_config", void 0), q([G()], ca.prototype, "_familyState", void 0), q([G()], ca.prototype, "_avatarModalMember", void 0), ca = q([U("lucarne-chores-card-editor")], ca), O("bundle-complete");
 //#endregion

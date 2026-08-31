@@ -99,6 +99,31 @@ describe('lucarne-avatar-upload-modal', () => {
     assert.ok(shadow(el, '.error-msg'), 'error message shown');
   });
 
+  it('emoji mode: shows the server message when set_member_avatar rejects', async () => {
+    const fakeHass = makeFakeHass();
+    const el = makeEl();
+    el.hass = fakeHass as any;
+    await el.updateComplete;
+
+    (shadow(el, '.emoji-btn') as HTMLElement).click();
+    await el.updateComplete;
+
+    // HA rejects with its plain `{ code, message }` payload, not an Error. This
+    // used to hit `String(err)` and render "[object Object]" at the user (#128).
+    (el.hass as any).callService = async () => {
+      throw { code: 'unknown_error', message: 'Member anna does not exist' };
+    };
+
+    const saveBtn = Array.from(el.shadowRoot!.querySelectorAll('.btn-primary')) as HTMLButtonElement[];
+    saveBtn[0]?.click();
+    await new Promise((r) => setTimeout(r, 10));
+    await el.updateComplete;
+
+    const text = shadow(el, '.error-msg')?.textContent ?? '';
+    assert.match(text, /Member anna does not exist/, "the server's message reaches the modal");
+    assert.doesNotMatch(text, /\[object Object\]/, 'never stringify the payload object at the user');
+  });
+
   it('upload mode: shows file picker initially (no source URL)', async () => {
     const el = makeEl();
     await el.updateComplete;

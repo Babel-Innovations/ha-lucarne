@@ -502,9 +502,10 @@ describe('lucarne-add-task-popover', () => {
     const el = makeEl(MEMBER_ANNA, [MEMBER_ANNA, MEMBER_BOB, HOUSEHOLD]);
     await el.updateComplete;
 
-    // Make callService reject.
+    // Reject the way HA actually does: a plain `{ code, message }` payload, not
+    // an Error. Rejecting with an Error here is what hid #128.
     (el.hass as any).callService = async () => {
-      throw new Error('HA service failed');
+      throw { code: 'unknown_error', message: 'HA service failed' };
     };
 
     const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
