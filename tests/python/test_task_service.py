@@ -1,13 +1,16 @@
 """Tests for task_service.py and preset seeding (Phase 2-C / 2-D)."""
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
+from homeassistant.components.todo.const import DATA_COMPONENT
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -15,6 +18,7 @@ from custom_components.lucarne_family.const import DOMAIN
 from custom_components.lucarne_family.models import Member
 from custom_components.lucarne_family.presets import BUILTIN_PRESETS
 from custom_components.lucarne_family.store import LucarneFamilyStore
+from custom_components.lucarne_family.task_service import _todo_write_error
 
 
 def _make_entry(
@@ -635,3 +639,189 @@ async def test_toggle_task_twice_uses_undone_action(
     actions = await hass.async_add_executor_job(_get_actions)
     unsub_listener()
     assert actions == ["completed", "undone"]
+
+
+# ---------------------------------------------------------------------------
+# Issue #119: a todo platform's own exception never reaches the caller raw
+# ---------------------------------------------------------------------------
+
+
+async def test_toggle_task_wraps_a_store_error_on_a_stale_list(
+    hass: HomeAssistant,
+    tmp_path: Path,
+) -> None:
+    """toggle_task reaches ical's TodoStore.edit, which raises like the delete does.
+
+    Driven through the real failure rather than a fabricated exception: a delete
+    whose ics write fails leaves local_todo's todo_items listing a uid its
+    calendar no longer holds, and the next edit of that uid raises.
+    """
+    _entry, store, _ = await _setup_with_member(hass, tmp_path)
+    await hass.services.async_call(
+        DOMAIN, "add_task", {"member": "anna", "summary": "Brush teeth"}, blocking=True
+    )
+    tasks = await store.async_get_tasks_for_member("anna")
+    uid = tasks[0]["item_uid"]
+
+    entity = hass.data[DATA_COMPONENT].get_entity("todo.anna")
+    assert entity is not None
+
+    async def _failing_save() -> None:
+        raise HomeAssistantError("ics write failed")
+
+    with patch.object(entity, "async_save", _failing_save):
+        with pytest.raises(HomeAssistantError, match="ics write failed"):
+            await hass.services.async_call(
+                DOMAIN, "delete_task", {"uid": uid}, blocking=True
+            )
+
+    # The list is stale: the calendar dropped the uid, todo_items still lists it.
+    assert uid in [i.uid for i in entity.todo_items or []]
+
+    with pytest.raises(HomeAssistantError, match="Could not update task") as excinfo:
+        await hass.services.async_call(
+            DOMAIN, "toggle_task", {"uid": uid}, blocking=True
+        )
+    # Still listed, so this is the write-failed branch, not the outside-removal one.
+    assert type(excinfo.value) is HomeAssistantError
+    assert "No existing item with uid" in str(excinfo.value.__cause__)
+
+
+async def test_toggle_task_reports_an_outside_removal_as_a_validation_error(
+    hass: HomeAssistant,
+    tmp_path: Path,
+) -> None:
+    """toggle_task's item lookup reads the list, then awaits — a delete fits between.
+
+    The outside delete refreshes todo_items on its way out, so the post-hoc read
+    sees the uid gone and says so instead of surfacing ical's missing-uid string.
+    """
+    _entry, store, _ = await _setup_with_member(hass, tmp_path)
+    await hass.services.async_call(
+        DOMAIN, "add_task", {"member": "anna", "summary": "Brush teeth"}, blocking=True
+    )
+    tasks = await store.async_get_tasks_for_member("anna")
+    uid = tasks[0]["item_uid"]
+
+    entity = hass.data[DATA_COMPONENT].get_entity("todo.anna")
+    assert entity is not None
+    original_update = entity.async_update_todo_item
+
+    async def _vanishing_update(item: Any) -> None:
+        # The item is removed outside Lucarne while the update is in flight; the
+        # real store then rejects the edit.
+        await entity.async_delete_todo_items([uid])
+        await original_update(item)
+
+    with patch.object(entity, "async_update_todo_item", _vanishing_update):
+        with pytest.raises(ServiceValidationError, match="already removed") as excinfo:
+            await hass.services.async_call(
+                DOMAIN, "toggle_task", {"uid": uid}, blocking=True
+            )
+    assert "No existing item with uid" not in str(excinfo.value)
+
+
+async def test_add_task_reports_the_insert_failure_when_the_rollback_also_fails(
+    hass: HomeAssistant,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The rollback is best-effort; its own failure must not replace the real one.
+
+    Without the inner guard the rollback's exception propagates instead of the
+    bare ``raise``, so the caller is told the list write failed when what
+    actually failed — and what they can act on — is the metadata INSERT.
+    """
+    _entry, store, _ = await _setup_with_member(hass, tmp_path)
+    entity = hass.data[DATA_COMPONENT].get_entity("todo.anna")
+    assert entity is not None
+
+    async def _failing_insert(*args: Any, **kwargs: Any) -> None:
+        raise sqlite3.OperationalError("database is locked")
+
+    async def _failing_rollback(uids: list[str]) -> None:
+        raise RuntimeError("ics write failed")
+
+    with (
+        patch.object(store, "async_add_task_metadata", _failing_insert),
+        patch.object(entity, "async_delete_todo_items", _failing_rollback),
+    ):
+        with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+            await hass.services.async_call(
+                DOMAIN,
+                "add_task",
+                {"member": "anna", "summary": "Brush teeth"},
+                blocking=True,
+            )
+
+    # Swallowed, but not silent — the log line is the only record left.
+    assert "ics write failed" in caplog.text
+    # And the residue is named: an item with no row, which is what every
+    # un-adopted item already is.
+    assert len(entity.todo_items or []) == 1
+
+
+class _StubItem:
+    def __init__(self, uid: str) -> None:
+        self.uid = uid
+
+
+class _StubEntity:
+    """Stands in for a todo platform whose todo_items is unloaded or raising."""
+
+    def __init__(self, items: Any) -> None:
+        self._items = items
+
+    @property
+    def todo_items(self) -> Any:
+        if isinstance(self._items, Exception):
+            raise self._items
+        return self._items
+
+
+def test_todo_write_error_keeps_an_unloaded_list_out_of_the_gone_branch() -> None:
+    """``todo_items is None`` means "not loaded", not "empty" — reconcile.py's rule.
+
+    Collapsing the two (``entity.todo_items or []``) would tell the user a task
+    was "already removed outside Lucarne" on the strength of a list that was
+    never read, hiding a genuine write failure behind a validation error.
+    """
+    err = _todo_write_error(
+        "remove", "u1", "todo.anna", _StubEntity(None), ValueError("boom")
+    )
+    assert type(err) is HomeAssistantError
+    assert "Could not remove task" in str(err)
+
+
+def test_todo_write_error_treats_a_loaded_empty_list_as_gone() -> None:
+    """``[]`` is a genuine answer: the list was read and does not hold the uid."""
+    err = _todo_write_error(
+        "remove", "u1", "todo.anna", _StubEntity([]), ValueError("boom")
+    )
+    assert isinstance(err, ServiceValidationError)
+    assert "already removed" in str(err)
+
+
+def test_todo_write_error_survives_a_raising_todo_items() -> None:
+    """It runs inside an ``except`` block, so it must never raise itself.
+
+    Anything thrown here would demote the real failure to ``__context__`` and
+    surface something worse than the bug being fixed.
+    """
+    err = _todo_write_error(
+        "remove",
+        "u1",
+        "todo.anna",
+        _StubEntity(RuntimeError("property exploded")),
+        ValueError("boom"),
+    )
+    assert type(err) is HomeAssistantError
+    assert "boom" in str(err)
+
+
+def test_todo_write_error_reports_a_still_listed_uid_as_a_write_failure() -> None:
+    err = _todo_write_error(
+        "update", "u1", "todo.anna", _StubEntity([_StubItem("u1")]), ValueError("boom")
+    )
+    assert type(err) is HomeAssistantError
+    assert "Could not update task" in str(err)
