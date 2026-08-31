@@ -69,7 +69,7 @@ Each card manages its own HA subscriptions independently.
 - **Agenda windowing is render-side**: the fetch stays a 7-day window (above), but `lucarne-agenda-strip` filters to events still ongoing AND starting before the end of the agenda window — today only (`windowDays=1`), or today+tomorrow when `agenda_show_tomorrow` is set (`windowDays=2`). The window boundary is computed in local time so date-only all-day events align with the viewer's day. A long list scrolls within the section rather than using a fixed count.
 - **Task ordering / window**: `lucarne-tasks-summary` sorts active tasks by urgency (overdue → due today → due ≤3 days → no due date → due >3 days) and renders up to `max_tasks` (default 5); tasks beyond the limit are not shown (backlog is intentionally hidden, not scrollable). With `refill_tasks_on_complete` false (default), a completed task's slot is burned and not refilled from the backlog — tracked on admitted uids that left the active set, so the burn survives even if the todo provider drops completed items; un-burned only if the uid returns to active. With it true, the window is the first `max_tasks` active by priority (rolling).
 - **Crossed-out completions**: a completed task stays rendered struck through in the slot it burned, rather than vanishing, so a mistap is visible and undoable — the row count in no-refill mode is therefore unchanged. In refill mode the backlog still slides up and crossed rows become extra rows on top of the `max_tasks` active ones, capped at `max_tasks`. "Extra" is a count, not a position: an un-sunk crossed row renders in the slot it occupied, and only moves to the bottom once it has been sunk. Only tasks seen *active first* qualify: a plain todo entity retains completed items indefinitely and carries no completion timestamp, so items already completed on first render are ignored rather than flooding the card.
-- **Where that state lives**: `shared/completed-window.ts`, at module scope keyed by entity + local day — **not** on `lucarne-tasks-summary`. Lovelace renders only the active view and destroys the previous view's DOM, so element fields reset on the very event (a view switch) that is supposed to sink crossed rows to the bottom. The card calls `sinkCompleted()` from `disconnectedCallback` and on `visibilitychange → hidden` (the kiosk backgrounding never unmounts the card), marking rows to render last on return so nothing reorders while the user is looking. The day key prunes at local midnight; a full reload clears it. Tests must call `resetWindows()` in `afterEach` — module-global state otherwise leaks between cases. Surviving a reload would mean dating completions the cards did not witness; the cheapest route is HA's own `TodoItem.completed` (populated by `local_todo`, which backs every entity Lucarne creates) — the cards' `TodoItem` type simply does not read it today. A `completion_log` WS query would also work but exists only in integration mode.
+- **Where that state lives**: `shared/completed-window.ts`, at module scope keyed by entity + local day — **not** on `lucarne-tasks-summary`. Lovelace renders only the active view and destroys the previous view's DOM, so element fields reset on the very event (a view switch) that is supposed to sink crossed rows to the bottom. The card calls `sinkCompleted()` from `disconnectedCallback` and on `visibilitychange → hidden` (the kiosk backgrounding never unmounts the card), marking rows to render last on return so nothing reorders while the user is looking. The day key prunes at local midnight; a full reload clears it. Tests must call `resetWindows()` in `afterEach` — module-global state otherwise leaks between cases. Surviving a reload would mean dating completions the cards did not witness. `TodoItem.completed` is now read (see below), so the route is open — the Today card's window simply does not use it yet. A `completion_log` WS query would also work but exists only in integration mode.
 
 **lucarne-calendar-card**
 - `RollingWindowController` (Lit ReactiveController) owns the fetch lifecycle: fetches `visible + ±visibleCount buffer` days on connect, on `setHass` first-arrival, on day-step navigation (pan), and on a 5-minute background poll
@@ -409,6 +409,74 @@ can wedge shutdown.
 can no longer be split by a cancellation, so the split the order exists to control is the
 one *between* the halves — the item removal is `local_todo`'s own executor hop and no
 store-level drain reaches it.
+
+### How long a crossed-out row lives on the chores card
+
+Ticking a task off does not remove it from the list — the row stays, struck through,
+until something clears it. Two mechanisms do, and they cover different sets:
+
+- **`reset_logic.async_perform_daily_reset`** deletes a completed `chore` and flips a
+  completed `routine` / `rotating` item back to `needs_action` at the configured
+  `reset_time`. It skips any item whose `task_metadata` row is absent — deliberately,
+  since Lucarne must not delete todo items it does not own (see *Never adopt a todo
+  item automatically*). So it does nothing for anything created outside
+  `lucarne_family.add_task`.
+- **The card's own staleness gate** (`isCompletionStale`, `src/shared/date-helpers.ts`)
+  hides a completed **chore** whose `completed` timestamp predates the last `reset_time`
+  boundary. This is what covers the items the reset skips.
+
+Both are needed. Before the gate existed, the chores card filtered chores on
+`due <= endOfToday` and never looked at `status`, so a completed un-adopted item — no
+due date, or a due date in the past — rendered indefinitely. And because
+`buildRenderableTasks` synthesizes `type: 'chore'` + `time_of_day: 'anytime'` for
+un-adopted uids, every one of them landed in the Anytime bucket: the symptom read as
+"Anytime tasks never go away", but the actual predicate was "created outside Lucarne". The
+containment is one-directional — an adopted chore or routine can sit in Anytime too.
+
+Four details are load-bearing:
+
+- **The gate is chores-only.** An un-adopted item is always synthesized as a chore, so
+  every row the reset skips lands in that branch — and since the reset *deletes* completed
+  chores, hiding one matches what it would have done. The narrowing protects **routines**,
+  which the reset flips back to `needs_action` instead: a stale-completed routine can only
+  mean the reset never ran (HA down across `reset_time`; `automation_writer` registers a
+  plain `async_track_time_change` with no startup catch-up), so the recovery is to keep
+  rendering it crossed out where the user can untick it, not to strand a task about to be
+  due again. Rotating tasks never reach the gate at all — the household column excludes
+  them and the owner column pulls them from `householdTasks`, which bypasses
+  `passesOwnFilter`.
+- **The boundary is `reset_time`, not local midnight.** A routine ticked off at 20:00
+  is still legitimately "done today" at 01:00 — the reset that restores it has not run.
+  A midnight boundary would blank the row for the whole pre-reset gap.
+- **An absent or unparseable `completed` never hides the row.** Nothing in the frontend
+  can date a completion HA did not stamp, and hiding an undatable one would make a fresh
+  tap vanish on any backend that omits `TodoItem.completed`. Lucarne's lists are
+  `local_todo`, which populates it; `todo.get_items` serializes it via
+  `dataclasses.asdict`.
+- **The gate reads the pre-optimistic status.** `passesOwnFilter` runs on the server's
+  task and `applyOptimistic` crosses it out afterwards, so a just-tapped row is still
+  `needs_action` when the gate sees it and can never be filtered by its own not-yet-written
+  timestamp. A 60 s grace covers the remaining seam: `completed` is stamped by HA while
+  `now` comes from the browser, so a tap either side of the boundary on a browser running
+  ahead of HA would otherwise be stamped just below it and vanish on the spot.
+
+The boundary is computed in the *browser's* zone rather than `hass.config.time_zone` — the
+convention every clock helper in `date-helpers.ts` already follows, so a kiosk in a
+different zone to HA shifts it accordingly. `lastResetBoundary` always steps back to
+at-or-before `now`; the one residual case is a `reset_time` inside a spring-forward DST gap,
+which the local `Date` constructor normalizes forward, putting the boundary an hour late for
+that single day. Both are bounded and strictly milder than the bug being fixed. If the zone
+basis ever moves to `hass.config.time_zone`, move every helper in that file together.
+
+Ordering is separate from visibility: `sortWithinBucket` (`src/components/member-column.ts`)
+sinks completed rows below the active ones **within their own time-of-day bucket**, so a
+finished Morning task does not jump past the Night section. Type ordering (routines before
+chores) applies inside each half — without the split, ticking a routine pinned the crossed
+row to the *top* of its section, since routines sort first.
+
+The chores card wakes at both boundaries: `_scheduleMidnightRefresh` arms on local midnight
+*and* on `resetTime`, re-arming from `_onFamilyState` when the integration reports a
+different reset time.
 
 ### Reconciling orphaned metadata (#116)
 

@@ -57,17 +57,6 @@ export function parseEventBoundary(value: string): Date {
   return value.length === 10 && !value.includes('T') ? new Date(`${value}T00:00:00`) : new Date(value);
 }
 
-/** Milliseconds from `now` until the next local midnight (00:00:00.000).
- *  At exactly midnight it returns one full local day — the delta to the *next*
- *  local midnight, never 0 — so a self-rescheduling timer can't spin in a
- *  zero-delay loop. Building the target with the local `Date` constructor keeps
- *  DST-transition days correct: that "full day" is 23h or 25h when the clocks
- *  change, not a fixed 24h. */
-export function msUntilNextLocalMidnight(now: Date): number {
-  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
-  return next.getTime() - now.getTime();
-}
-
 /** Parse a local-time `HH:MM` string to minutes-since-midnight, or `null` if it
  *  isn't a valid 00:00–23:59 time. Rejects both non-numeric input (`'nonsense'`,
  *  a missing minutes half) and out-of-range values (`'25:00'`, `'12:99'`) so a
@@ -120,6 +109,68 @@ export function msUntilNextDailyBoundary(now: Date, times: string[]): number {
     best = Math.min(best, cand.getTime() - now.getTime());
   }
   return best;
+}
+
+/** The most recent occurrence of the local `HH:MM` reset boundary at or before
+ *  `now`. A malformed or empty `resetTime` falls back to local midnight, so a
+ *  card that has not yet received the integration's configured reset time still
+ *  gets a sane day boundary rather than no boundary at all.
+ *
+ *  Built in the *browser's* zone, not `hass.config.time_zone` — the same convention
+ *  every other clock helper here uses (`currentScrollBucket`,
+ *  `msUntilNextDailyBoundary`, the chores card's `endOfToday` window). A kiosk in a
+ *  different zone to HA shifts the boundary accordingly; if that ever moves to
+ *  `hass.config.time_zone`, move all four together rather than mixing conventions
+ *  inside one card.
+ *
+ *  The step-back keeps the result `<= now`. The one residual case is a `reset_time`
+ *  that falls inside a spring-forward DST gap (e.g. `02:30` on 2026-03-08 US/Pacific):
+ *  the local `Date` constructor normalizes it to 03:30, which needs no step-back, so
+ *  for that one day the boundary lands an hour later than configured and a completion
+ *  stamped inside the gap reads as stale early. Once a year, bounded by an hour. */
+export function lastResetBoundary(now: Date, resetTime: string): Date {
+  const mins = parseHmToMinutes(resetTime) ?? 0;
+  const boundary = new Date(
+    now.getFullYear(), now.getMonth(), now.getDate(), Math.floor(mins / 60), mins % 60, 0, 0,
+  );
+  if (boundary.getTime() > now.getTime()) boundary.setDate(boundary.getDate() - 1);
+  return boundary;
+}
+
+/** Clock-skew allowance around the reset boundary — see `isCompletionStale`. Sized
+ *  well above any plausible browser/HA drift on a LAN, and far below the shortest
+ *  interval that could make a genuinely stale row (a day) look fresh. */
+const FRESH_COMPLETION_GRACE_MS = 60_000;
+
+/** Whether a completion predates the current reset window — i.e. the integration's
+ *  daily reset has already had its chance to clear the task, so the crossed-out row
+ *  is left over from a previous day and should no longer render.
+ *
+ *  The boundary is the configured `reset_time` rather than local midnight on
+ *  purpose: `reset_logic.async_perform_daily_reset` is what deletes a completed
+ *  chore and flips a completed routine back, so anything completed since the last
+ *  boundary is still legitimately "done today" from the card's point of view. Using
+ *  midnight would blank a routine completed last night during the 00:00–04:00 gap,
+ *  hours before the reset actually restores it.
+ *
+ *  An absent or unparseable timestamp returns `false` (keep rendering). Nothing in
+ *  the frontend can date a completion HA did not stamp, and hiding an undatable row
+ *  would make a fresh tap vanish on any backend that does not populate
+ *  `TodoItem.completed`. Lucarne's own lists are `local_todo`, which does. */
+export function isCompletionStale(
+  completed: string | undefined,
+  now: Date,
+  resetTime: string,
+): boolean {
+  if (!completed) return false;
+  const at = new Date(completed).getTime();
+  if (Number.isNaN(at)) return false;
+  // `completed` is stamped by the HA server; `now` is the browser's clock. A tap a
+  // few seconds either side of the boundary on a browser running ahead of HA would
+  // otherwise be stamped just below it and vanish on the spot. Anything this recent
+  // is a completion the user is watching happen, whatever the clocks say.
+  if (now.getTime() - at < FRESH_COMPLETION_GRACE_MS) return false;
+  return at < lastResetBoundary(now, resetTime).getTime();
 }
 
 export function formatRelativeStart(event: CalendarEvent, now: Date): string {

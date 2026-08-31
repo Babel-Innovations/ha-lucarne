@@ -26,7 +26,7 @@ const TASK_META: TaskMetadata = {
 function makeFamilyHass(opts: {
   members?: MemberSummary[];
   taskMetadata?: TaskMetadata[];
-  todoItems?: Record<string, { uid: string; summary: string; status: string }[]>;
+  todoItems?: Record<string, { uid: string; summary: string; status: string; completed?: string }[]>;
   getItemsError?: boolean;
 }) {
   const fakeHass = makeFakeHass();
@@ -84,6 +84,55 @@ describe('subscribeFamilyState', () => {
     assert.equal(annaTasks[0].summary, 'Brush teeth');
     assert.equal(annaTasks[0].metadata.type, 'routine');
     assert.equal(annaTasks[0].metadata.icon, '🪥');
+  });
+
+  it("carries HA's completion timestamp through to the renderable task", async () => {
+    // The cards date a completion off TodoItem.completed to tell "ticked off
+    // today" from a crossed-out row left over from a previous day.
+    const fakeHass = makeFamilyHass({
+      members: [MEMBER_ANNA],
+      taskMetadata: [TASK_META],
+      todoItems: {
+        'todo.anna': [
+          {
+            uid: 'uid-1',
+            summary: 'Brush teeth',
+            status: 'completed',
+            completed: '2026-08-25T16:58:26+00:00',
+          },
+        ],
+      },
+    });
+
+    const states: import('../../src/shared/family-subscription.js').FamilyState[] = [];
+    const unsub = subscribeFamilyState(fakeHass as unknown as import('../../src/shared/types.js').HomeAssistant, (s) => {
+      states.push(s);
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    unsub();
+
+    const annaTasks = states[states.length - 1].tasksByMember.get('anna') ?? [];
+    assert.equal(annaTasks[0].completed, '2026-08-25T16:58:26+00:00');
+  });
+
+  it('leaves completed undefined when HA sends no timestamp', async () => {
+    const fakeHass = makeFamilyHass({
+      members: [MEMBER_ANNA],
+      taskMetadata: [TASK_META],
+      todoItems: {
+        'todo.anna': [{ uid: 'uid-1', summary: 'Brush teeth', status: 'completed' }],
+      },
+    });
+
+    const states: import('../../src/shared/family-subscription.js').FamilyState[] = [];
+    const unsub = subscribeFamilyState(fakeHass as unknown as import('../../src/shared/types.js').HomeAssistant, (s) => {
+      states.push(s);
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    unsub();
+
+    const annaTasks = states[states.length - 1].tasksByMember.get('anna') ?? [];
+    assert.equal(annaTasks[0].completed, undefined);
   });
 
   it('includes todo items without metadata using fallback chore metadata', async () => {

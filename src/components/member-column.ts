@@ -33,14 +33,25 @@ function choreCompare(a: RenderableTask, b: RenderableTask): number {
   return a.summary.localeCompare(b.summary);
 }
 
-// Within a time-of-day bucket, routines list first (alpha) then one-off chores
-// and rotating tasks (by due date / alpha), so recurring items stay above ad-hoc tasks.
-function sortWithinBucket(tasks: RenderableTask[]): RenderableTask[] {
+// Routines list first (alpha) then one-off chores and rotating tasks (by due date
+// / alpha), so recurring items stay above ad-hoc tasks.
+function orderByType(tasks: RenderableTask[]): RenderableTask[] {
   const routines = tasks
     .filter((t) => t.metadata.type === 'routine')
     .sort((a, b) => a.summary.localeCompare(b.summary));
   const rest = tasks.filter((t) => t.metadata.type !== 'routine').sort(choreCompare);
   return [...routines, ...rest];
+}
+
+// Completed rows sink below the active ones *within their own bucket*, so the
+// time-of-day grouping still means something — a finished Morning task does not
+// jump past the Night section. Type ordering applies inside each half, which is
+// what keeps a ticked-off routine from pinning itself to the top of the section
+// (routines sort ahead of chores, so before this it did exactly that).
+function sortWithinBucket(tasks: RenderableTask[]): RenderableTask[] {
+  const active = orderByType(tasks.filter((t) => t.status !== 'completed'));
+  const done = orderByType(tasks.filter((t) => t.status === 'completed'));
+  return [...active, ...done];
 }
 
 // Bucket every task — routines AND one-off chores — by its time_of_day, so a

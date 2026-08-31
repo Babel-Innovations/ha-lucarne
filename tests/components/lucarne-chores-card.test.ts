@@ -988,4 +988,235 @@ describe('lucarne-chores-card', () => {
       mock.timers.reset();
     }
   });
+
+  // --- Stale completions. The daily reset deletes a completed chore and flips a
+  // completed routine back, but it skips any item with no task_metadata row (it
+  // must not delete todo items Lucarne does not own). Those used to stay crossed
+  // out on the card forever — and since buildRenderableTasks synthesizes
+  // chore/anytime for them, they all piled up in the Anytime bucket. ---
+
+  /** First rendered row of the first column — same lookup as annaTaskRow, named
+   *  for the cases below where the single configured column is not Anna's. */
+  const firstTaskRow = annaTaskRow;
+
+  /** Freeze at 09:00 on 2026-08-30; seeded state uses reset_time '03:00'. */
+  const MORNING = new Date(2026, 7, 30, 9, 0, 0, 0);
+  const BEFORE_RESET = new Date(2026, 7, 29, 20, 0, 0, 0).toISOString();
+  const AFTER_RESET = new Date(2026, 7, 30, 7, 0, 0, 0).toISOString();
+
+  it('hides a completed chore left over from a previous day', async () => {
+    const el = await makeCard(['anna']);
+    try {
+      freezeClock(el, MORNING);
+      seedAnnaTask(el, { ...makeChore('completed'), completed: BEFORE_RESET });
+      await el.updateComplete;
+      assert.equal(annaTaskRow(el)?.task.uid, undefined, 'completion predating the reset boundary is gone');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('keeps a completed chore that was ticked off since the last reset', async () => {
+    const el = await makeCard(['anna']);
+    try {
+      freezeClock(el, MORNING);
+      seedAnnaTask(el, { ...makeChore('completed'), completed: AFTER_RESET });
+      await el.updateComplete;
+      const row = annaTaskRow(el);
+      assert.ok(row, 'today\'s completion still renders crossed out');
+      assert.equal(row!.task.status, 'completed');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('keeps a completed chore whose completion HA never stamped', async () => {
+    // No timestamp means the card cannot date it. Hiding it would make a fresh
+    // tap vanish on any backend that omits TodoItem.completed.
+    const el = await makeCard(['anna']);
+    try {
+      freezeClock(el, MORNING);
+      seedAnnaTask(el, makeChore('completed'));
+      await el.updateComplete;
+      assert.ok(annaTaskRow(el), 'undatable completion is never hidden');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('hides a stale completed chore even when its due date is in the past', async () => {
+    // The chore branch only ever gated on `due <= endOfToday`, so a completed
+    // task due last week passed the filter indefinitely.
+    const el = await makeCard(['anna']);
+    try {
+      freezeClock(el, MORNING);
+      seedAnnaTask(el, {
+        ...makeChore('completed'),
+        due: '2026-08-26',
+        completed: BEFORE_RESET,
+      });
+      await el.updateComplete;
+      assert.equal(annaTaskRow(el)?.task.uid, undefined, 'past-due stale completion hidden');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('keeps a stale completed rotating task — the reset restores it, not deletes it', async () => {
+    // Reaching "completed with a stale timestamp" as a rotating task means the daily
+    // reset never ran (HA down across reset_time; there is no startup catch-up). The
+    // reset would have flipped it back to needs_action, so hiding it would remove a
+    // task that is about to be due again with no way to reach it from the card.
+    const el = await makeCard(['bob']);
+    try {
+      freezeClock(el, MORNING);
+      seedHouseholdRotating(el, {
+        ...makeRotatingTask('bob'),
+        status: 'completed',
+        completed: BEFORE_RESET,
+      });
+      el.requestUpdate();
+      await el.updateComplete;
+      assert.equal(firstTaskRow(el)?.task.uid, 'r-1', 'stale rotating completion still rendered');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('keeps a stale completed routine — the reset flips it back rather than deleting it', async () => {
+    const el = await makeCard(['anna']);
+    try {
+      freezeClock(el, MORNING);
+      seedAnnaTask(el, {
+        ...makeRoutine('FREQ=DAILY', 'completed'),
+        completed: BEFORE_RESET,
+      });
+      await el.updateComplete;
+      assert.equal(annaTaskRow(el)?.task.uid, 'rt-1', 'stale routine completion still rendered');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('never filters a just-tapped task by a timestamp the gate should not see', async () => {
+    // The gate runs on the SERVER's task, before applyOptimistic. To prove that
+    // ordering the fixture has to be one the gate would reject if it ran after:
+    // needs_action, but still carrying a stale `completed`. That pairing is
+    // synthetic — ical clears `completed` on the flip back to needs_action — and is
+    // the only way to make the assertion discriminating rather than vacuous.
+    const el = await makeCard(['anna']);
+    try {
+      freezeClock(el, MORNING);
+      seedAnnaTask(el, { ...makeChore('needs_action'), completed: BEFORE_RESET });
+      await el.updateComplete;
+      (el as unknown as { _optimistic: Map<string, RenderableTask['status']> })._optimistic =
+        new Map([['c-1', 'completed']]);
+      el.requestUpdate();
+      await el.updateComplete;
+      const row = annaTaskRow(el);
+      assert.equal(row?.task.uid, 'c-1', 'optimistically completed row still rendered');
+      assert.equal(row!.task.status, 'completed');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('treats a completion within the clock-skew grace as fresh', async () => {
+    // `completed` is stamped by HA, `now` is the browser's clock. A tap seconds
+    // after the boundary on a browser running ahead would otherwise be stamped
+    // just below it and vanish immediately.
+    const el = await makeCard(['anna']);
+    try {
+      const justAfterReset = new Date(2026, 7, 30, 3, 0, 5, 0); // reset_time is 03:00
+      freezeClock(el, justAfterReset);
+      const stampedEarly = new Date(2026, 7, 30, 2, 59, 55, 0).toISOString();
+      seedAnnaTask(el, { ...makeChore('completed'), completed: stampedEarly });
+      await el.updateComplete;
+      assert.equal(annaTaskRow(el)?.task.uid, 'c-1', 'near-boundary completion kept');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('arms the day-boundary timer on the reset time, not just midnight', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _midnightTimer?: ReturnType<typeof setTimeout>;
+      _scrollTimer?: ReturnType<typeof setTimeout>;
+      _familyState: FamilyState | null;
+    };
+    clearTimeout(internals._midnightTimer);
+    internals._midnightTimer = undefined;
+    clearTimeout(internals._scrollTimer);
+    internals._scrollTimer = undefined;
+    try {
+      mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+      mock.timers.setTime(new Date(2026, 7, 30, 9, 0, 0, 0).getTime());
+      seedAnnaTask(el, makeChore('needs_action')); // seeds resetTime '03:00'
+
+      const renders: number[] = [];
+      const origUpdate = el.requestUpdate.bind(el);
+      el.requestUpdate = (...args: unknown[]) => {
+        renders.push(Date.now());
+        return (origUpdate as (...a: unknown[]) => unknown)(...args);
+      };
+
+      (el as unknown as { _scheduleMidnightRefresh(): void })._scheduleMidnightRefresh();
+      // 09:00 → the next boundary is 03:00 tomorrow (18h), not midnight (15h).
+      mock.timers.tick(15 * 60 * 60 * 1000);
+      assert.equal(renders.length, 1, 'woke at midnight');
+      mock.timers.tick(3 * 60 * 60 * 1000);
+      assert.equal(renders.length, 2, 'woke again at the 03:00 reset boundary');
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('re-arms the day-boundary timer on the NEW reset time when it changes', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _midnightTimer?: ReturnType<typeof setTimeout>;
+      _scrollTimer?: ReturnType<typeof setTimeout>;
+      _onFamilyState(state: FamilyState): void;
+    };
+    seedAnnaTask(el, makeChore('needs_action'));
+    clearTimeout(internals._midnightTimer);
+    internals._midnightTimer = undefined;
+    clearTimeout(internals._scrollTimer);
+    internals._scrollTimer = undefined;
+    try {
+      mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+      mock.timers.setTime(new Date(2026, 7, 30, 9, 0, 0, 0).getTime());
+
+      const renders: number[] = [];
+      const origUpdate = el.requestUpdate.bind(el);
+      el.requestUpdate = (...args: unknown[]) => {
+        renders.push(Date.now());
+        return (origUpdate as (...a: unknown[]) => unknown)(...args);
+      };
+
+      const state = (el as unknown as { _familyState: FamilyState })._familyState;
+      internals._onFamilyState({ ...state, resetTime: '05:30' });
+      const armed = internals._midnightTimer;
+      assert.ok(armed, 'timer armed after the reset time changed');
+
+      // Identity alone would pass against a hard-coded boundary — assert the wake
+      // times instead: midnight (15h), then 05:30 (5.5h later), not the old 03:00.
+      renders.length = 0;
+      mock.timers.tick(15 * 60 * 60 * 1000);
+      assert.equal(renders.length, 1, 'woke at midnight');
+      mock.timers.tick(3 * 60 * 60 * 1000);
+      assert.equal(renders.length, 1, 'did NOT wake at the superseded 03:00');
+      mock.timers.tick(2.5 * 60 * 60 * 1000);
+      assert.equal(renders.length, 2, 'woke at the new 05:30 boundary');
+
+      // An unchanged reset time must not re-arm (that would reset the countdown
+      // on every ~20s poll and the boundary wake would never land).
+      const running = internals._midnightTimer;
+      internals._onFamilyState({ ...state, resetTime: '05:30' });
+      assert.equal(internals._midnightTimer, running, 'unchanged reset time does not re-arm');
+    } finally {
+      mock.timers.reset();
+    }
+  });
 });

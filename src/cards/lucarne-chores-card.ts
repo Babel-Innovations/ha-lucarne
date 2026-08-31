@@ -7,8 +7,8 @@ import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subs
 import type { FamilyState } from '../shared/family-subscription.js';
 import { parseRRule, isRoutineDueToday } from '../shared/recurrence.js';
 import {
-  msUntilNextLocalMidnight,
   currentScrollBucket,
+  isCompletionStale,
   msUntilNextDailyBoundary,
 } from '../shared/date-helpers.js';
 
@@ -300,15 +300,23 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
     this._scheduleScrollRefresh();
   }
 
-  /** Arm (or re-arm) a one-shot timer for the next local midnight that forces a
-   *  re-render so the "due today" window recomputes, then reschedules itself. */
+  /** Arm (or re-arm) a one-shot timer for the next day boundary that forces a
+   *  re-render, then reschedules itself. Two boundaries matter and they are not the
+   *  same instant: local midnight recomputes the "due today" window, and the
+   *  integration's configured `reset_time` is when a crossed-out row stops counting
+   *  as completed today (see `isCompletionStale`). The reset time only becomes known
+   *  once the family state arrives, so `_onFamilyState` re-arms this when it changes. */
   private _scheduleMidnightRefresh() {
     if (this._midnightTimer) clearTimeout(this._midnightTimer);
+    const resetTime = this._familyState?.resetTime ?? '';
+    // msUntilNextDailyBoundary skips malformed entries, so an empty/garbled reset
+    // time simply leaves midnight as the only boundary — always finite here.
+    const ms = msUntilNextDailyBoundary(new Date(), ['00:00', resetTime]);
     this._midnightTimer = setTimeout(() => {
       this._midnightTimer = undefined;
       this.requestUpdate();
       this._scheduleMidnightRefresh();
-    }, msUntilNextLocalMidnight(new Date()));
+    }, ms);
   }
 
   /** Arm (or re-arm) a one-shot timer for the next afternoon/night threshold that
@@ -403,7 +411,11 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
         if (changed) this._optimisticEdits = nextEdits;
       }
     }
+    const resetTimeChanged = this._familyState?.resetTime !== state.resetTime;
     this._familyState = state;
+    // The reset boundary is a wakeup time; a change to it (first state delivery, or
+    // an Options-flow edit) must re-arm the timer or the card keeps waking at the old one.
+    if (resetTimeChanged && this.isConnected) this._scheduleMidnightRefresh();
   };
 
   private _handleTaskUpdated = (e: Event) => {
@@ -520,6 +532,43 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
     // Applied before filtering so an edited type/due/owner routes correctly.
     const applyEdit = (t: RenderableTask): RenderableTask => this._optimisticEdits.get(t.uid) ?? t;
 
+    // A completed chore whose completion predates the last reset boundary is left
+    // over from an earlier day, not something the user just ticked off.
+    //
+    // Without this the only thing clearing a crossed-out row was
+    // `reset_logic.async_perform_daily_reset`, which skips any item with no
+    // `task_metadata` row (deliberately — Lucarne must not delete todo items it
+    // does not own). Items added outside Lucarne therefore stayed on the card
+    // permanently once completed, and since `buildRenderableTasks` synthesizes
+    // `chore`/`anytime` for them, they all piled up in the Anytime bucket.
+    //
+    // **Chores only, and that is the whole point.** An un-adopted item is always
+    // synthesized as a chore, so every row the reset skips lands in this branch, and
+    // `reset_logic` deletes a completed chore outright — hiding one matches what the
+    // reset would have done anyway.
+    //
+    // The narrowing exists to protect *routines*: `reset_logic` flips those back to
+    // needs_action rather than deleting them, so a stale-completed routine can only
+    // mean the reset never ran (HA down across `reset_time`; `automation_writer`
+    // registers a plain `async_track_time_change` with no startup catch-up). Keep
+    // rendering it crossed out, where the user can untick it, instead of hiding a
+    // task that is about to be due again with no way to reach it from here.
+    //
+    // Rotating tasks are protected by routing, not by this check: the household
+    // column hard-excludes them below, and the owner column pulls them from
+    // `householdTasks`, which never passes through `passesOwnFilter`. `isStale` is
+    // simply never asked about one.
+    //
+    // Deliberately evaluated against the *pre*-optimistic status: a task the user
+    // just tapped is still `needs_action` on the server, so it passes here and
+    // `applyOptimistic` crosses it out — the fresh tap can never be filtered by
+    // its own (not yet written) timestamp.
+    const resetTime = this._familyState.resetTime;
+    const isStale = (t: RenderableTask): boolean =>
+      t.status === 'completed' &&
+      t.metadata.type === 'chore' &&
+      isCompletionStale(t.completed, now, resetTime);
+
     // Household bucket is the source for rotating tasks; pulled once and reused.
     // Tombstoned (optimistically-deleted) uids are dropped here so they vanish
     // from both the household column and any owner's rotating list.
@@ -536,6 +585,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
     // showRoutines; chores gate on showTasks and the due-today window. Applied to
     // both real and optimistically-added tasks so they're treated identically.
     const passesOwnFilter = (t: RenderableTask): boolean => {
+      if (isStale(t)) return false;
       if (t.metadata.type === 'routine') {
         if (!showRoutines) return false;
         // A scheduled routine is only active on days its RRULE fires — the

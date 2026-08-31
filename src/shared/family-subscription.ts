@@ -64,6 +64,11 @@ function buildRenderableTasks(
 ): RenderableTask[] {
   return items.map((item) => {
     const meta = metadataByUid.get(item.uid);
+    // Fallback for an item Lucarne never adopted (HA's to-do panel, voice, an
+    // agent's todo.add_item, the Reminders bridge). It is why every such task
+    // renders as a chore in the Anytime bucket — and, since the daily reset
+    // skips rows it has no metadata for, why those are the ones that used to
+    // linger crossed out forever.
     const metadata: TaskMetadata = meta ?? {
       item_uid: item.uid,
       member_slug: memberSlug,
@@ -80,6 +85,7 @@ function buildRenderableTasks(
       status: item.status,
       due: item.due ?? null,
       description: item.description ?? '',
+      completed: item.completed,
       metadata,
     };
   });

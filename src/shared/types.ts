@@ -54,6 +54,8 @@ export interface RenderableTask {
   status: 'needs_action' | 'completed';
   due: string | null;
   description: string;
+  /** See `TodoItem.completed` — carried through so cards can date a completion. */
+  completed?: string;
   metadata: TaskMetadata;
 }
 
@@ -84,6 +86,13 @@ export interface TodoItem {
   status: 'needs_action' | 'completed';
   due?: string;
   description?: string;
+  /**
+   * ISO timestamp of when the item was marked completed, straight from HA's own
+   * `TodoItem.completed` (`local_todo` populates it; `todo.get_items` serializes
+   * every dataclass field). Absent on backends that never set it — callers must
+   * treat "missing" as "cannot be dated", never as "completed long ago".
+   */
+  completed?: string;
 }
 
 export interface PersonPresence {

@@ -6,9 +6,10 @@ import {
   eventBandPortion,
   formatRelativeStart,
   parseEventBoundary,
-  msUntilNextLocalMidnight,
   currentScrollBucket,
   msUntilNextDailyBoundary,
+  lastResetBoundary,
+  isCompletionStale,
 } from '../../src/shared/date-helpers.js';
 import type { CalendarEvent } from '../../src/shared/types.js';
 
@@ -198,54 +199,6 @@ describe('formatRelativeStart', () => {
 });
 
 // ---------------------------------------------------------------------------
-// msUntilNextLocalMidnight
-// ---------------------------------------------------------------------------
-describe('msUntilNextLocalMidnight', () => {
-  const MIN = 60 * 1000;
-  const HOUR = 60 * MIN;
-
-  it('30 minutes before midnight → 30 minutes', () => {
-    const now = new Date(2026, 5, 8, 23, 30, 0, 0); // local 23:30
-    assert.equal(msUntilNextLocalMidnight(now), 30 * MIN);
-  });
-
-  it('exactly midnight → one full local day, never 0', () => {
-    const now = new Date(2026, 5, 8, 0, 0, 0, 0);
-    // Don't hard-code 24h: the contract is "delta to the next local midnight",
-    // which is 23h/25h on DST days (covered below). Compute it independently.
-    const expected = new Date(2026, 5, 9, 0, 0, 0, 0).getTime() - now.getTime();
-    const result = msUntilNextLocalMidnight(now);
-    assert.ok(result > 0, 'never returns 0 at exactly midnight');
-    assert.equal(result, expected, 'equals the delta to the next local midnight');
-  });
-
-  // TZ=America/Los_Angeles is set in the test scripts, so the US DST transitions
-  // apply: clocks spring forward on 2026-03-08 (23h day) and fall back on
-  // 2026-11-01 (25h day). These prove the helper tracks wall-clock midnight, not
-  // a fixed 24h offset.
-  it('spring-forward DST day → 23h from midnight (US DST begins 2026-03-08)', () => {
-    const now = new Date(2026, 2, 8, 0, 0, 0, 0);
-    assert.equal(msUntilNextLocalMidnight(now), 23 * HOUR);
-  });
-
-  it('fall-back DST day → 25h from midnight (US DST ends 2026-11-01)', () => {
-    const now = new Date(2026, 10, 1, 0, 0, 0, 0);
-    assert.equal(msUntilNextLocalMidnight(now), 25 * HOUR);
-  });
-
-  it('mid-day → remainder of the day', () => {
-    const now = new Date(2026, 5, 8, 14, 15, 30, 0); // local 14:15:30
-    // 9h 44m 30s until midnight
-    assert.equal(msUntilNextLocalMidnight(now), 9 * HOUR + 44 * MIN + 30 * 1000);
-  });
-
-  it('one second before midnight → 1000ms', () => {
-    const now = new Date(2026, 5, 8, 23, 59, 59, 0);
-    assert.equal(msUntilNextLocalMidnight(now), 1000);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // currentScrollBucket
 // ---------------------------------------------------------------------------
 describe('currentScrollBucket', () => {
@@ -313,6 +266,25 @@ describe('msUntilNextDailyBoundary', () => {
   const MIN = 60 * 1000;
   const HOUR = 60 * MIN;
 
+  // TZ=America/Los_Angeles is set in the test scripts, so the US DST transitions
+  // apply: clocks spring forward on 2026-03-08 (23h day) and fall back on
+  // 2026-11-01 (25h day). These prove the helper tracks wall-clock time, not a
+  // fixed 24h offset — it is what arms the chores card's day-boundary timer.
+  it('spring-forward DST day → 23h from midnight (US DST begins 2026-03-08)', () => {
+    const now = new Date(2026, 2, 8, 0, 0, 0, 0);
+    assert.equal(msUntilNextDailyBoundary(now, ['00:00']), 23 * HOUR);
+  });
+
+  it('fall-back DST day → 25h from midnight (US DST ends 2026-11-01)', () => {
+    const now = new Date(2026, 10, 1, 0, 0, 0, 0);
+    assert.equal(msUntilNextDailyBoundary(now, ['00:00']), 25 * HOUR);
+  });
+
+  it('one second before midnight → 1000ms', () => {
+    const now = new Date(2026, 5, 8, 23, 59, 59, 0);
+    assert.equal(msUntilNextDailyBoundary(now, ['00:00']), 1000);
+  });
+
   it('picks the soonest upcoming boundary later today', () => {
     const now = new Date(2026, 5, 8, 9, 0, 0, 0); // 09:00, both boundaries ahead
     assert.equal(msUntilNextDailyBoundary(now, ['12:00', '19:00']), 3 * HOUR);
@@ -367,5 +339,98 @@ describe('msUntilNextDailyBoundary', () => {
     assert.equal(msUntilNextDailyBoundary(now, ['12:00:45', '19:00']), 10 * HOUR);
     // A bare hour with no minutes is also skipped.
     assert.equal(msUntilNextDailyBoundary(now, ['12', '19:00']), 10 * HOUR);
+  });
+});
+
+describe('lastResetBoundary', () => {
+  it('returns today\'s boundary once the clock is past it', () => {
+    const now = new Date(2026, 7, 30, 9, 0, 0, 0);
+    assert.deepEqual(lastResetBoundary(now, '04:00'), new Date(2026, 7, 30, 4, 0, 0, 0));
+  });
+
+  it('rolls back to yesterday before the boundary', () => {
+    const now = new Date(2026, 7, 30, 1, 30, 0, 0);
+    assert.deepEqual(lastResetBoundary(now, '04:00'), new Date(2026, 7, 29, 4, 0, 0, 0));
+  });
+
+  it('treats the exact boundary instant as already reset', () => {
+    const now = new Date(2026, 7, 30, 4, 0, 0, 0);
+    assert.deepEqual(lastResetBoundary(now, '04:00'), new Date(2026, 7, 30, 4, 0, 0, 0));
+  });
+
+  it('falls back to local midnight for an empty or malformed reset time', () => {
+    const now = new Date(2026, 7, 30, 9, 0, 0, 0);
+    const midnight = new Date(2026, 7, 30, 0, 0, 0, 0);
+    for (const bad of ['', '25:00', '12:99', 'nonsense', '12', '04:00:00']) {
+      assert.deepEqual(lastResetBoundary(now, bad), midnight, `"${bad}" falls back to midnight`);
+    }
+  });
+
+  it('crosses a month boundary when rolling back', () => {
+    const now = new Date(2026, 8, 1, 2, 0, 0, 0);
+    assert.deepEqual(lastResetBoundary(now, '04:00'), new Date(2026, 7, 31, 4, 0, 0, 0));
+  });
+});
+
+describe('isCompletionStale', () => {
+  const now = new Date(2026, 7, 30, 9, 0, 0, 0);
+
+  it('is stale when completed before the last boundary', () => {
+    const at = new Date(2026, 7, 29, 20, 0, 0, 0).toISOString();
+    assert.equal(isCompletionStale(at, now, '04:00'), true);
+  });
+
+  it('is fresh when completed after the last boundary', () => {
+    const at = new Date(2026, 7, 30, 6, 0, 0, 0).toISOString();
+    assert.equal(isCompletionStale(at, now, '04:00'), false);
+  });
+
+  it('keeps last night\'s completion fresh during the pre-reset gap', () => {
+    // 01:00 local: the reset has not run yet, so a routine ticked off at 20:00
+    // yesterday is still legitimately "done today" and must keep rendering.
+    // Using local midnight as the boundary would blank it for four hours.
+    const preReset = new Date(2026, 7, 30, 1, 0, 0, 0);
+    const at = new Date(2026, 7, 29, 20, 0, 0, 0).toISOString();
+    assert.equal(isCompletionStale(at, preReset, '04:00'), false);
+  });
+
+  it('treats a completion within the clock-skew grace as fresh', () => {
+    // HA stamps `completed`; the browser supplies `now`. Just below the boundary
+    // but seconds old is a tap the user is watching happen, not stale history.
+    const justAfter = new Date(2026, 7, 30, 4, 0, 5, 0);
+    const stampedEarly = new Date(2026, 7, 30, 3, 59, 55, 0).toISOString();
+    assert.equal(isCompletionStale(stampedEarly, justAfter, '04:00'), false);
+  });
+
+  it('still hides a pre-boundary completion once it is past the grace', () => {
+    const wellAfter = new Date(2026, 7, 30, 4, 5, 0, 0);
+    const stampedEarly = new Date(2026, 7, 30, 3, 59, 55, 0).toISOString();
+    assert.equal(isCompletionStale(stampedEarly, wellAfter, '04:00'), true);
+  });
+
+  it('brackets the grace at 60s', () => {
+    // Pins the constant itself, not just "some grace exists". `now` has to sit past
+    // the 04:00 boundary for staleness to be in play at all, so the completion is
+    // stamped just below it and `now` walks across the grace edge.
+    const stamped = new Date(2026, 7, 30, 3, 59, 30, 0);
+    const at = stamped.toISOString();
+    const plus = (ms: number) => new Date(stamped.getTime() + ms);
+    assert.equal(isCompletionStale(at, plus(59_000), '04:00'), false, '59s → fresh');
+    assert.equal(isCompletionStale(at, plus(61_000), '04:00'), true, '61s → stale');
+  });
+
+  it('never hides a completion it cannot date', () => {
+    // Nothing in the frontend can date a completion HA did not stamp; hiding one
+    // would make a fresh tap vanish on a backend that omits TodoItem.completed.
+    assert.equal(isCompletionStale(undefined, now, '04:00'), false);
+    assert.equal(isCompletionStale('', now, '04:00'), false);
+    assert.equal(isCompletionStale('not-a-date', now, '04:00'), false);
+  });
+
+  it('parses the UTC timestamps HA actually sends', () => {
+    // todo.get_items serializes TodoItem.completed via datetime.isoformat(), so
+    // the wire value carries an offset rather than local wall-clock time.
+    const at = new Date(2026, 7, 25, 16, 58, 26, 0).toISOString();
+    assert.equal(isCompletionStale(at, now, '04:00'), true);
   });
 });
