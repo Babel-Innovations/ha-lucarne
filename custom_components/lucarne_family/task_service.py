@@ -52,6 +52,33 @@ def _get_todo_entity(hass: HomeAssistant, entity_id: str) -> Any:
     return entity
 
 
+def _todo_write_error(
+    verb: str, uid: str, entity_id: str, entity: Any, err: Exception
+) -> HomeAssistantError:
+    """Build the error to raise for a todo-entity write that failed (see #119).
+
+    A loaded list that no longer holds the uid means the item was removed outside
+    Lucarne; anything else is a write failure. Classifying *after* the failure is
+    not the check-then-act #114 removed — the write has already been attempted
+    and abandoned.
+    """
+    try:
+        items = entity.todo_items
+    except Exception:
+        # This runs inside an ``except`` block, so anything raised here would
+        # demote the real failure to ``__context__`` and surface something worse
+        # than the bug being fixed.
+        items = None
+    # ``None`` means "not loaded yet", ``[]`` means "genuinely empty" — the
+    # distinction reconcile.py refuses to collapse. Only a loaded list that does
+    # not hold the uid proves the item is gone.
+    if isinstance(items, list) and not any(item.uid == uid for item in items):
+        return ServiceValidationError(
+            f"Task {uid!r} was already removed from {entity_id!r} outside Lucarne"
+        )
+    return HomeAssistantError(f"Could not {verb} task {uid!r} in {entity_id!r}: {err}")
+
+
 def _resolve_todo_entity_id(store: LucarneFamilyStore, member_slug: str) -> str:
     """Map member slug → todo entity_id, raising ServiceValidationError for unknowns."""
     if member_slug == _HOUSEHOLD_SLUG:
@@ -216,8 +243,20 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
                     current_owner=resolved_current_owner,
                 )
             except Exception:
-                # Best-effort rollback: remove the orphaned todo item.
-                await entity.async_delete_todo_items([item_uid])
+                # Best-effort rollback: remove the orphaned todo item. Its own
+                # failure is logged and swallowed so the bare ``raise`` below
+                # still re-raises the INSERT error the caller can act on — a
+                # raising rollback would replace it with the provider's (issue
+                # #119). What is left behind is an item with no row, which is
+                # what every un-adopted item already is.
+                try:
+                    await entity.async_delete_todo_items([item_uid])
+                except Exception:
+                    _LOGGER.exception(
+                        "Rolling back todo item %s after a failed metadata insert "
+                        "also failed; the item is left with no row",
+                        item_uid,
+                    )
                 raise
         hass.bus.async_fire(
             "lucarne_family_task_added",
@@ -412,8 +451,9 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         # ical's store raises on a missing uid. That is the common case, and it
         # is the #116 row whose item was already removed outside Lucarne: nothing
         # is left to clean up, and this order reaps the row where the reverse
-        # order never could, since the raise came first. A retry just reports
-        # "No task found" — find_managed_item has no list holding the uid.
+        # order never could, since the raise came first. _todo_write_error names
+        # that outside removal (#119); a retry then reports "No task found" from
+        # _resolve_task_target — find_managed_item has no list holding the uid.
         #
         # A failed ics *write* is the narrower branch, and its cost is real: the
         # row is gone while the item survives, so until the user re-edits the task
@@ -429,13 +469,26 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         #
         # Restoring the row on failure was considered and rejected: the commonest
         # raise *is* the missing-uid case, so a blanket restore would re-create
-        # exactly the #116 orphan.
+        # exactly the #116 orphan. Succeeding on that branch instead of raising
+        # was rejected too: _resolve_task_target already rejects a uid no list
+        # holds, so succeeding here would be incoherent with it, and it would
+        # fire task_deleted for an item Lucarne did not delete.
         async with async_task_uid_lock(uid):
             # Unconditional: the DELETE is a no-op when the item was never adopted,
             # and gating it on the earlier read would leak a row for an item that
             # gets adopted between that read and this call.
             await store.async_delete_task_metadata(uid)
-            await entity.async_delete_todo_items([uid])
+            try:
+                await entity.async_delete_todo_items([uid])
+            except HomeAssistantError:
+                # Already user-facing; relabelling would bury the real message.
+                raise
+            except Exception as err:
+                # CancelledError is a BaseException, so #118's drain semantics
+                # are untouched — a cancellation still unwinds this frame.
+                raise _todo_write_error(
+                    "remove", uid, todo_entity_id, entity, err
+                ) from err
         hass.bus.async_fire("lucarne_family_task_deleted", {"uid": uid})
 
     async def handle_toggle_task(call: ServiceCall) -> None:
@@ -455,15 +508,24 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         action = "completed" if is_completing else "undone"
 
         # Include all existing fields to avoid overwriting due/description with None.
-        await entity.async_update_todo_item(
-            TodoItem(
-                uid=uid,
-                summary=item.summary,
-                status=new_status,
-                due=item.due,
-                description=item.description,
+        try:
+            await entity.async_update_todo_item(
+                TodoItem(
+                    uid=uid,
+                    summary=item.summary,
+                    status=new_status,
+                    due=item.due,
+                    description=item.description,
+                )
             )
-        )
+        except HomeAssistantError:
+            # See handle_delete_task: already user-facing.
+            raise
+        except Exception as err:
+            # The item lookup above reads the list and then awaits, so an outside
+            # delete can land in that window; _todo_write_error re-reads to tell
+            # that apart from a genuine write failure (issue #119).
+            raise _todo_write_error("update", uid, todo_entity_id, entity, err) from err
         # Phase 3: completion_listener is now the authoritative source for the
         # completion log. toggle_task must NOT append here or a double row appears
         # for every card tap (once from this handler, once from the state-change

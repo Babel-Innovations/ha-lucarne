@@ -137,6 +137,16 @@ A uid with no `task_metadata` row is **not** an error: an item added outside
 `add_task` (HA's to-do panel, voice, the Companion app, the Reminders bridge) has
 none, and the todo entity — not `task_metadata` — is the source of truth for whether
 a task exists. The item is removed from its list and there is simply no row to drop.
+The converse *is* an error: a uid **with** a row whose item is gone reports the
+outside removal (below), after reaping the row.
+
+**Runtime errors**: no unwrapped *todo-platform* exception reaches the caller.
+- the item is no longer in its list (removed outside Lucarne) → `ServiceValidationError`.
+  The metadata row is still deleted first, so this is how a #116 orphan gets reaped.
+- the list rejected the write for any other reason → `HomeAssistantError` naming the
+  uid and entity, carrying the platform's own error as its cause
+- a todo platform that raises its own `HomeAssistantError` passes through unchanged —
+  it is already user-facing, and relabelling it would bury the real message
 
 **Example call**:
 ```yaml
@@ -162,6 +172,15 @@ Toggle a task's completion status (needs_action ↔ completed) and append a comp
 
 As with `delete_task`, a uid with no `task_metadata` row is resolved by scanning the
 managed lists rather than rejected.
+
+**Runtime errors**: unlike `delete_task`, this service looks the item up first, so
+the two "item is gone" cases are reported differently.
+- gone *before* the call (the #116 orphan) → the lookup rejects it with
+  `HomeAssistantError` (`Todo item … not found in …`)
+- gone *while the update is in flight* → `ServiceValidationError` naming the outside
+  removal
+- any other write failure → `HomeAssistantError` carrying the platform's own error as
+  its cause; a platform's own `HomeAssistantError` passes through unchanged
 
 **Example call**:
 ```yaml

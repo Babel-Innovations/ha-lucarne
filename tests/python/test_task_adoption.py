@@ -1002,14 +1002,64 @@ async def test_delete_task_removes_metadata_before_the_item(
     assert uid in _uids(hass, "todo.anna")
 
     # So this branch is visible but not retry-fixable — the retry resolves the uid
-    # from the stale list and the store raises on it again, until local_todo
+    # from the stale list and ical's store raises on it again, until local_todo
     # reloads. Pinned so the rationale in handle_delete_task stays honest.
-    # ical's TodoStoreError, raw — local_todo does not wrap it — so match on the
-    # message rather than pinning this test to that exception type.
-    with pytest.raises(Exception, match="No existing item with uid"):
+    #
+    # A plain HomeAssistantError, not the ServiceValidationError branch: the uid
+    # is still listed (the failed save skipped the state refresh), so the
+    # post-hoc classification correctly refuses to call this "already removed" —
+    # the item really is still in the file (issue #119).
+    with pytest.raises(HomeAssistantError, match="Could not remove task") as excinfo:
         await hass.services.async_call(
             DOMAIN, "delete_task", {"uid": uid}, blocking=True
         )
+    assert type(excinfo.value) is HomeAssistantError
+    # The provider's own message survives as context rather than as the whole
+    # error: before #119 this reached the user raw.
+    assert "No existing item with uid" in str(excinfo.value)
+    assert "No existing item with uid" in str(excinfo.value.__cause__)
+
+
+async def test_delete_task_reports_an_outside_removal_as_a_validation_error(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """The commonest item-delete raise is #116's: the item went, its row stayed.
+
+    ``local_todo`` lets ical's ``TodoStoreError`` out unwrapped and it is not a
+    ``HomeAssistantError``, so HA reported it as ``unknown_error`` with an
+    "Unexpected exception" traceback and the raw
+    "No existing item with uid/recurrence_id: …" reached the user (issue #119).
+    Nothing is actually broken here — the task is gone, which is what the caller
+    asked for — so it is a ServiceValidationError, which HA logs without a
+    traceback.
+    """
+    _entry, store = await _setup(hass, tmp_path)
+    response = await hass.services.async_call(
+        DOMAIN,
+        "add_task",
+        {"member": "anna", "summary": "Feed the cat", "type": "routine"},
+        blocking=True,
+        return_response=True,
+    )
+    assert response is not None
+    uid = response["uid"]
+
+    # Remove the item the way every path except delete_task does — HA's to-do
+    # panel, todo.remove_item, the Companion app — leaving the row behind. The
+    # entity's own state refresh drops the uid from todo_items, which is what
+    # lets the post-hoc classification tell this branch apart.
+    await _get_entity(hass, "todo.anna").async_delete_todo_items([uid])
+    assert uid not in _uids(hass, "todo.anna")
+    assert await store.async_get_task_metadata(uid) is not None
+
+    with pytest.raises(ServiceValidationError, match="already removed") as excinfo:
+        await hass.services.async_call(
+            DOMAIN, "delete_task", {"uid": uid}, blocking=True
+        )
+    # The raw ical wording is what the user used to see; keep it out.
+    assert "No existing item with uid" not in str(excinfo.value)
+    # Metadata-first is why the raise still reaped #116's orphan.
+    assert await store.async_get_task_metadata(uid) is None
 
 
 async def test_delete_during_preset_seeding_insert_leaves_no_orphan_row(

@@ -406,6 +406,21 @@ Single HACS item — `integration` category only. The cards ride along inside th
   worker thread*) and cancels a real task awaiting it; patching the store coroutine, which every
   other race test does, models the drain instead of exercising it.
   `test_cancelling_an_adoption_mid_insert_leaves_no_orphan_row` is the same thing end to end.
+- **`task_service.py` is the translation boundary for todo-entity writes made on a
+  caller-named uid** (#119): a todo
+  platform may raise anything, and `local_todo` lets ical's `TodoStoreError` out unwrapped —
+  it is *not* a `HomeAssistantError`, so HA reports it as `unknown_error` with an "Unexpected
+  exception" traceback and the raw `No existing item with uid/recurrence_id: <uid>/None`
+  reaches the user. The two writes that act on a **caller-named** uid are wrapped —
+  `delete_task`'s removal and `toggle_task`'s update; `add_task`'s create is not, since a
+  freshly minted uuid4 cannot be missing. `_todo_write_error` picks the message by
+  re-reading `todo_items` **after** the failure —
+  never before, which would be the check-then-act #114 removed. It follows reconcile's
+  `None` (not loaded) vs `[]` (genuinely empty) rule: only a *loaded* list missing the uid
+  proves an outside removal. Catch `Exception`, never `BaseException` — a `CancelledError`
+  must keep unwinding (#118), and `handle_add_task`'s rollback relies on `pytest.fail`'s
+  `BaseException` escaping it. `handle_add_task`'s rollback logs and swallows its own failure
+  so the bare `raise` still surfaces the INSERT error the caller can act on.
 - **Orphaned `task_metadata` is reaped by reading the lists, never by diffing snapshots**
   (#116): every removal path except `lucarne_family.delete_task` — HA's to-do panel,
   `todo.remove_item` from an automation/voice/agent, the Companion app — deletes the todo item
@@ -523,6 +538,8 @@ Single HACS item — `integration` category only. The cards ride along inside th
 
 - **Don't** add a card mutation (service call from a card/component) without optimistic UI + reconcile — see the Optimistic UI pitfall above and `docs/architecture.md`.
 - **Don't** write HA automations for the time-based triggers — the integration's listeners own these.
+- **Don't** let a todo-entity write out of a service handler unwrapped, and don't add a
+  pre-check to decide the message — classify after the failure (#119).
 - **Don't** hand-roll RRULE date math — use `recurrence.py` (Python) or `recurrence.ts` (JS).
 - **Don't** write files to `<config>/www/` outside `/local/lucarne/avatars/`.
 - **Don't** add `contributing.md`, `code_of_conduct.md`, or other meta docs unless asked.
