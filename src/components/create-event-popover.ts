@@ -2,6 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
 import type { HomeAssistant, CalendarConfig } from '../shared/types.js';
+import { serviceErrorMessage } from '../shared/service-errors.js';
 
 function toLocalISO(date: string, time: string): string {
   const d = new Date(`${date}T${time}:00`);
@@ -294,7 +295,7 @@ export class LucarneCreateEventPopover extends LitElement {
         entity_id: this._calendarEntityId,
       });
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'Failed to create event';
+      this._error = serviceErrorMessage(err, 'Failed to create event');
       this._saving = false;
       return;
     }

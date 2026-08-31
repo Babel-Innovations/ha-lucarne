@@ -6,6 +6,7 @@ import { coerceTimeOfDay } from '../shared/types.js';
 import { updateTaskMetadata, deleteTask } from '../shared/integration-services.js';
 import { parseRRule, buildRRule, friendlySummary, WEEKDAY_CODES } from '../shared/recurrence.js';
 import type { RecurrenceMode, WeekdayCode } from '../shared/recurrence.js';
+import { serviceErrorMessage } from '../shared/service-errors.js';
 
 @customElement('lucarne-edit-task-popover')
 export class LucarneEditTaskPopover extends LitElement {
@@ -588,7 +589,7 @@ export class LucarneEditTaskPopover extends LitElement {
 
       this._close();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'Failed to save';
+      this._error = serviceErrorMessage(err, 'Failed to save');
       this._saving = false;
     }
   }
@@ -610,7 +611,7 @@ export class LucarneEditTaskPopover extends LitElement {
       );
       this._close();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'Failed to delete';
+      this._error = serviceErrorMessage(err, 'Failed to delete');
       this._saving = false;
       this._confirmingDelete = false;
     }

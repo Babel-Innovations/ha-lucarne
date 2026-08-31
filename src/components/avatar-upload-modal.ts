@@ -5,6 +5,7 @@ import type { HomeAssistant } from '../shared/types.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
 import { cropperCss } from '../shared/cropper-styles.js';
 import { setMemberAvatar, uploadAvatar } from '../shared/integration-services.js';
+import { serviceErrorMessage } from '../shared/service-errors.js';
 
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -306,7 +307,7 @@ export class LucarneAvatarUploadModal extends LitElement {
         );
         this._close();
       } catch (err) {
-        this._error = err instanceof Error ? err.message : String(err);
+        this._error = serviceErrorMessage(err, 'Failed to save avatar');
       } finally {
         this._submitting = false;
       }
@@ -325,7 +326,7 @@ export class LucarneAvatarUploadModal extends LitElement {
       this.dispatchEvent(new CustomEvent('avatar-changed'));
       this._close();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : String(err);
+      this._error = serviceErrorMessage(err, 'Failed to upload avatar');
     } finally {
       this._submitting = false;
     }

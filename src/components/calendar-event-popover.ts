@@ -3,6 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
 import { deleteCalendarEvent, entitySupportsDelete } from '../shared/ha-subscriptions.js';
 import type { HomeAssistant, CalendarEvent } from '../shared/types.js';
+import { serviceErrorMessage } from '../shared/service-errors.js';
 
 function formatDateTime(value: string): string {
   const d = new Date(value);
@@ -204,7 +205,7 @@ export class LucarneCalendarEventPopover extends LitElement {
     try {
       await deleteCalendarEvent(this.hass, this.entityId, rawUid);
     } catch (err) {
-      this._deleteError = err instanceof Error ? err.message : 'Failed to delete event';
+      this._deleteError = serviceErrorMessage(err, 'Failed to delete event');
       this._deleting = false;
       this._confirmingDelete = false;
       return;

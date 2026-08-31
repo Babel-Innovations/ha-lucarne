@@ -165,8 +165,10 @@ describe('lucarne-edit-task-popover', () => {
   it('does not fire task-updated when the save service call fails', async () => {
     const el = await makeEl();
     const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+    // The shape HA actually rejects with: a plain `{ code, message }` payload,
+    // NOT an Error. Rejecting with an Error here is what hid #128.
     fakeHass.callService = async () => {
-      throw new Error('save failed');
+      throw { code: 'unknown_error', message: 'save failed' };
     };
     const updated: CustomEvent[] = [];
     el.addEventListener('task-updated', (e) => updated.push(e as CustomEvent));
@@ -179,7 +181,11 @@ describe('lucarne-edit-task-popover', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     assert.equal(updated.length, 0, 'no optimistic event on failure');
-    assert.ok(shadow(el, '.error-msg'), 'error surfaced');
+    assert.equal(
+      shadow(el, '.error-msg')?.textContent?.trim(),
+      'save failed',
+      "the server's message reaches the popover, not the generic fallback",
+    );
   });
 
   it('calls updateTaskMetadata when type changes', async () => {
@@ -309,7 +315,7 @@ describe('lucarne-edit-task-popover', () => {
     const el = await makeEl();
     const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
     fakeHass.callService = async () => {
-      throw new Error('No task found');
+      throw { code: 'unknown_error', message: 'No task found' };
     };
 
     const deleted: CustomEvent[] = [];
@@ -324,8 +330,11 @@ describe('lucarne-edit-task-popover', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     assert.equal(deleted.length, 0, 'no tombstone event on failure');
-    const errorMsg = shadow(el, '.error-msg');
-    assert.ok(errorMsg, 'error surfaced in the popover');
+    assert.equal(
+      shadow(el, '.error-msg')?.textContent?.trim(),
+      'No task found',
+      "the server's message reaches the popover, not the generic fallback",
+    );
   });
 
   it('fires popover-close on Cancel click', async () => {
