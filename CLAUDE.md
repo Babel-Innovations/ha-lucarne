@@ -434,6 +434,33 @@ Single HACS item — `integration` category only. The cards ride along inside th
   cleanup ever deletes are household `rotating` rows that lost their last owner — so re-adding the
   same slug hits `seed_preset_routines`' `source == "template"` early return and the new member's
   list is never seeded. That fix belongs in the removal path, which knows the slug is going away.
+- **A completed row is cleared by two mechanisms, and neither covers the other's set**:
+  `reset_logic.async_perform_daily_reset` deletes completed chores / flips completed
+  routines at `reset_time`, but skips any item with no `task_metadata` row — so it does
+  nothing for anything created outside `lucarne_family.add_task`. The chores card's
+  `isCompletionStale` (`src/shared/date-helpers.ts`) covers that set — and any other
+  completed chore — hiding one whose HA `TodoItem.completed` timestamp predates the last
+  `reset_time` boundary. **Chores only**: an un-adopted item is always synthesized as a
+  chore, so every reset-skipped row lands in that branch, and the reset *deletes* completed
+  chores anyway. The narrowing is there to protect **routines**, which the reset flips back
+  to `needs_action` instead — a stale-completed one can only mean the reset never ran (HA
+  down across the window; there is no startup catch-up), so keep rendering it crossed out
+  where the user can untick it rather than stranding a task about to be due again. Rotating
+  tasks are protected by *routing*, not by this check: the household column excludes them and
+  the owner column pulls them from `householdTasks`, which never reaches `passesOwnFilter`. The boundary is `reset_time`, **not** local midnight — a routine ticked
+  off at 20:00 is still "done today" at 01:00, and midnight would blank it for the whole
+  pre-reset gap. An absent/unparseable timestamp **keeps** the row: nothing in the
+  frontend can date a completion HA did not stamp, and hiding one would make a fresh tap
+  vanish on a backend that omits the field. The gate deliberately runs on the *server's*
+  status, before `applyOptimistic`, and allows 60 s of browser-vs-HA clock skew, so a
+  just-tapped row can never be filtered by its own not-yet-written timestamp. Note the
+  symptom this fixed reads as an Anytime-only bug:
+  `buildRenderableTasks` synthesizes `chore` + `anytime` for un-adopted uids, so every row
+  the reset skips lands in the Anytime bucket (one-directional — an adopted chore or routine
+  can sit there too). Separately,
+  `sortWithinBucket` (`src/components/member-column.ts`) sinks completed rows **within
+  their bucket**, not to the bottom of the column — and the split is what stops a ticked
+  routine pinning itself to the *top* of its section, since routines sort ahead of chores.
 - **Never adopt a todo item automatically**: `reset_logic` deletes completed `type="chore"`
   items at the daily-reset window, and `if metadata is None: continue` is the *only* thing
   keeping items Lucarne didn't create out of that sweep. Adopting on appearance would mean a

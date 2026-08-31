@@ -482,3 +482,57 @@ describe('lucarne-member-column', () => {
     assert.equal(writes(), 0, 'clearing the bucket cancels the pending scroll frame');
   });
 });
+
+describe('lucarne-member-column completed ordering', () => {
+  function row(el: LucarneMemberColumn, sectionBucket: string) {
+    const section = el.shadowRoot!.querySelector(`.section[data-bucket="${sectionBucket}"]`)!;
+    return Array.from(section.querySelectorAll('lucarne-task-row')).map(
+      (r) => (r as HTMLElement & { task: RenderableTask }).task.uid,
+    );
+  }
+
+  it('sinks a completed routine below the active tasks in its bucket', async () => {
+    // Regression: routines sort ahead of chores, so ticking one used to pin the
+    // crossed-out row to the TOP of its section instead of moving it out of the way.
+    const meta = makeTask().metadata;
+    const el = makeEl([
+      makeTask({ uid: 'r-done', summary: 'Water tree', status: 'completed', metadata: { ...meta, type: 'routine' } }),
+      makeTask({ uid: 'r-open', summary: 'Zzz routine', metadata: { ...meta, type: 'routine' } }),
+      makeTask({ uid: 'c-open', summary: 'A chore', metadata: { ...meta, type: 'chore' } }),
+    ]);
+    await el.updateComplete;
+
+    assert.deepEqual(row(el, 'anytime'), ['r-open', 'c-open', 'r-done']);
+  });
+
+  it('keeps type ordering inside both the active and the completed group', async () => {
+    // The two halves must disagree with a single whole-list type sort, or this
+    // asserts nothing: without the split the routines would collapse together
+    // ahead of the chores, giving r-open, r-done, c-open, c-done.
+    const meta = makeTask().metadata;
+    const el = makeEl([
+      makeTask({ uid: 'c-done', summary: 'B chore', status: 'completed', metadata: { ...meta, type: 'chore' } }),
+      makeTask({ uid: 'r-done', summary: 'Z routine', status: 'completed', metadata: { ...meta, type: 'routine' } }),
+      makeTask({ uid: 'r-open', summary: 'Open routine', metadata: { ...meta, type: 'routine' } }),
+      makeTask({ uid: 'c-open', summary: 'A chore', metadata: { ...meta, type: 'chore' } }),
+    ]);
+    await el.updateComplete;
+
+    assert.deepEqual(row(el, 'anytime'), ['r-open', 'c-open', 'r-done', 'c-done']);
+  });
+
+  it('sinks within the bucket, not to the bottom of the column', async () => {
+    // A finished Morning task must not jump past the Night section — the
+    // time-of-day grouping is the primary axis.
+    const meta = makeTask().metadata;
+    const el = makeEl([
+      makeTask({ uid: 'm-done', summary: 'Morning done', status: 'completed', metadata: { ...meta, type: 'routine', time_of_day: 'morning' } }),
+      makeTask({ uid: 'm-open', summary: 'Morning open', metadata: { ...meta, type: 'routine', time_of_day: 'morning' } }),
+      makeTask({ uid: 'n-open', summary: 'Night open', metadata: { ...meta, type: 'routine', time_of_day: 'night' } }),
+    ]);
+    await el.updateComplete;
+
+    assert.deepEqual(row(el, 'morning'), ['m-open', 'm-done']);
+    assert.deepEqual(row(el, 'night'), ['n-open']);
+  });
+});

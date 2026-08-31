@@ -69,6 +69,7 @@ function toRenderable(item: TodoItem): RenderableTask {
     status: item.status,
     due: item.due ?? null,
     description: item.description ?? '',
+    completed: item.completed,
     metadata: {
       item_uid: item.uid,
       member_slug: HOUSEHOLD_SLUG,
