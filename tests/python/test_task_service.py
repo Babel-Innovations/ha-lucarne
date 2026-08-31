@@ -761,6 +761,41 @@ async def test_add_task_reports_the_insert_failure_when_the_rollback_also_fails(
     assert len(entity.todo_items or []) == 1
 
 
+async def test_a_broken_database_reports_a_named_error_not_an_unexpected_exception(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """Issue #127, end to end on the handler it was reported against.
+
+    A locked database used to leave ``delete_task`` as a raw
+    ``sqlite3.OperationalError`` — not a ``HomeAssistantError``, so HA logged an
+    "Unexpected exception" traceback and told the caller "Unknown error" with no
+    indication of which task or service it came from. ``delete_task`` reads before
+    it writes, which is why the read half of the store had to translate too.
+    """
+    _entry, store, _ = await _setup_with_member(hass, tmp_path)
+    response = await hass.services.async_call(
+        DOMAIN,
+        "add_task",
+        {"member": "anna", "summary": "Brush teeth"},
+        blocking=True,
+        return_response=True,
+    )
+    assert response is not None
+    uid = response["uid"]
+
+    with patch.object(
+        store, "_db_connect", side_effect=sqlite3.OperationalError("database is locked")
+    ):
+        with pytest.raises(HomeAssistantError) as excinfo:
+            await hass.services.async_call(
+                DOMAIN, "delete_task", {"uid": uid}, blocking=True
+            )
+
+    assert not isinstance(excinfo.value, sqlite3.Error)
+    assert uid in str(excinfo.value)
+    assert "database is locked" in str(excinfo.value)
+
+
 class _StubItem:
     def __init__(self, uid: str) -> None:
         self.uid = uid

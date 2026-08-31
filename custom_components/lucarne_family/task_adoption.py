@@ -27,7 +27,6 @@ Everything else adopts as a plain manual chore.
 from __future__ import annotations
 
 import logging
-import sqlite3
 from typing import Any
 
 from homeassistant.components.todo.const import DATA_COMPONENT
@@ -35,7 +34,7 @@ from homeassistant.core import HomeAssistant
 
 from .apple_sentinel_backfill import APPLE_SENTINEL_RE
 from .const import HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
-from .store import LucarneFamilyStore
+from .store import LucarneFamilyStore, StoreIntegrityError
 from .task_locks import async_task_uid_lock
 
 _LOGGER = logging.getLogger(__name__)
@@ -197,7 +196,7 @@ async def async_adopt_item(
                 rotation_owners=defaults["rotation_owners"],
                 current_owner=defaults["current_owner"],
             )
-        except sqlite3.IntegrityError:
+        except StoreIntegrityError:
             # The uid lock keeps another *locked* inserter out of the gap between
             # the check above and this INSERT, but item_uid is the PRIMARY KEY and
             # this is a service-call path: anything that ever writes the table

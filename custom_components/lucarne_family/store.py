@@ -11,6 +11,7 @@ from typing import Any, TypeVar
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import CONF_MEMBERS, STORAGE_VERSION
 from .models import Member
@@ -20,6 +21,43 @@ _LOGGER = logging.getLogger(__name__)
 _SCHEMA_SQL = Path(__file__).parent / "schema.sql"
 
 _T = TypeVar("_T")
+
+
+class StoreError(HomeAssistantError):
+    """A statement against Lucarne's own SQLite database failed (issue #127).
+
+    ``sqlite3.Error`` and ``OSError`` are neither of them a ``HomeAssistantError``,
+    so one reaching a service or WebSocket handler is reported as
+    ``unknown_error``: the caller is told "Unknown error" and the log gets an
+    "Unexpected exception" traceback naming neither the task nor the service.
+    Translating here rather than in each handler means every caller benefits, and
+    the store is the only layer that knows the failure came from Lucarne's
+    database rather than from a todo platform (#119 wraps that half).
+    """
+
+
+class StoreIntegrityError(StoreError):
+    """A write violated a constraint — in practice a lost ``item_uid`` race.
+
+    Separate from :class:`StoreError` because ``async_adopt_item`` and
+    ``async_backfill_apple_sentinel`` retreat quietly when they lose the PRIMARY
+    KEY race (the row is there either way) while still surfacing a broken
+    database. They caught ``sqlite3.IntegrityError`` before this translation
+    existed; this is the same distinction, kept inside HA's exception hierarchy.
+    """
+
+
+def _store_error(operation: str, err: Exception) -> StoreError:
+    """Name what failed, and keep the driver's own words on the wire.
+
+    HA sends ``str(err)`` to the client for a ``HomeAssistantError``, so
+    "database is locked" only survives by being interpolated here.
+    """
+    if isinstance(err, sqlite3.IntegrityError):
+        cls: type[StoreError] = StoreIntegrityError
+    else:
+        cls = StoreError
+    return cls(f"Could not {operation} in Lucarne's database: {err}")
 
 
 async def _async_settled(job: asyncio.Future[Any]) -> None:
@@ -223,7 +261,15 @@ class LucarneFamilyStore:
         self._db_path = db_path
 
     async def async_init(self) -> None:
-        """Open SQLite, apply schema DDL, and record schema version."""
+        """Open SQLite, apply schema DDL, and record schema version.
+
+        One of the two writes outside ``_async_write``, and — like
+        ``async_rename_member_slug`` — deliberately left untranslated by #127. A
+        failure here propagates into HA's own config-entry setup, which already
+        catches it and reports the entry as failed with this integration named;
+        there is no path from here to a service or WebSocket caller, because
+        nothing is registered until this returns.
+        """
         schema_sql = await self._hass.async_add_executor_job(_read_schema)
         await self._hass.async_add_executor_job(_init_db, self._db_path, schema_sql)
         _LOGGER.debug("LucarneFamilyStore initialised at %s", self._db_path)
@@ -258,7 +304,22 @@ class LucarneFamilyStore:
         con.row_factory = sqlite3.Row
         return con
 
-    async def _async_write(self, func: Callable[[], _T]) -> _T:
+    async def _async_read(self, func: Callable[[], _T], operation: str) -> _T:
+        """Run a blocking read in the executor, translating a failure (#127).
+
+        Deliberately not routed through ``_async_write``: abandoning a ``SELECT``
+        on cancellation costs nothing, and #118's drain exists only to order a
+        write against the lock its caller holds. What reads *do* share is the
+        failure mode — a locked or unreadable database fails them identically,
+        and a read runs first on nearly every handler (``_resolve_task_target``),
+        so leaving them raw would keep the whole #127 symptom reachable.
+        """
+        try:
+            return await self._hass.async_add_executor_job(func)
+        except (sqlite3.Error, OSError) as err:
+            raise _store_error(operation, err) from err
+
+    async def _async_write(self, func: Callable[[], _T], operation: str) -> _T:
         """Run a blocking write in the executor without ever abandoning it (#118).
 
         A plain ``await hass.async_add_executor_job(...)`` is abandonable:
@@ -302,9 +363,15 @@ class LucarneFamilyStore:
         ``async_block_till_done`` altogether — see ``_async_drain``, where that is
         the property that keeps a drain clear of shutdown.
 
-        Reads are deliberately not routed through here: abandoning a ``SELECT``
-        costs nothing, and neither does abandoning ``async_init``, which runs
-        before any service is registered.
+        Reads go through ``_async_read`` instead: abandoning a ``SELECT`` costs
+        nothing, and neither does abandoning ``async_init``, which runs before any
+        service is registered.
+
+        Only the ``job.result()`` path is translated (#127). The cancelled arm is
+        left exactly as it is: ``CancelledError`` is a ``BaseException`` and must
+        keep unwinding — swallowing one would release the caller's uid lock, which
+        is the whole of #118 — and a write that fails *after* its caller is gone
+        belongs to nobody, so ``_async_drain`` logs it rather than raising.
         """
         job = self._hass.loop.run_in_executor(None, func)
         try:
@@ -312,7 +379,10 @@ class LucarneFamilyStore:
         except asyncio.CancelledError:
             await _async_drain(job)
             raise
-        return job.result()
+        try:
+            return job.result()
+        except (sqlite3.Error, OSError) as err:
+            raise _store_error(operation, err) from err
 
     async def async_add_task_metadata(
         self,
@@ -349,7 +419,7 @@ class LucarneFamilyStore:
                     ),
                 )
 
-        await self._async_write(_insert)
+        await self._async_write(_insert, f"save details for task {item_uid!r}")
 
     async def async_update_task_metadata(self, item_uid: str, **fields: Any) -> None:
         """UPDATE allowed fields on a task_metadata row."""
@@ -371,7 +441,7 @@ class LucarneFamilyStore:
                     values,
                 )
 
-        await self._async_write(_update)
+        await self._async_write(_update, f"update details for task {item_uid!r}")
 
     async def async_delete_task_metadata(self, item_uid: str) -> None:
         """DELETE task_metadata row (leaves completion_log intact)."""
@@ -380,7 +450,7 @@ class LucarneFamilyStore:
             with self._db_connect() as con:
                 con.execute("DELETE FROM task_metadata WHERE item_uid = ?", (item_uid,))
 
-        await self._async_write(_delete)
+        await self._async_write(_delete, f"delete details for task {item_uid!r}")
 
     async def async_get_task_metadata(self, item_uid: str) -> dict[str, Any] | None:
         """Return task_metadata row as dict, or None if not found."""
@@ -392,7 +462,7 @@ class LucarneFamilyStore:
                 ).fetchone()
                 return dict(row) if row else None
 
-        return await self._hass.async_add_executor_job(_get)
+        return await self._async_read(_get, f"read details for task {item_uid!r}")
 
     async def async_get_tasks_for_member(self, member_slug: str) -> list[dict[str, Any]]:
         """Return all task_metadata rows for `member_slug`."""
@@ -404,7 +474,7 @@ class LucarneFamilyStore:
                 ).fetchall()
                 return [dict(r) for r in rows]
 
-        return await self._hass.async_add_executor_job(_get)
+        return await self._async_read(_get, f"list the tasks for {member_slug!r}")
 
     async def async_get_all_task_metadata(self) -> list[dict[str, Any]]:
         """Return all task_metadata rows (used by the WebSocket get_family command)."""
@@ -414,7 +484,7 @@ class LucarneFamilyStore:
                 rows = con.execute("SELECT * FROM task_metadata").fetchall()
                 return [dict(r) for r in rows]
 
-        return await self._hass.async_add_executor_job(_get)
+        return await self._async_read(_get, "list every task")
 
     async def async_get_rotating_tasks(self) -> list[dict[str, Any]]:
         """Return all task_metadata rows where type='rotating'."""
@@ -426,7 +496,7 @@ class LucarneFamilyStore:
                 ).fetchall()
                 return [dict(r) for r in rows]
 
-        return await self._hass.async_add_executor_job(_get)
+        return await self._async_read(_get, "list the rotating tasks")
 
     def get_task_metadata_sync(self, member_slug: str) -> list[dict[str, Any]]:
         """Sync helper used by make_recurrence_evaluator (called from executor context)."""
@@ -454,6 +524,12 @@ class LucarneFamilyStore:
         was built for. Forcing it to land would commit the migration and then skip
         both the entity rename and the rollback, leaving rows on the new slug with
         the member, its entities and the config entry still on the old one.
+
+        Left untranslated by #127 for a separate reason: its only caller is the
+        options flow, which already catches ``Exception`` around both this call
+        and its rollback and re-renders the form with ``entity_rename_failed``.
+        A raw sqlite error cannot reach a user from here, so wrapping would change
+        nothing but the text of a log line.
         """
 
         def _rename() -> None:
@@ -501,7 +577,7 @@ class LucarneFamilyStore:
                     ),
                 )
 
-        await self._async_write(_insert)
+        await self._async_write(_insert, f"log the completion of task {item_uid!r}")
 
     async def async_get_streak(
         self,
@@ -555,4 +631,6 @@ class LucarneFamilyStore:
                     break
             return streak
 
-        return await self._hass.async_add_executor_job(_compute)
+        return await self._async_read(
+            _compute, f"compute the streak for {member_slug!r}"
+        )

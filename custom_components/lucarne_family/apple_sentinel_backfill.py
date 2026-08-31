@@ -19,12 +19,11 @@ from __future__ import annotations
 
 import logging
 import re
-import sqlite3
 
 from homeassistant.components.todo.const import DATA_COMPONENT
 from homeassistant.core import HomeAssistant
 
-from .store import LucarneFamilyStore
+from .store import LucarneFamilyStore, StoreIntegrityError
 from .task_locks import async_task_uid_lock
 
 _LOGGER = logging.getLogger(__name__)
@@ -102,7 +101,7 @@ async def _async_backfill_locked(
             source="apple",
             apple_uid=apple_uid,
         )
-    except sqlite3.IntegrityError:
+    except StoreIntegrityError:
         # Symmetric with task_adoption.async_adopt_item: the uid lock this runs
         # under excludes every other *locked* inserter from the gap between the
         # existence check above and this INSERT, but item_uid is the PRIMARY KEY

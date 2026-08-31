@@ -421,6 +421,26 @@ Single HACS item — `integration` category only. The cards ride along inside th
   must keep unwinding (#118), and `handle_add_task`'s rollback relies on `pytest.fail`'s
   `BaseException` escaping it. `handle_add_task`'s rollback logs and swallows its own failure
   so the bare `raise` still surfaces the INSERT error the caller can act on.
+- **`store.py` is the translation boundary for Lucarne's own SQLite** (#127), the other
+  half of the same problem: `sqlite3.Error` and `OSError` are not `HomeAssistantError`
+  either, so a `database is locked` used to leave a handler raw and arrive as
+  `unknown_error` + "Unexpected exception". `_async_write` and `_async_read` wrap into
+  `StoreError`, naming the operation and the uid with the driver's exception as
+  `__cause__` — HA sends `str(err)` on the wire, so the driver's own words survive only by
+  being interpolated. **Reads translate too**: nearly every handler reads first
+  (`_resolve_task_target`), so wrapping writes alone would leave the symptom reachable on
+  the commonest path. Three constraints. Only the `job.result()` path is wrapped — the
+  `except asyncio.CancelledError` / `_async_drain` arm stays exactly as #118 left it, and
+  catching `BaseException` there would strand the caller's uid lock. `sqlite3.IntegrityError`
+  becomes the `StoreIntegrityError` subclass, which is what `async_adopt_item` and
+  `async_backfill_apple_sentinel` catch to retreat quietly from a lost `item_uid` PRIMARY KEY
+  race — they caught the bare `sqlite3` class before, and collapsing the subclass away turns
+  a benign race back into an error out of a service call. And the two bulk writes outside
+  `_async_write` are deliberately **not** translated: `async_init` fails into HA's own
+  config-entry setup (which names the integration, and nothing is registered yet), and
+  `async_rename_member_slug`'s only caller already catches `Exception` and re-renders the
+  options form with `entity_rename_failed`. Neither can reach a user raw; each docstring
+  says so.
 - **Orphaned `task_metadata` is reaped by reading the lists, never by diffing snapshots**
   (#116): every removal path except `lucarne_family.delete_task` — HA's to-do panel,
   `todo.remove_item` from an automation/voice/agent, the Companion app — deletes the todo item
@@ -540,6 +560,8 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Don't** write HA automations for the time-based triggers — the integration's listeners own these.
 - **Don't** let a todo-entity write out of a service handler unwrapped, and don't add a
   pre-check to decide the message — classify after the failure (#119).
+- **Don't** let a `sqlite3` error out of the store, and don't collapse
+  `StoreIntegrityError` into `StoreError` — the adoption paths key their retreat on it (#127).
 - **Don't** hand-roll RRULE date math — use `recurrence.py` (Python) or `recurrence.ts` (JS).
 - **Don't** write files to `<config>/www/` outside `/local/lucarne/avatars/`.
 - **Don't** add `contributing.md`, `code_of_conduct.md`, or other meta docs unless asked.

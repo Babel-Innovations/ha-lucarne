@@ -2,6 +2,23 @@
 
 All services are in the `lucarne_family` domain and are callable from **Developer Tools → Services** or via `hass.callService()` / `hass.services.async_call()` in automations.
 
+**Database errors apply to every service below.** A statement against Lucarne's own
+SQLite database that fails — `database is locked`, a disk error, a constraint
+violation — is reported as a `HomeAssistantError` naming the operation and what it
+was for: the task's uid where the statement acts on one task, otherwise the member
+slug, and neither for the whole-table reads. It carries the underlying SQLite or
+filesystem exception as its cause. For example:
+
+```text
+Could not delete details for task '550e…' in Lucarne's database: database is locked
+```
+
+It is never re-raised raw, which HA would report to the caller as `unknown_error`
+with an "Unexpected exception" traceback and no indication of which operation or
+service it came from. This covers reads as well as writes; the per-service "Runtime
+errors" sections below are about **todo-platform** failures, which are a separate
+translation.
+
 > **Phase 5 status**: Services documented here are fully implemented. The `lucarne-today-card` reads household tasks via the existing `lucarne_family/get_family` WebSocket command (no new services in Phase 5). Two additional services — `perform_daily_reset` and `evaluate_all_streaks` — are already registered and callable from Developer Tools → Services, but are not yet documented below (Phase 6 will add their reference entries). They take no fields; the in-process time-change listeners call them on schedule, and they can also be triggered manually to force an immediate reset or streak recompute.
 
 ---
