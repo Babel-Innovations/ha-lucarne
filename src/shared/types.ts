@@ -1,5 +1,74 @@
+import type { Connection, Context, HassEntities, HassServiceTarget } from 'home-assistant-js-websocket';
+
 export type { HassEntity } from 'home-assistant-js-websocket';
-export type { HomeAssistant } from 'custom-card-helpers';
+
+/** Result of `hass.callService` when called with the `returnResponse` flag. */
+export interface ServiceCallResponse<T = unknown> {
+  context: Context;
+  response?: T;
+}
+
+/**
+ * The slice of the frontend's `hass` object Lucarne actually reads.
+ *
+ * Declared here rather than re-exported from `custom-card-helpers`, which was
+ * the only path to the deprecated `@formatjs/intl-utils` (#130). Widen it only
+ * when a card starts reading something new, so the compiler keeps naming our
+ * real surface on HA core.
+ *
+ * Read as a *consumer* contract, not a structural supertype of HA's own object:
+ * `callService`'s void arm is a deliberate narrowing (see below) that HA core's
+ * signature would not satisfy. Nothing assigns the real `hass` to this type —
+ * cards receive it unchecked from HA, and test mocks reach it through an
+ * unchecked cast — so the narrowing costs nothing and buys the call-site safety.
+ *
+ * `callService` is typed to the live frontend's six-argument shape.
+ * `custom-card-helpers` still described the stale four-argument
+ * `Promise<void>` version, which is why call sites needing a service response
+ * used to cast around it.
+ */
+export interface HomeAssistant {
+  states: HassEntities;
+  connection: Connection;
+  callApi: <T>(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    path: string,
+    parameters?: Record<string, unknown>,
+  ) => Promise<T>;
+
+  /**
+   * Overloaded on `returnResponse` — method shorthand rather than the property
+   * style used above, because the arrow-property form cannot carry overloads.
+   * A response is readable exactly when the flag asked HA for one, so a call
+   * that never requested one cannot reach for a `.response` that a service
+   * without `supports_response` never sends. HA itself resolves `{context}` on
+   * both paths; `void` describes what a caller may read, not what arrives.
+   *
+   * Naming `<T>` selects the response arm, so it requires all six arguments —
+   * a three-argument call with a type argument reports an arity error rather
+   * than anything about `returnResponse`.
+   *
+   * `| undefined` on that arm is belt-and-braces for an upstream we track by
+   * hand; the "service answered without a payload" case is already carried by
+   * `response?:` being optional, which is `addTask`'s second `?.`.
+   */
+  callService<T = unknown>(
+    domain: string,
+    service: string,
+    serviceData: Record<string, unknown> | undefined,
+    target: HassServiceTarget | undefined,
+    notifyOnError: boolean | undefined,
+    returnResponse: true,
+  ): Promise<ServiceCallResponse<T> | undefined>;
+  callService(
+    domain: string,
+    service: string,
+    serviceData?: Record<string, unknown>,
+    target?: HassServiceTarget,
+    notifyOnError?: boolean,
+    returnResponse?: false,
+  ): Promise<void>;
+}
 
 export type TaskType = 'routine' | 'chore' | 'rotating';
 export type TaskSource = 'manual' | 'template' | 'apple';

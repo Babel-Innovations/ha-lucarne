@@ -15,21 +15,6 @@ export interface AddTaskParams {
 }
 
 /**
- * `hass.callService` with the `returnResponse` flag. The `custom-card-helpers`
- * type is stale (4 args, `Promise<void>`), but the live HA frontend accepts
- * `(domain, service, data, target, notifyOnError, returnResponse)` and returns
- * `{ context, response }` when the service supports a response.
- */
-type CallServiceWithResponse = (
-  domain: string,
-  service: string,
-  serviceData?: Record<string, unknown>,
-  target?: unknown,
-  notifyOnError?: boolean,
-  returnResponse?: boolean,
-) => Promise<{ response?: { uid?: string } } | undefined>;
-
-/**
  * Add a task and return the server-generated uid (or `null` if the backend
  * doesn't return one — e.g. an older integration build).
  *
@@ -57,9 +42,8 @@ export async function addTask(
   if (params.current_owner !== undefined) serviceData.current_owner = params.current_owner;
 
   // Invoke as a method on `hass` so the receiver binding is preserved — the
-  // live HA frontend's callService may rely on `this`. (Cast only widens the
-  // stale 4-arg type to accept the returnResponse flag.)
-  const result = await (hass as unknown as { callService: CallServiceWithResponse }).callService(
+  // live HA frontend's callService may rely on `this`.
+  const result = await hass.callService<{ uid?: string }>(
     'lucarne_family',
     'add_task',
     serviceData,

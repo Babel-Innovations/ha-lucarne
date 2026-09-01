@@ -5,7 +5,7 @@ import type { LucarneCalendarCardConfig } from '../cards/lucarne-calendar-card.j
 import { lucarneStyles } from '../shared/design-tokens.js';
 import { editorBaseStyles } from '../shared/editor-styles.js';
 import { ensureHaFormElements } from '../shared/ha-elements.js';
-import { fireEvent } from 'custom-card-helpers';
+import { fireEvent } from '../shared/fire-event.js';
 
 @customElement('lucarne-calendar-card-editor')
 export class LucarneCalendarCardEditor extends LitElement {
