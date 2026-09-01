@@ -7,7 +7,7 @@ import { DEFAULT_AFTERNOON_START, DEFAULT_NIGHT_START } from '../cards/lucarne-c
 import { lucarneStyles } from '../shared/design-tokens.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
-import { fireEvent } from 'custom-card-helpers';
+import { fireEvent } from '../shared/fire-event.js';
 import '../components/avatar-upload-modal.js';
 import '../components/reorder-list.js';
 import type { ReorderItem } from '../components/reorder-list.js';

@@ -7,7 +7,7 @@ import { SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
 import { editorBaseStyles } from '../shared/editor-styles.js';
 import { ensureHaFormElements } from '../shared/ha-elements.js';
-import { fireEvent } from 'custom-card-helpers';
+import { fireEvent } from '../shared/fire-event.js';
 import '../components/reorder-list.js';
 import type { ReorderItem } from '../components/reorder-list.js';
 
