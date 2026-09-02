@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.5.1 — 2026-09-01
+
+**Fixes:**
+-  translate sqlite failures into HomeAssistantError (fixes #127)
+-  show the server's error message instead of a generic fallback
+-  translate a todo platform's error at the service boundary
+-  clear stale completed chores and sink completed rows
+-  drain a cancelled store write before releasing the uid lock
+-  reap task_metadata orphaned by an outside item delete
+
+
 ## v1.5.0 — 2026-08-25
 
 **Features:**
