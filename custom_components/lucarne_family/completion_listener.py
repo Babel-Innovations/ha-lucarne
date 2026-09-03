@@ -15,14 +15,12 @@ Reset suppression:
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 
 from homeassistant.components.todo.const import DATA_COMPONENT, TodoItemStatus
 from homeassistant.core import CALLBACK_TYPE, CoreState, Event, HomeAssistant, callback
 from homeassistant.helpers.event import EventStateChangedData, async_track_state_change_event
 
 from .apple_sentinel_backfill import async_backfill_apple_sentinel
-from .const import EVENT_APPLE_WRITEBACK_REQUESTED
 from .store import LucarneFamilyStore
 from .task_adoption import resolve_member_slug
 
@@ -228,27 +226,6 @@ def async_start_completion_listener(
                     {"member": member_slug, "uid": uid, "summary": summary},
                 )
                 members_with_completions.add(member_slug)
-
-                # Round-trip writeback event: only for apple-sourced tasks.
-                if (
-                    metadata
-                    and metadata.get("source") == "apple"
-                    and metadata.get("apple_uid")
-                    and entry_id
-                ):
-                    cfg_entry = hass.config_entries.async_get_entry(entry_id)
-                    if cfg_entry is not None:
-                        round_trip = cfg_entry.data.get("round_trip", {})
-                        if round_trip.get("enabled"):
-                            hass.bus.async_fire(
-                                EVENT_APPLE_WRITEBACK_REQUESTED,
-                                {
-                                    "apple_uid": metadata["apple_uid"],
-                                    "status": "completed",
-                                    "timestamp": datetime.now(UTC).isoformat(),
-                                    "device_name": round_trip.get("device_name", "Sync device"),
-                                },
-                            )
 
         # Check all-routines-done for each member that had at least one completion.
         # Called once per member (not per UID) to avoid firing the composite event

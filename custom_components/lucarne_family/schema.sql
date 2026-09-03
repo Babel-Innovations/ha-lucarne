@@ -29,3 +29,10 @@ CREATE TABLE IF NOT EXISTS completion_log (
     recurrence_at_time TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_completion_log_member_ts ON completion_log(member_slug, timestamp DESC);
+CREATE TABLE IF NOT EXISTS apple_sync_state (
+    apple_uid TEXT PRIMARY KEY NOT NULL,
+    member_slug TEXT NOT NULL,
+    item_uid TEXT NOT NULL,
+    last_seen TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_apple_sync_state_member ON apple_sync_state(member_slug);

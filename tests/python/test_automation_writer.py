@@ -39,12 +39,6 @@ def _make_entry(
             "members": [],
             "reset_time": reset_time,
             "streak_check_time": streak_check_time,
-            "round_trip": {
-                "enabled": False,
-                "webhook_url": "",
-                "secret": "",
-                "device_name": "",
-            },
             "custom_presets": [],
         },
     )
@@ -232,12 +226,6 @@ async def test_services_registered_after_setup_entry(hass: HomeAssistant) -> Non
             "members": [],
             "reset_time": "04:00",
             "streak_check_time": "21:00",
-            "round_trip": {
-                "enabled": False,
-                "webhook_url": "",
-                "secret": "",
-                "device_name": "",
-            },
             "custom_presets": [],
         },
     )

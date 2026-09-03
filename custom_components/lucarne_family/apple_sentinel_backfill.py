@@ -1,19 +1,20 @@
-"""Apple-sentinel backfill for items synced via the Reminders bridge (Phase 3-D).
+"""Apple-sentinel backfill for items synced from Apple Reminders.
 
-When the lucarne_reminders_sync blueprint syncs an Apple Reminders item it
-embeds a sentinel in the item's description:
+Every item the bridge receiver (``apple_bridge.py``) writes carries a sentinel
+at the start of its description:
 
     [apple:UUID]
 
-This module detects that sentinel on newly-appeared todo items and inserts a
-task_metadata row so the rest of the integration can treat synced items as
-first-class tasks.
+This module turns that sentinel into a ``task_metadata`` row (``source=apple``)
+so the rest of the integration treats synced items as first-class tasks. The
+receiver calls the locked body directly when it creates an item; the
+completion listener calls the wrapper for items that appear by any other route
+(a list restored from backup, an item copied between lists).
 
 Regex is locked — do not alter:
     r"\\[apple:([^\\]]+)\\]"
-Matches standard UUIDs, Shortcuts-provided IDs such as ``apple-stable-uuid``,
-and opaque Apple IDs.  The prefix ``apple:`` is intentionally lowercase to
-match what ``blueprints/automation/lucarne_reminders_sync.yaml`` documents.
+Matches standard UUIDs and opaque Apple identifiers. ``src/shared/task-notes.ts``
+mirrors it to strip the sentinel from rendered notes; keep the two in step.
 """
 from __future__ import annotations
 
@@ -55,17 +56,23 @@ async def async_backfill_apple_sentinel(
     daily reset (``reconcile``) (issue #114).
     """
     async with async_task_uid_lock(uid):
-        return await _async_backfill_locked(hass, store, entity_id, uid, member_slug)
+        return await async_backfill_apple_sentinel_locked(
+            hass, store, entity_id, uid, member_slug
+        )
 
 
-async def _async_backfill_locked(
+async def async_backfill_apple_sentinel_locked(
     hass: HomeAssistant,
     store: LucarneFamilyStore,
     entity_id: str,
     uid: str,
     member_slug: str,
 ) -> bool:
-    """Body of :func:`async_backfill_apple_sentinel`, run under that uid's lock."""
+    """Body of :func:`async_backfill_apple_sentinel`.
+
+    The caller **must** hold ``async_task_uid_lock(uid)`` — the bridge receiver
+    does, across the item creation that precedes this INSERT (#114).
+    """
     existing = await store.async_get_task_metadata(uid)
     if existing is not None:
         return False

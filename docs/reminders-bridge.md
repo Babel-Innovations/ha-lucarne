@@ -1,203 +1,168 @@
-# Reminders Bridge
+# Apple Reminders bridge
 
-End-to-end flow: MacOS Shortcuts.app → HA webhook → local_todo entities → iPad dashboard.
+Mirror Apple Reminders lists into Lucarne, and check reminders off in Apple when they are
+completed or deleted in Home Assistant. Two pieces:
 
-## Flow
+- **`lucarne-bridge`**, a small command-line app on any Mac signed in to the family's iCloud
+  account. It reads Reminders through Apple's EventKit framework and runs every 5 minutes
+  from `launchd`.
+- **The integration's webhook receiver**, which does all the matching and writing on the HA
+  side. There is no blueprint, no automation and no Shortcut to build.
 
-1. launchd fires `shortcuts run ha-lucarne-sync` every 300 s
-2. Shortcut reads configured Apple Reminders lists, applies per-list filters
-3. Shortcut builds JSON payload and POSTs to `http://homeassistant.local:8123/api/webhook/<secret>`
-4. HA automation receives webhook, diffs items by Apple Reminder UID, upserts into `todo.*` entities
-5. Wall-iPad today card displays updated items (task-count badge)
+Apple removed Reminders from iCloud's CalDAV service in iOS 13, so a Mac is the only place a
+program can read them reliably. Nothing else needs to run on the Mac.
 
-## Log locations
+## Install (three steps)
 
-- MacOS: `~/Library/Logs/ha-lucarne-sync.log`
-- HA: Settings → Automations & Scenes → `lucarne_reminders_sync` → Traces tab
+1. **Install the app on the Mac.** Either
 
----
-
-## Troubleshooting FAQ
-
-### "Reminders not syncing — nothing appears in HA"
-
-1. Check launchd is running the agent:
    ```sh
-   launchctl list | grep ha-lucarne-sync
-   ```
-   Expected output: one line with `0` exit code. Non-zero = Shortcut errored.
-
-2. Check the log:
-   ```sh
-   tail ~/Library/Logs/ha-lucarne-sync.log
-   ```
-   Quiet log (no output) means the Shortcut runs successfully but the Keychain lookup or
-   Shortcuts.app launch hasn't had a problem yet — look for HTTP non-200 responses.
-
-3. Confirm Shortcuts.app has been launched at least once (required for `shortcuts run` CLI after
-   each macOS major version upgrade). Launch it from Spotlight, then re-run:
-   ```sh
-   shortcuts run "ha-lucarne-sync"
-   echo "Exit: $?"
+   brew install babel-innovations/lucarne/lucarne-bridge
    ```
 
-4. If HA is reached via Tailscale (100.x address), open the `lucarne_reminders_sync` automation
-   instance and set **Local only** to **off** (disables RFC1918-only restriction).
+   or, without Homebrew:
 
-### "Items appear duplicated in HA"
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/Babel-Innovations/ha-lucarne/main/bridge/install.sh | sh
+   ```
 
-The blueprint deduplicates by Apple Reminder UID (`id` field from the Shortcut). If you see
-duplicates, the Shortcut may be sending empty or malformed UIDs. Check the Shortcut's `id` action:
-it must read the `id` property from each Reminder, not the `name`.
+   The release binary is signed and notarized. Install it with one of the commands above
+   rather than downloading it in a browser: a browser download is quarantined by macOS.
 
-To clean up existing duplicates: HA → the todo entity → delete duplicate items manually.
+2. **Copy the install command from Home Assistant.** Open Settings → Devices & services →
+   Lucarne Family → Configure → **Apple Reminders bridge**. The dialog shows a line like
 
-### "Items completed in HA reappear after the next sync"
+   ```sh
+   lucarne-bridge install http://homeassistant.local:8123/api/webhook/6f1c…
+   ```
 
-Expected behavior in v0.1. The bridge is **one-way** (Reminders → HA). Completing an item in HA
-does not mark it complete in Apple Reminders, so the next sync re-adds it as incomplete.
+   Run it in Terminal on the Mac. It stores the URL, installs the `launchd` agent and runs
+   the first sync. macOS asks whether `lucarne-bridge` may access Reminders: click **Allow**.
+   The command waits for that first sync and prints what it did.
 
-Fix in v0.2: the bridge will read HA todo completion state and mark the corresponding Apple
-Reminder complete. Until then, complete items in Apple Reminders (on your iPhone/Mac), not in HA.
+   If the dialog says no URL is configured, set an internal URL under Settings → System →
+   Network first. The URL must be reachable from the Mac; a Tailscale address is fine.
 
-### "Sync runs but the todo entity is empty"
+3. **Map lists.** In the same dialog, set the **household** Reminders list (default
+   `Family`). Every reminder in it lands in the shared household column. To give a member
+   their own list, open Manage members → Edit member and fill in **Apple Reminders list**.
+   After the first sync the fields offer the list names the Mac actually has as
+   suggestions; before that, type the name as Reminders shows it (case does not matter). A
+   name the Mac does not have shows up as a Repairs issue after the next sync.
 
-Confirm the Reminders list names in the Shortcut match your actual iCloud list names exactly
-(case-sensitive). Open Shortcuts.app → find `ha-lucarne-sync` → check the "Get Reminders" steps.
+That is the whole setup. `lucarne-bridge status` on the Mac shows the last sync; the HA dialog
+shows it too.
 
-Also confirm the iCloud account is signed in on this Mac and the lists are synced: open
-Reminders.app and verify the lists appear.
+## What syncs, in both directions
 
-### "Mac mini goes to sleep overnight"
+| In Apple Reminders | In Home Assistant |
+|---|---|
+| New reminder in a mapped list | Task appears in that member's (or the household) column, with the reminder's notes and due date |
+| Title, notes or due date edited (including clearing the due date) | Task updated in place — matched by Apple's identifier, never by title |
+| Reminder completed or deleted | Task marked completed; the daily reset then removes it like any other completed chore |
 
-System Settings → Lock Screen → set "Put computer to sleep when display is off" to **Never**.
+| In Home Assistant | In Apple Reminders |
+|---|---|
+| Synced task completed | Reminder checked off on the next sync (within 5 minutes) |
+| Synced task deleted — by hand, or by the daily reset | Reminder checked off. Lucarne never deletes a reminder |
+| Completed task un-ticked before the next sync | Nothing sent; the reminder stays open |
 
-The mini must stay awake for launchd to fire. Check the current sleep setting:
-```sh
-pmset -g | grep sleep
-```
-`sleep 0` = never sleep.
+A few consequences worth knowing:
 
-### "launchd agent fires but errors with code 1"
+- **Completing in HA sticks.** Until the Mac confirms the reminder is closed, a task
+  completed in HA stays completed even though Apple still lists the reminder as open.
+- **Reopening a reminder in Apple is not mirrored.** Once HA has completed a task, unchecking
+  the reminder in Apple does not reopen it in HA.
+- Only *incomplete* reminders are sent. Completed reminders never appear in HA.
+- Reminders are routed by **list**. Apple does not expose shared-list assignees, tags or
+  sections to programs, so "assign to Anna" inside one shared list cannot be read; give Anna
+  her own list instead (it can be shared with the family in Reminders).
+- Two mapped targets can never share one list; the options flow rejects it.
 
-Check the log for the actual error. Common causes:
-- Keychain entry missing: re-run `security add-generic-password -a "ha-lucarne" -s "ha-lucarne-webhook-secret" -w "<secret>"`
-- HA unreachable: ping `homeassistant.local` from the mini
-- Webhook URL changed: verify the URL in the Shortcut matches the blueprint's configured webhook token
+## On the Mac
 
-### "Adapting the bridge to fewer or more Reminders lists"
+- `lucarne-bridge status` — configuration, whether the agent is loaded, the last sync result.
+- `lucarne-bridge sync` — run one sync now and print the outcome.
+- `lucarne-bridge logs` — follow `~/Library/Logs/lucarne-bridge.log`.
+- `lucarne-bridge uninstall` — remove the agent and its configuration.
 
-Open the Shortcut in Shortcuts.app and add or remove "Get Reminders" + "Repeat with Each" step
-pairs — one pair per list. Then open the `lucarne_reminders_sync` automation instance and edit the
-**List Mappings** JSON field to add or remove the corresponding key/value pair, e.g.:
-```json
-{"Family": "todo.ingrid_tasks", "Groceries": "todo.groceries"}
-```
+The Mac must stay awake for the agent to fire. `lucarne-bridge install` warns when
+System Settings → Energy (or Lock Screen) still lets the Mac sleep. `launchd` catches up on
+wake, so a sleeping Mac loses nothing, it just syncs late.
 
-### "Using shared iCloud lists vs. private lists"
+The log is append-only and nothing rotates it (about 100k lines a year at the default
+interval). Truncate it whenever you like, or add a `newsyslog.d` rule for it.
 
-The Shortcut reads any list you configure. For shared lists (e.g. a Family list where both adults
-can add items), the Shortcut picks up all items regardless of who added them. If you want per-
-person filtering (e.g. only Ingrid's assignments), add an Assignee filter in the Shortcut's
-"Get Reminders" step: filter by Assignee = "Ingrid".
+Configuration lives in `~/Library/Application Support/lucarne-bridge/` (the webhook URL, mode
+0600, and the last sync state). The webhook URL is the credential: anyone who has it can post
+reminders into your lists, so treat it like a password and use **Generate a new webhook URL**
+in the HA dialog if it leaks. Re-run the install command afterwards.
 
-## Known failure modes
+## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `shortcuts run` hangs | Shortcuts.app not launched | Launch it manually once |
-| HTTP 200 but no HA update | Local-only rejecting Tailscale IP | Open automation instance → set **Local only** to **off** |
-| List is empty in HA | iCloud not synced on this Mac | Sign in to iCloud, open Reminders.app |
-| Sync stops after macOS upgrade | `shortcuts run` CLI reset | Re-launch Shortcuts.app manually |
-| Network partition | Mini can't reach HA | Items queue in Reminders; next sync catches up |
+| Symptom | What to check |
+|---|---|
+| Install prints "Reminders access denied" | System Settings → Privacy & Security → Reminders → enable `lucarne-bridge`. To make macOS ask again: `tccutil reset Reminders com.babel-innovations.lucarne-bridge` |
+| Install prints an HTTP error | The URL is wrong or HA is unreachable from the Mac. Copy it again from the HA dialog; `curl <url>` from the Mac should return JSON |
+| A Repairs issue says a list was not found | The Mac reported its list names and the mapped one is not among them. Rename the list in Reminders or fix the mapping; the issue clears on the next sync |
+| Reminders sync but a member's column stays empty | That member has no **Apple Reminders list** set, or the list name differs. Check Edit member; after one sync the field is a dropdown |
+| Items completed in HA come back | The bridge is not running. `lucarne-bridge status` should show a sync in the last 5 minutes; `launchctl list \| grep lucarne-bridge` should show exit code 0 |
+| `lucarne-bridge status` shows `HTTP 400` | The integration rejected the payload; the message names the field. Usually a version mismatch between the app and the integration: update both |
+| After a macOS upgrade nothing syncs | macOS may have reset the Reminders permission. `lucarne-bridge sync` in Terminal shows the prompt again |
 
----
+### Upgrading from the old Shortcut-based bridge
 
-## Round-trip writeback (designed for v0.2; writeback POST deferred to a future spec)
+Items the old blueprint created carry the same `[apple:…]` marker and are picked up as-is,
+as long as the identifier Shortcuts reported matches the one EventKit reports. If it does
+not, each open reminder appears once more after the first sync. Cleanest path: delete the old
+`[apple:…]` items from the HA lists before running the install command, then let the first
+sync repopulate them. Remove the old `lucarne_reminders_sync` automation and the
+`ha-lucarne-sync` Shortcut and launchd agent; nothing uses them any more.
 
-The integration is ready to fire the round-trip event. The webhook POST from HA → Mac mini is
-deferred to a future spec.
+The former "Apple Reminders sync" options (webhook URL, secret, device name) and the
+`lucarne_family_apple_writeback_requested` event are gone. The bridge learns what to check
+off from the webhook's response, so there is nothing to subscribe to.
 
-### What is ready now
+## Protocol (for developers)
 
-When a task with `source == "apple"` **and a non-empty `apple_uid`** (set by the Apple sentinel
-backfill) flips to `completed` **and** `round_trip.enabled == true` in the Options Flow config,
-the integration fires:
+One webhook per config entry, `GET` and `POST`, at `/api/webhook/<webhook_id>`. The id is a
+64-hex token minted at setup and is the only credential; `local_only` is off so the Mac may
+reach HA over Tailscale.
 
-```yaml
-event_type: lucarne_family_apple_writeback_requested
-event_data:
-  apple_uid: "Apple-UUID-string"   # from [apple:UUID] sentinel in item description
-  status: "completed"
-  timestamp: "2026-05-25T14:30:00+00:00"   # UTC ISO-8601
-  device_name: "Mac mini"          # from Options Flow config
-```
-
-`webhook_url` and `secret` are **never** included in the event payload. HA events are visible to
-every integration and any user with Developer Tools access; secrets stay in `entry.data` only.
-
-Enable round-trip in the Options Flow:
-**Settings → Devices & Services → Lucarne Family → Configure → Apple Reminders sync**
-
-### Accessor contract for future subscribers
-
-Future-spec code that subscribes to `lucarne_family_apple_writeback_requested` and needs to POST
-to the webhook **MUST** call:
-
-```python
-from custom_components.lucarne_family import get_round_trip_config
-
-config = get_round_trip_config(hass)
-# config is None if the integration is not set up or round-trip is disabled.
-# config.webhook_url, config.secret, config.device_name are the typed fields.
-```
-
-**NEVER read `entry.data["round_trip"]` directly.** The accessor abstracts the storage layout so
-a future migration does not break subscribers.
-
-### Full protocol (for the future-spec implementer)
-
-**Trigger**: HA event `lucarne_family_apple_writeback_requested` — subscriber receives it from
-the HA bus. Get `webhook_url` and `secret` by calling `get_round_trip_config(hass)`.
-
-**Receiver**: any device with Apple Reminders write access (Mac mini in the current bridge,
-or any iCloud-connected automation server).
-
-**Webhook contract** — POST to `webhook_url`:
+**`GET`** returns which lists to send (`sync_interval` is advisory; the launchd interval is
+fixed at install time by `lucarne-bridge install --interval`):
 
 ```json
-{
-  "apple_uid": "<UUID>",
-  "status": "completed",
-  "timestamp": "2026-05-23T17:00:00Z",
-  "device_name": "Mac mini"
-}
+{"version": 1, "sync_interval": 300,
+ "lists": [{"name": "Family", "target": "household", "entity_id": "todo.lucarne_household"},
+           {"name": "Anna",   "target": "anna",      "entity_id": "todo.anna"}]}
 ```
 
-**Authentication**: HMAC-SHA256 of the raw JSON body using `secret`, sent as `X-Lucarne-Signature`
-header. Receiver verifies before acting.
+**`POST`** carries every incomplete reminder of those lists plus the names of all lists on
+the Mac:
 
+```json
+{"version": 1, "host": "mac-mini", "bridge_version": "1.6.0",
+ "available_lists": ["Family", "Anna", "Groceries"],
+ "lists": [{"name": "Family", "items": [
+   {"id": "6B5B…", "title": "Buy milk", "due": "2026-09-04", "notes": "2 litres"}]}]}
 ```
-X-Lucarne-Signature: sha256=<hex_digest>
+
+`due` is a bare date when the reminder has no time, otherwise RFC 3339 with an offset. A
+`due` the integration cannot parse is dropped (the reminder still syncs, without a date); an
+`id` containing `]` or whitespace is skipped, since it could not be stored in the sentinel.
+
+The response lists what the Mac must check off:
+
+```json
+{"ok": true, "complete": ["6B5B…"], "received": 12, "created": 1, "updated": 3,
+ "completed_in_ha": 2, "skipped_lists": [], "unmapped_lists": ["Groceries"]}
 ```
 
-**Idempotency**: receiver must handle duplicate webhooks (HA may retry on network failure). Use
-`apple_uid + status + timestamp` as the dedup key.
-
-**Failure modes (future subscriber requirement)**: the subscriber should catch network errors,
-log them, and not retry. Retry queues are out of scope for this design. In v0.2 no HTTP request
-is made — the event is fired on the HA bus only.
-
-**Mac mini side** (future spec): add a Shortcuts automation or Python subscriber that receives
-the webhook, reads `apple_uid`, calls `EKEventStore.calendarItem(withIdentifier:)` (cast to
-`EKReminder`) or `fetchReminders(matching:completion:)`, and marks the Reminder completed.
-
-### Why this design
-
-- **Webhook + HMAC** is symmetric to the inbound bridge — same mental model for both directions.
-- **Generic "sync device" naming** keeps the config portable: any Mac or iCloud-connected server
-  can receive the webhook, not just the Mac mini.
-- **HMAC vs. shared-secret-in-URL**: HMAC chosen because it survives URL logging and proxy caches
-  that would expose a plain token in the query string.
-- **Secrets stay in entry.data**: firing an HA event with the secret would expose it to any
-  automation author, log parser, or Developer Tools user — unacceptable for a credential.
+`skipped_lists` names mapped lists whose HA entity could not be read this run (nothing was
+written for them). Errors come back as `400 invalid_json` / `invalid_payload` or
+`500 internal`, always with a JSON body. A stale or rotated URL does **not** error: Home
+Assistant answers an empty `200` for any unknown webhook id on purpose, so the bridge reports
+that as an unexpected (non-JSON) reply. `404 unknown_webhook` only covers the moment the
+integration is reloading. The receiver lives in
+`custom_components/lucarne_family/apple_bridge.py`.

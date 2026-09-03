@@ -180,6 +180,14 @@ remove workflows, and [docs/cards.md](docs/cards.md) for the card YAML reference
 
 ---
 
+## Apple Reminders (optional)
+
+A small signed app on any Mac signed in to the family's iCloud mirrors Reminders lists into
+the member and household columns, and checks reminders off when tasks are completed or
+deleted in Home Assistant. Install it with one command, paste the install line the
+integration shows you, and map lists in the Configure dialog. See
+[docs/reminders-bridge.md](docs/reminders-bridge.md).
+
 ## Custom events
 
 The integration fires `lucarne_family_all_routines_done` when all of a member's

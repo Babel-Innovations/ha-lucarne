@@ -1,0 +1,35 @@
+name: Bridge
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "bridge/**"
+      - ".github/workflows/bridge.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "bridge/**"
+      - ".github/workflows/bridge.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  swift:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: bridge
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - run: swift build -c release --product lucarne-bridge
+
+      - run: swift test
+
+      # The embedded Info.plist is what lets EventKit ask for Reminders access.
+      - name: Info.plist is embedded
+        run: otool -s __TEXT __info_plist .build/release/lucarne-bridge | grep -q __info_plist

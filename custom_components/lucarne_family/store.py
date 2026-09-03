@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import Any, TypeVar
@@ -507,7 +507,10 @@ class LucarneFamilyStore:
             return [dict(r) for r in rows]
 
     async def async_rename_member_slug(self, old_slug: str, new_slug: str) -> None:
-        """Update all slug-keyed rows in task_metadata and completion_log atomically.
+        """Update all slug-keyed rows atomically.
+
+        Covers task_metadata (member and assignee), completion_log and
+        apple_sync_state.
 
         Pointedly **not** routed through ``_async_write``. Nothing about #118 asks
         for it: no uid lock is held across it, and draining orders a write against
@@ -546,8 +549,84 @@ class LucarneFamilyStore:
                     "UPDATE completion_log SET member_slug = ? WHERE member_slug = ?",
                     (new_slug, old_slug),
                 )
+                con.execute(
+                    "UPDATE apple_sync_state SET member_slug = ? WHERE member_slug = ?",
+                    (new_slug, old_slug),
+                )
 
         await self._hass.async_add_executor_job(_rename)
+
+    # ------------------------------------------------------------------
+    # Apple Reminders sync state
+    # ------------------------------------------------------------------
+    # One row per reminder the bridge receiver has created (or re-seen) in HA,
+    # keyed by the Apple id. Its only job is to make an HA-side deletion
+    # observable: an id still active in Reminders whose HA item is gone but
+    # whose row survives was deleted here, so the bridge is told to complete
+    # it. Rows leave only when the id leaves Apple's active set.
+
+    async def async_get_apple_sync_state(self, member_slug: str) -> list[dict[str, Any]]:
+        """Return every apple_sync_state row for ``member_slug``."""
+
+        def _get() -> list[dict[str, Any]]:
+            with self._db_connect() as con:
+                rows = con.execute(
+                    "SELECT * FROM apple_sync_state WHERE member_slug = ?",
+                    (member_slug,),
+                ).fetchall()
+                return [dict(r) for r in rows]
+
+        return await self._async_read(_get, f"list the Reminders sync state for {member_slug!r}")
+
+    async def async_upsert_apple_sync_state(
+        self, apple_uid: str, member_slug: str, item_uid: str
+    ) -> None:
+        """Insert or refresh the row for ``apple_uid``."""
+        now = datetime.now(UTC).isoformat()
+
+        def _upsert() -> None:
+            with self._db_connect() as con:
+                con.execute(
+                    "INSERT INTO apple_sync_state "
+                    "(apple_uid, member_slug, item_uid, last_seen) VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(apple_uid) DO UPDATE SET "
+                    "member_slug = excluded.member_slug, "
+                    "item_uid = excluded.item_uid, "
+                    "last_seen = excluded.last_seen",
+                    (apple_uid, member_slug, item_uid, now),
+                )
+
+        await self._async_write(_upsert, f"save the Reminders sync state for {apple_uid!r}")
+
+    async def async_delete_apple_sync_state(self, apple_uids: Iterable[str]) -> None:
+        """Delete the rows for ``apple_uids`` (missing ids are ignored)."""
+        uids = list(apple_uids)
+        if not uids:
+            return
+
+        def _delete() -> None:
+            with self._db_connect() as con:
+                con.executemany(
+                    "DELETE FROM apple_sync_state WHERE apple_uid = ?",
+                    [(uid,) for uid in uids],
+                )
+
+        await self._async_write(
+            _delete, f"delete the Reminders sync state for {len(uids)} reminder(s)"
+        )
+
+    async def async_delete_apple_sync_state_for_member(self, member_slug: str) -> None:
+        """Delete every row for ``member_slug`` (member removal)."""
+
+        def _delete() -> None:
+            with self._db_connect() as con:
+                con.execute(
+                    "DELETE FROM apple_sync_state WHERE member_slug = ?", (member_slug,)
+                )
+
+        await self._async_write(
+            _delete, f"delete the Reminders sync state for {member_slug!r}"
+        )
 
     # ------------------------------------------------------------------
     # Completion log

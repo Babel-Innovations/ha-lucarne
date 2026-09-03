@@ -51,7 +51,9 @@ list" is exactly the state it refuses to act on.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
+from homeassistant.components.todo import TodoItem
 from homeassistant.components.todo.const import DATA_COMPONENT
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
@@ -63,31 +65,52 @@ from .task_locks import async_task_uid_lock
 _LOGGER = logging.getLogger(__name__)
 
 
-def _live_uids(hass: HomeAssistant, store: LucarneFamilyStore) -> dict[str, set[str]]:
-    """Return ``{member_slug: uids}`` for every managed list that could be read.
+def readable_todo_entity(
+    hass: HomeAssistant, entity_id: str
+) -> tuple[Any, list[TodoItem]] | None:
+    """Return ``(entity, items)`` for a todo list that can be read, else ``None``.
 
-    A list is omitted — not recorded as empty — when its entity is unknown, its
-    state is unavailable, or ``todo_items`` is still ``None``. That last one is
-    the difference between "not loaded yet" and "genuinely empty": ``local_todo``
-    leaves ``_attr_todo_items`` unset until its first update, and an entity caught
-    in that window would otherwise cost every row in its list.
+    ``None`` — never an empty list — when the entity is unknown, its state is
+    unavailable, or ``todo_items`` is still ``None``. That last one is the
+    difference between "not loaded yet" and "genuinely empty": ``local_todo``
+    leaves ``_attr_todo_items`` unset until its first update, and an entity
+    caught in that window would otherwise read as having lost every item. The
+    single readability rule for every pass that acts on a list's *absences*:
+    the orphan reaper below and the Apple Reminders bridge receiver.
     """
     todo_component = hass.data.get(DATA_COMPONENT)
     if todo_component is None:
-        return {}
+        return None
+    entity = todo_component.get_entity(entity_id)
+    if entity is None:
+        return None
+    state = hass.states.get(entity_id)
+    if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        return None
+    items = entity.todo_items
+    if items is None:
+        return None
+    return entity, list(items)
 
+
+def readable_todo_items(hass: HomeAssistant, entity_id: str) -> list[TodoItem] | None:
+    """Items of a readable list, or ``None`` (see :func:`readable_todo_entity`)."""
+    readable = readable_todo_entity(hass, entity_id)
+    return None if readable is None else readable[1]
+
+
+def _live_uids(hass: HomeAssistant, store: LucarneFamilyStore) -> dict[str, set[str]]:
+    """Return ``{member_slug: uids}`` for every managed list that could be read.
+
+    A list is omitted — not recorded as empty — whenever
+    :func:`readable_todo_entity` refuses it.
+    """
     live: dict[str, set[str]] = {}
     for entity_id in managed_todo_entity_ids(store):
         slug = resolve_member_slug(entity_id, store)
         if not slug:
             continue
-        entity = todo_component.get_entity(entity_id)
-        if entity is None:
-            continue
-        state = hass.states.get(entity_id)
-        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            continue
-        items = entity.todo_items
+        items = readable_todo_items(hass, entity_id)
         if items is None:
             continue
         live[slug] = {item.uid for item in items if item.uid}

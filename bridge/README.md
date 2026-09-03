@@ -1,164 +1,77 @@
-# MacOS Bridge — Install Instructions
+# lucarne-bridge (developer notes)
 
-Sets up the `ha-lucarne-sync` macOS Shortcut + launchd job that pushes Apple Reminders to HA every 5 minutes.
+The user guide is [`docs/reminders-bridge.md`](../docs/reminders-bridge.md). This file
+covers building and releasing the macOS CLI that lives in this directory.
 
-## Prerequisites
+```
+Package.swift                       SwiftPM manifest; embeds Sources/lucarne-bridge/Info.plist via -sectcreate
+Sources/lucarne-bridge/             the executable: ArgumentParser commands (install, sync, status, uninstall, logs)
+Sources/LucarneBridgeCore/          everything testable: wire types, config/state files, EventKit adapter,
+                                    HTTP transport, SyncEngine, launchd agent, pmset parsing
+Tests/LucarneBridgeCoreTests/       XCTest suite with fake Reminders + HTTP transport
+install.sh                          curl | sh installer (downloads the release zip, verifies sha256)
+homebrew/lucarne-bridge.rb.tmpl     formula template rendered by the release workflow into the tap
+```
 
-- macOS 13 (Ventura) or later
-- Shortcuts.app launched at least once (required for `shortcuts run` CLI)
-- iCloud account signed in to Reminders, with access to the Family and Groceries lists
-- MacOS configured to **not sleep** (System Settings → Lock Screen → disable "Put computer to sleep when display is off")
-
-## 1. Generate webhook secret + store in Keychain
-
-On this MacOS (or any machine, then transfer):
+## Build and test
 
 ```sh
-openssl rand -hex 32
+cd bridge
+swift build            # debug binary at .build/debug/lucarne-bridge
+swift test
+swift build -c release --arch arm64 --arch x86_64 --product lucarne-bridge
+otool -s __TEXT __info_plist .build/apple/Products/Release/lucarne-bridge | head -3   # plist section present
 ```
 
-Copy the output. Then store it:
+Requires the Xcode Command Line Tools (Swift 5.9+). Build from inside `bridge/`: the
+`-sectcreate` path in `Package.swift` is resolved against the working directory, so
+`swift build --package-path bridge` from the repo root fails to link. The Info.plist is
+embedded so EventKit finds `NSRemindersFullAccessUsageDescription`; without it macOS
+terminates the process at the access request ("attempted to access privacy-sensitive data
+without a usage description"). `CFBundleShortVersionString` is `0.0.0-dev` in the tree and stamped with
+the release tag by CI, and `lucarne-bridge --version` reads it back.
+
+### Trying a local build
+
+A debug build works end to end, with one caveat: macOS keys the Reminders permission to
+the binary's code signature, and every ad-hoc-signed build has a fresh one, so you get a
+new permission prompt per build (`tccutil reset Reminders com.babel-innovations.lucarne-bridge`
+clears stale grants). Run `install` from the built path — the launchd agent records the
+absolute path of the binary you install from:
 
 ```sh
-security add-generic-password -a "ha-lucarne" -s "ha-lucarne-webhook-secret" -w "<the-secret>"
+.build/debug/lucarne-bridge install http://homeassistant.local:8123/api/webhook/<id>
+.build/debug/lucarne-bridge status
 ```
 
-To retrieve later (used by the Shortcut at runtime):
+`LUCARNE_BRIDGE_HOME=/tmp/somewhere` relocates config.json / state.json (tests use it).
 
-```sh
-security find-generic-password -a "ha-lucarne" -s "ha-lucarne-webhook-secret" -w
-```
+## Release
 
-## 2. Build and install the Shortcut
+`.github/workflows/bridge-release.yml` runs on every published GitHub release — both
+`scripts/create-release.sh` and `scripts/create-prerelease.sh` produce one — and:
 
-> **Note**: The `ha-lucarne-sync.shortcut` binary is not committed to the repo (it's user-specific and created locally). `bridge/ha-lucarne-sync.json` in the repo documents the Shortcut's logical structure. You must build it manually in Shortcuts.app following the steps below. The `.shortcut` file is exported after you build it and kept locally on the mini.
+1. checks out the tag, stamps the version into Info.plist, builds the universal binary;
+2. if the signing secrets are present, imports the Developer ID certificate into a
+   temporary keychain, signs with the hardened runtime, and notarizes the zip with an
+   App Store Connect API key (`xcrun notarytool … --wait`). Bare executables cannot be
+   stapled; Gatekeeper fetches the ticket online. Without the secrets (forks, PRs from
+   forks) it logs "unsigned build" and continues;
+3. uploads `lucarne-bridge-<version>-macos-universal.zip` and its `.sha256` to the release;
+4. for a stable release, renders `homebrew/lucarne-bridge.rb.tmpl` and pushes it to
+   `Babel-Innovations/homebrew-lucarne` (`Formula/lucarne-bridge.rb`).
 
-Open Shortcuts.app on the Mac mini and create a new Shortcut named `ha-lucarne-sync`. Build the following action sequence (refer to `bridge/ha-lucarne-sync.json` for the full logical structure):
+Repository secrets it reads (all optional; signing needs the first six together):
 
-1. **Run Shell Script** → `security find-generic-password -a 'ha-lucarne' -s 'ha-lucarne-webhook-secret' -w` → result: `WEBHOOK_SECRET`
-2. **Get Reminders** from "Family" list, optionally filtered by Assignee = "Ingrid"
-3. **Repeat with Each** → build `{id, title, due, completed, notes}` dict per reminder → accumulate to `family_items`
-4. **Get Reminders** from "Groceries" list (all items)
-5. **Repeat with Each** → build dict per reminder → accumulate to `groceries_items`
-6. **Make Dictionary** → `{"lists": [{"apple_list_name": "Family", ...}, {"apple_list_name": "Groceries", ...}]}`
-7. **Get Contents of URL** → POST to `http://homeassistant.local:8123/api/webhook/[WEBHOOK_SECRET]` with JSON body
-8. **If** status ≠ 200 → log a notification
+| Secret | What |
+|---|---|
+| `MACOS_CERT_P12_BASE64` | Developer ID Application certificate + private key, `.p12`, base64 |
+| `MACOS_CERT_PASSWORD` | password of that `.p12` |
+| `APPLE_TEAM_ID` | 10-character team id (passed to `notarytool --team-id`) |
+| `NOTARY_KEY_ID` | App Store Connect API key id |
+| `NOTARY_ISSUER_ID` | App Store Connect issuer id |
+| `NOTARY_KEY_P8_BASE64` | the API key `.p8`, base64 |
+| `TAP_GITHUB_TOKEN` | PAT with `contents: write` on `homebrew-lucarne` (skip to leave the tap alone) |
 
-After building, update the list names if they differ from "Family" / "Groceries".
-
-## 3. Test the Shortcut manually
-
-In Shortcuts.app, click the Play (▶) button next to `ha-lucarne-sync`. Check HA — items should appear in the target `todo.*` entities within a few seconds.
-
-Also test from Terminal:
-
-```sh
-shortcuts run "ha-lucarne-sync"
-echo "Exit code: $?"
-```
-
-Exit code 0 = success.
-
-## 4. Install the launchd agent
-
-Copy the plist, substituting your macOS username:
-
-```sh
-sed 's/<USERNAME>/'"$(whoami)"'/g' com.molant.ha-lucarne-sync.plist \
-  > ~/Library/LaunchAgents/com.molant.ha-lucarne-sync.plist
-
-launchctl load ~/Library/LaunchAgents/com.molant.ha-lucarne-sync.plist
-```
-
-Verify it's loaded:
-
-```sh
-launchctl list | grep ha-lucarne-sync
-```
-
-Should show the label with exit code `0` (or `-` if not yet fired).
-
-## 5. Monitor
-
-```sh
-tail -f ~/Library/Logs/ha-lucarne-sync.log
-```
-
-Successful runs are silent — the Shortcut only logs on HTTP non-200 errors. An empty or quiet log means the bridge is running correctly. To confirm syncs are firing: check HA's automation traces (`Developer Tools → Traces → automation.lucarne_reminders_sync`) or watch the `last_changed` timestamp on the target todo entity after a sync cycle.
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---------|-----|
-| `shortcuts run` hangs or errors | Launch Shortcuts.app manually once, then retry |
-| HTTP 200 but HA items don't update | Check automation trace: HA → Settings → Automations & Scenes → `lucarne_reminders_sync` → Traces. If no trace: **Local only** may be rejecting the mini's Tailscale IP (100.x). Open the automation instance → set **Local only** to **off** → save. |
-| Shortcut runs but Reminders list is empty | Confirm iCloud account is signed in on this Mac and the list is synced |
-| launchd agent not firing | Check `launchctl list | grep ha-lucarne-sync` — non-zero exit code means the Shortcut errored. Check the log. |
-| After macOS major upgrade | Re-launch Shortcuts.app manually — the `shortcuts run` CLI requires it |
-
----
-
-## When using the Lucarne Family integration
-
-The Lucarne Family integration creates `todo.<slug>` entities for each member (e.g. `todo.anna`,
-`todo.bob`) and a shared `todo.lucarne_household`. The bridge can target these entities directly —
-update the **List Mappings** in the `lucarne_reminders_sync` automation instance to point to the
-integration-managed entities:
-
-```json
-{"Family": "todo.anna", "Groceries": "todo.lucarne_household"}
-```
-
-The key must exactly match the `apple_list_name` value the Shortcut sends. The integration's
-Apple-sentinel backfill (`apple_sentinel_backfill.py`) reads `[apple:UUID]` sentinels from item
-descriptions and writes `source=apple` metadata rows — so synced Reminders appear with integration
-metadata in the chores card.
-
-**Assigning Reminders to the chores card**: for a Reminder to surface in the chores card under a
-specific member's column, it must land in that member's `todo.<slug>` entity. For it to appear in
-the household column, map its Reminders list to `todo.lucarne_household`.
-
----
-
-## Adapting to fewer or more Reminders lists
-
-The Shortcut contains one "Get Reminders" + "Repeat with Each" step pair per list. To add a list:
-
-1. Open Shortcuts.app → `ha-lucarne-sync` → edit
-2. Duplicate an existing "Get Reminders" + "Repeat with Each" block
-3. Change the list name in the "Get Reminders" step
-4. Append the new list's items array to the JSON payload Dictionary under a new key
-5. In the HA automation backed by `lucarne_reminders_sync`, open its instance and edit the
-   **List Mappings** field — add a new key/value pair, e.g.:
-   ```json
-   {"Family": "todo.anna", "Groceries": "todo.lucarne_household", "NewList": "todo.new_list"}
-   ```
-   The key must exactly match the `apple_list_name` value the Shortcut sends in the payload.
-
-To remove a list: delete the corresponding block from the Shortcut and remove the key/value pair
-from the **List Mappings** JSON in the automation instance. The corresponding `todo.*` entity in HA
-will retain its last-synced items until you clear it manually.
-
-## Adapting to non-shared lists (individual, not family)
-
-If a list is private (not shared with other family members) and you don't want assignee filtering:
-
-1. In the "Get Reminders" step for that list, remove the Assignee filter (if one exists)
-2. The Shortcut will sync all items in the list regardless of who added them
-
-If you want per-person filtering on a shared list (e.g. only items assigned to "Ingrid"):
-
-1. In the "Get Reminders" step, add filter: **Assignee** is **Ingrid**
-2. Only Ingrid's assigned items from that list will sync to HA
-
-## Extended troubleshooting matrix
-
-| Symptom | Likely cause | Fix |
-|---------|-------------|-----|
-| `launchctl list` shows non-zero exit code | Shortcut errored | Check `~/Library/Logs/ha-lucarne-sync.log`; re-run `shortcuts run "ha-lucarne-sync"` in Terminal |
-| Shortcut runs but list is empty | iCloud not synced on this Mac | Open Reminders.app and confirm lists appear |
-| HTTP 401 from HA | Wrong webhook secret in Keychain | Re-run `security add-generic-password` with correct secret |
-| HTTP 400 from HA | Malformed JSON in Shortcut | Check the Dictionary step in Shortcuts.app for typos |
-| Items sync but wrong todo entity | Mismatched key in List Mappings JSON | Open automation instance → check **List Mappings** key matches the Shortcut's `apple_list_name` exactly. When using the Lucarne Family integration, target entities are `todo.<slug>` or `todo.lucarne_household`. |
-| Shortcut works manually but not via launchd | PATH or Keychain ACL issue | Load the agent with `launchctl load ~/Library/LaunchAgents/com.molant.ha-lucarne-sync.plist` and check log |
-| After macOS major upgrade | `shortcuts run` CLI reset | Re-launch Shortcuts.app manually then test `shortcuts run "ha-lucarne-sync"` |
+`.github/workflows/bridge.yml` builds and tests the package on every PR that touches
+`bridge/`.

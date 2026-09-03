@@ -14,3 +14,7 @@ uv.lock
 # Coverage artifacts
 .coverage
 coverage/
+
+# Swift package (bridge/)
+bridge/.build/
+bridge/.swiftpm/

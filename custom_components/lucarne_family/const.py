@@ -1,6 +1,8 @@
 """Constants for the Lucarne Family integration."""
 from __future__ import annotations
 
+from homeassistant.const import CONF_WEBHOOK_ID as HA_CONF_WEBHOOK_ID
+
 DOMAIN = "lucarne_family"
 STORAGE_VERSION = 1
 
@@ -35,12 +37,17 @@ CONF_FAMILY_NAME = "family_name"
 CONF_MEMBERS = "members"
 CONF_RESET_TIME = "reset_time"
 CONF_STREAK_CHECK_TIME = "streak_check_time"
-CONF_ROUND_TRIP = "round_trip"
-CONF_ROUND_TRIP_ENABLED = "enabled"
-CONF_ROUND_TRIP_WEBHOOK_URL = "webhook_url"
-CONF_ROUND_TRIP_SECRET = "secret"
-CONF_ROUND_TRIP_DEVICE_NAME = "device_name"
 CONF_CUSTOM_PRESETS = "custom_presets"
+# Apple Reminders bridge. The webhook id is the bridge's credential: a 64-hex
+# token minted once per entry by webhook.async_generate_id(). Same key HA's
+# own integrations use for theirs.
+CONF_WEBHOOK_ID = HA_CONF_WEBHOOK_ID
+CONF_APPLE_BRIDGE = "apple_bridge"
+CONF_HOUSEHOLD_LIST = "household_list"
+DEFAULT_HOUSEHOLD_LIST = "Family"
+BRIDGE_PROTOCOL_VERSION = 1
+BRIDGE_SYNC_INTERVAL = 300
+ISSUE_APPLE_LIST_MISSING = "apple_list_missing"
 
 # Preset slugs
 PRESET_SCHOOL_AGE = "school-age"
@@ -52,9 +59,6 @@ PRESET_CUSTOM = "custom"
 AVATAR_MAX_BYTES = 2 * 1024 * 1024
 AVATAR_MAX_PIXELS = 4096 * 4096
 AVATAR_ALLOWED_MIME: frozenset[str] = frozenset({"image/png", "image/jpeg", "image/webp"})
-
-# Round-trip event names
-EVENT_APPLE_WRITEBACK_REQUESTED = "lucarne_family_apple_writeback_requested"
 
 # Rotating-task event names
 EVENT_ROTATION_ADVANCED = "lucarne_family_rotation_advanced"

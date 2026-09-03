@@ -1,0 +1,171 @@
+name: Bridge release
+
+# Builds, signs, notarizes and attaches the macOS bridge binary to every
+# published GitHub release (scripts/create-release.sh and create-prerelease.sh
+# both publish one). Signing and the Homebrew tap update are skipped when their
+# secrets are absent, so forks still get an unsigned build.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build for (vX.Y.Z or vX.Y.Z-pre-…)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      # A `release` event says so directly; a manual run on a -pre- tag is
+      # caught below. Written to GITHUB_ENV as TAP_ELIGIBLE, nothing else.
+      RELEASE_IS_PRERELEASE: ${{ github.event.release.prerelease || 'false' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Derive version
+        run: |
+          VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "ASSET=lucarne-bridge-${VERSION}-macos-universal.zip" >> "$GITHUB_ENV"
+
+      - name: Stamp version into Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" bridge/Sources/lucarne-bridge/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" bridge/Sources/lucarne-bridge/Info.plist
+
+      - name: Build universal binary
+        working-directory: bridge
+        run: |
+          swift build -c release --arch arm64 --arch x86_64 --product lucarne-bridge
+          mkdir -p ../dist
+          cp .build/apple/Products/Release/lucarne-bridge ../dist/lucarne-bridge
+          ARCHS="$(lipo -archs ../dist/lucarne-bridge)"
+          echo "architectures: $ARCHS"
+          case "$ARCHS" in *arm64*) ;; *) echo "arm64 slice missing"; exit 1 ;; esac
+          case "$ARCHS" in *x86_64*) ;; *) echo "x86_64 slice missing"; exit 1 ;; esac
+          ../dist/lucarne-bridge --version | grep -qx "$VERSION"
+
+      # `secrets` and a step's own `env` are not visible to a step-level `if`,
+      # so every gate below is computed here into GITHUB_ENV.
+      - name: Decide what the secrets allow
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -n "$MACOS_CERT_P12_BASE64" ] && [ -n "$MACOS_CERT_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ] \
+             && [ -n "$NOTARY_KEY_ID" ] && [ -n "$NOTARY_ISSUER_ID" ] && [ -n "$NOTARY_KEY_P8_BASE64" ]; then
+            echo "HAS_SIGNING=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_SIGNING=false" >> "$GITHUB_ENV"
+            echo "::warning::Signing secrets absent — publishing an unsigned build"
+          fi
+          # The stable tap gets stable releases only, whichever event ran us.
+          TAP_ELIGIBLE=false
+          if [ -n "$TAP_GITHUB_TOKEN" ] && [ "$RELEASE_IS_PRERELEASE" != "true" ]; then
+            case "$TAG" in
+              *-pre-*) ;;
+              *) TAP_ELIGIBLE=true ;;
+            esac
+          fi
+          echo "TAP_ELIGIBLE=$TAP_ELIGIBLE" >> "$GITHUB_ENV"
+
+      - name: Import Developer ID certificate
+        if: env.HAS_SIGNING == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep 'Developer ID Application' | head -n 1 | sed -E 's/.*"(.*)".*/\1/')"
+          [ -n "$IDENTITY" ] || { echo "No Developer ID Application identity in the certificate"; exit 1; }
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Sign
+        if: env.HAS_SIGNING == 'true'
+        run: |
+          codesign --force --options runtime --timestamp --keychain "$KEYCHAIN" \
+            --sign "$SIGN_IDENTITY" dist/lucarne-bridge
+          codesign --verify --strict --verbose=2 dist/lucarne-bridge
+
+      - name: Package
+        run: |
+          cd dist
+          # No --keepParent: the binary must sit at the archive root for install.sh.
+          ditto -c -k --norsrc --noextattr lucarne-bridge "$ASSET"
+          shasum -a 256 "$ASSET" > "$ASSET.sha256"
+          cat "$ASSET.sha256"
+
+      - name: Smoke-test the archive the way install.sh opens it
+        run: |
+          mkdir -p "$RUNNER_TEMP/smoke" && cd "$RUNNER_TEMP/smoke"
+          cp "$GITHUB_WORKSPACE/dist/$ASSET" "$GITHUB_WORKSPACE/dist/$ASSET.sha256" .
+          shasum -a 256 -c "$ASSET.sha256"
+          ditto -x -k "$ASSET" .
+          [ -x lucarne-bridge ] || { echo "binary is not at the archive root"; ls -R; exit 1; }
+          ./lucarne-bridge --version | grep -qx "$VERSION"
+
+      - name: Notarize
+        if: env.HAS_SIGNING == 'true'
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          xcrun notarytool submit "dist/$ASSET" \
+            --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
+            --team-id "$APPLE_TEAM_ID" --wait --timeout 30m
+          rm -f "$RUNNER_TEMP/notary.p8"
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "dist/$ASSET" "dist/$ASSET.sha256" --clobber
+
+      - name: Remove signing keychain
+        if: always() && env.KEYCHAIN != ''
+        run: security delete-keychain "$KEYCHAIN" || true
+
+      - name: Update Homebrew tap
+        if: env.TAP_ELIGIBLE == 'true'
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          SHA256="$(cut -d ' ' -f 1 "dist/$ASSET.sha256")"
+          LICENSE="$(sed -n '1s/^\(.*\) License$/\1/p' LICENSE | tr -d '\r')"
+          [ -n "$LICENSE" ] || LICENSE="MIT"
+          git clone --depth 1 "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/Babel-Innovations/homebrew-lucarne.git" tap
+          mkdir -p tap/Formula
+          sed -e "s/__VERSION__/$VERSION/g" -e "s/__SHA256__/$SHA256/g" -e "s/__LICENSE__/$LICENSE/g" \
+            bridge/homebrew/lucarne-bridge.rb.tmpl > tap/Formula/lucarne-bridge.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/lucarne-bridge.rb
+          git diff --cached --quiet || git commit -m "lucarne-bridge $VERSION"
+          git push

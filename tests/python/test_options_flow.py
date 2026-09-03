@@ -7,11 +7,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant import data_entry_flow
+from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lucarne_family.const import (
+    CONF_APPLE_BRIDGE,
+    CONF_HOUSEHOLD_LIST,
     CONF_MEMBERS,
+    CONF_WEBHOOK_ID,
     DEFAULT_RESET_TIME,
     DEFAULT_STREAK_CHECK_TIME,
     DOMAIN,
@@ -71,12 +75,6 @@ def _make_entry(
             CONF_MEMBERS: members or [],
             "reset_time": DEFAULT_RESET_TIME,
             "streak_check_time": DEFAULT_STREAK_CHECK_TIME,
-            "round_trip": {
-                "enabled": False,
-                "webhook_url": "",
-                "secret": "",
-                "device_name": "Sync device",
-            },
             "custom_presets": [],
         },
     )
@@ -421,200 +419,6 @@ async def test_edit_schedule_invalid_time_rejected(hass: HomeAssistant) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_edit_round_trip_disabled_saves_without_url(hass: HomeAssistant) -> None:
-    """Submitting with enabled=False saves without requiring URL or secret."""
-    entry = _make_entry(hass)
-    await _setup_entry(hass, entry)
-
-    result = await _init_options_flow(hass, entry)
-    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_round_trip"})
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
-    assert result["step_id"] == "edit_round_trip"
-
-    result = await _configure(
-        hass,
-        result["flow_id"],
-        {
-            "enabled": False,
-            "webhook_url": "",
-            "secret": "",
-            "device_name": "My Mac",
-        },
-    )
-    assert result["type"] in (
-        data_entry_flow.FlowResultType.MENU,
-        data_entry_flow.FlowResultType.CREATE_ENTRY,
-    )
-    rt = entry.data["round_trip"]
-    assert rt["enabled"] is False
-    assert rt["device_name"] == "My Mac"
-
-
-async def test_edit_round_trip_enabled_saves_correctly(hass: HomeAssistant) -> None:
-    """Enabled=True with valid URL and 32-char secret round-trips correctly."""
-    entry = _make_entry(hass)
-    await _setup_entry(hass, entry)
-
-    secret = "a" * 32
-    result = await _init_options_flow(hass, entry)
-    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_round_trip"})
-
-    result = await _configure(
-        hass,
-        result["flow_id"],
-        {
-            "enabled": True,
-            "webhook_url": "https://example.com/hook",
-            "secret": secret,
-            "device_name": "Mac mini",
-        },
-    )
-    assert result["type"] in (
-        data_entry_flow.FlowResultType.MENU,
-        data_entry_flow.FlowResultType.CREATE_ENTRY,
-    )
-    rt = entry.data["round_trip"]
-    assert rt["enabled"] is True
-    assert rt["webhook_url"] == "https://example.com/hook"
-    assert rt["secret"] == secret
-    assert rt["device_name"] == "Mac mini"
-
-
-async def test_edit_round_trip_invalid_url_rejected(hass: HomeAssistant) -> None:
-    """Malformed URL is rejected when round-trip is enabled."""
-    entry = _make_entry(hass)
-    await _setup_entry(hass, entry)
-
-    secret = "b" * 32
-    result = await _init_options_flow(hass, entry)
-    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_round_trip"})
-
-    result = await _configure(
-        hass,
-        result["flow_id"],
-        {
-            "enabled": True,
-            "webhook_url": "not-a-url",
-            "secret": secret,
-            "device_name": "Mac mini",
-        },
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
-    assert "webhook_url" in result["errors"]
-
-
-async def test_edit_round_trip_short_secret_rejected(hass: HomeAssistant) -> None:
-    """Secret shorter than 32 chars is rejected when round-trip is enabled."""
-    entry = _make_entry(hass)
-    await _setup_entry(hass, entry)
-
-    result = await _init_options_flow(hass, entry)
-    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_round_trip"})
-
-    result = await _configure(
-        hass,
-        result["flow_id"],
-        {
-            "enabled": True,
-            "webhook_url": "https://example.com/hook",
-            "secret": "tooshort",
-            "device_name": "Mac mini",
-        },
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
-    assert "secret" in result["errors"]
-
-
-async def test_edit_round_trip_generate_secret_replaces_existing(
-    hass: HomeAssistant,
-) -> None:
-    """generate_secret=True rotates the secret and saves the form atomically.
-
-    Other in-flight fields (URL, device name) must be preserved alongside
-    the new secret — they're not silently discarded.
-    """
-    entry = _make_entry(hass)
-    await _setup_entry(hass, entry)
-
-    old_secret = "a" * 32
-    result = await _init_options_flow(hass, entry)
-    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_round_trip"})
-    await _configure(
-        hass,
-        result["flow_id"],
-        {
-            "enabled": True,
-            "webhook_url": "https://example.com/hook",
-            "secret": old_secret,
-            "device_name": "Mac mini",
-        },
-    )
-    assert entry.data["round_trip"]["secret"] == old_secret
-
-    # Re-open and submit with generate_secret + a changed device_name.
-    result = await _init_options_flow(hass, entry)
-    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_round_trip"})
-    result = await _configure(
-        hass,
-        result["flow_id"],
-        {
-            "enabled": True,
-            "webhook_url": "https://example.com/hook",
-            "secret": old_secret,
-            "device_name": "New Mac",
-            "generate_secret": True,
-        },
-    )
-    # Save flow completes successfully — both the new secret and the
-    # device_name update are persisted in one atomic write.
-    assert result["type"] in (
-        data_entry_flow.FlowResultType.MENU,
-        data_entry_flow.FlowResultType.CREATE_ENTRY,
-    )
-
-    rt = entry.data["round_trip"]
-    new_secret = rt["secret"]
-    assert new_secret != old_secret
-    assert len(new_secret) >= 32
-    assert all(c in "0123456789abcdef" for c in new_secret)
-    assert rt["device_name"] == "New Mac"
-
-
-async def test_edit_round_trip_readback(hass: HomeAssistant) -> None:
-    """Data saved in one flow can be read back in a subsequent flow init."""
-    entry = _make_entry(hass)
-    await _setup_entry(hass, entry)
-
-    secret = "c" * 32
-    result = await _init_options_flow(hass, entry)
-    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_round_trip"})
-    await _configure(
-        hass,
-        result["flow_id"],
-        {
-            "enabled": True,
-            "webhook_url": "https://hook.example.com/lucarne",
-            "secret": secret,
-            "device_name": "Home server",
-        },
-    )
-
-    # Start a new flow and navigate to edit_round_trip to confirm defaults are populated
-    result2 = await _init_options_flow(hass, entry)
-    result2 = await _configure(hass, result2["flow_id"], {"next_step_id": "edit_round_trip"})
-    assert result2["type"] == data_entry_flow.FlowResultType.FORM
-    # The schema defaults should reflect the saved values
-    schema = result2.get("data_schema")
-    assert schema is not None
-
-
-# ---------------------------------------------------------------------------
-# Back navigation (issue #15) — every sub-menu and sub-form returns to its
-# parent menu instead of closing the dialog, so users don't have to reopen
-# the gear icon to access a sibling setting.
-# ---------------------------------------------------------------------------
-
-
 async def test_manage_members_menu_offers_back_to_init(hass: HomeAssistant) -> None:
     """`manage_members` menu must expose a `back_to_init` affordance."""
     entry = _make_entry(hass)
@@ -686,29 +490,6 @@ async def test_edit_schedule_submit_returns_to_init_menu(hass: HomeAssistant) ->
     # Save still happened
     assert entry.data["reset_time"] == "03:00"
     assert entry.data["streak_check_time"] == "20:30"
-
-
-async def test_edit_round_trip_submit_returns_to_init_menu(hass: HomeAssistant) -> None:
-    """Saving Apple-Reminders-sync settings lands back on `init`, not close."""
-    entry = _make_entry(hass)
-    await _setup_entry(hass, entry)
-
-    result = await _init_options_flow(hass, entry)
-    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_round_trip"})
-    result = await _configure(
-        hass,
-        result["flow_id"],
-        {
-            "enabled": False,
-            "webhook_url": "",
-            "secret": "",
-            "device_name": "Mac mini",
-        },
-    )
-
-    assert result["type"] == data_entry_flow.FlowResultType.MENU
-    assert result["step_id"] == "init"
-    assert entry.data["round_trip"]["device_name"] == "Mac mini"
 
 
 async def test_add_preset_routine_new_preset_returns_to_edit_templates(
@@ -800,3 +581,387 @@ async def test_add_routine_to_existing_preset_returns_to_edit_custom_preset(
     assert result["type"] == data_entry_flow.FlowResultType.MENU
     assert result["step_id"] == "edit_custom_preset"
 
+
+
+
+# ---------------------------------------------------------------------------
+# Apple Reminders bridge
+# ---------------------------------------------------------------------------
+
+
+def _webhook_ids(hass: HomeAssistant) -> set[str]:
+    return set(hass.data.get(webhook.DOMAIN, {}))
+
+
+async def _open_bridge_step(hass: HomeAssistant, entry: MockConfigEntry) -> Any:
+    result = await _init_options_flow(hass, entry)
+    return await _configure(hass, result["flow_id"], {"next_step_id": "edit_apple_bridge"})
+
+
+async def test_bridge_step_shows_install_command_and_saves_household_list(
+    hass: HomeAssistant,
+) -> None:
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+    hass.config.internal_url = "http://ha.local:8123"
+
+    result = await _open_bridge_step(hass, entry)
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "edit_apple_bridge"
+    webhook_id = entry.data[CONF_WEBHOOK_ID]
+    placeholders = result["description_placeholders"]
+    assert placeholders["webhook_url"] == f"http://ha.local:8123/api/webhook/{webhook_id}"
+    assert placeholders["install_command"] == (
+        f"lucarne-bridge install http://ha.local:8123/api/webhook/{webhook_id}"
+    )
+    assert placeholders["last_sync"] == "never"
+    assert placeholders["available_lists"] == "(none reported yet)"
+
+    result = await _configure(hass, result["flow_id"], {CONF_HOUSEHOLD_LIST: " Casa "})
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+    assert result["step_id"] == "init"
+    assert entry.data[CONF_APPLE_BRIDGE][CONF_HOUSEHOLD_LIST] == "Casa"
+    assert entry.data[CONF_WEBHOOK_ID] == webhook_id
+
+
+async def test_bridge_step_without_a_url_explains_instead_of_failing(
+    hass: HomeAssistant,
+) -> None:
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+    hass.config.internal_url = None
+    hass.config.external_url = None
+
+    with patch(
+        "custom_components.lucarne_family.config_flow.webhook.async_generate_url",
+        side_effect=__import__(
+            "homeassistant.helpers.network", fromlist=["NoURLAvailableError"]
+        ).NoURLAvailableError,
+    ):
+        result = await _open_bridge_step(hass, entry)
+
+    placeholders = result["description_placeholders"]
+    assert placeholders["webhook_url"] == "(no URL configured)"
+    assert "Settings → System → Network" in placeholders["install_command"]
+
+
+async def test_bridge_step_reports_last_sync_and_offers_reported_lists(
+    hass: HomeAssistant,
+) -> None:
+    from custom_components.lucarne_family.apple_bridge import BridgeStatus
+
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+    runtime = hass.data[DOMAIN][entry.entry_id]["bridge"]
+    runtime.available_lists = ["Family", "Anna"]
+    runtime.status = BridgeStatus(
+        synced_at=datetime(2026, 9, 3, 10, 5, tzinfo=UTC),
+        host="mac-mini",
+        bridge_version="1.6.0",
+        received=4,
+        created=1,
+        updated=2,
+        completed_in_ha=1,
+        sent_complete=1,
+        skipped_lists=["Anna"],
+        unmapped_lists=["Groceries"],
+    )
+
+    result = await _open_bridge_step(hass, entry)
+
+    placeholders = result["description_placeholders"]
+    assert placeholders["available_lists"] == "Family, Anna"
+    assert placeholders["last_sync"] == (
+        "2026-09-03 10:05 UTC from mac-mini (bridge 1.6.0): 4 received, 1 created, "
+        "2 updated, 1 completed here, 1 sent back, skipped: Anna, not mapped: Groceries"
+    )
+    field = next(k for k in result["data_schema"].schema if k == CONF_HOUSEHOLD_LIST)
+    sel = result["data_schema"].schema[field]
+    assert sel.config["options"] == ["Family", "Anna"]
+    assert sel.config["custom_value"] is True
+
+
+async def test_bridge_step_reports_a_failed_sync(hass: HomeAssistant) -> None:
+    from custom_components.lucarne_family.apple_bridge import BridgeStatus
+
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+    runtime = hass.data[DOMAIN][entry.entry_id]["bridge"]
+    runtime.status = BridgeStatus(
+        synced_at=datetime(2026, 9, 3, 10, 5, tzinfo=UTC),
+        host="mac-mini",
+        bridge_version="1.6.0",
+        error="database is locked",
+    )
+
+    result = await _open_bridge_step(hass, entry)
+    assert result["description_placeholders"]["last_sync"] == (
+        "2026-09-03 10:05 UTC from mac-mini: database is locked"
+    )
+
+
+async def test_bridge_step_rejects_a_list_already_given_to_a_member(
+    hass: HomeAssistant,
+) -> None:
+    entry = _make_entry(hass, members=[_member_dict("anna", apple_list="Kids")])
+    await _setup_entry(hass, entry)
+
+    result = await _open_bridge_step(hass, entry)
+    result = await _configure(hass, result["flow_id"], {CONF_HOUSEHOLD_LIST: "kids"})
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["errors"] == {CONF_HOUSEHOLD_LIST: "apple_list_conflict"}
+    assert entry.data[CONF_APPLE_BRIDGE][CONF_HOUSEHOLD_LIST] == "Family"
+
+
+async def test_rotating_the_webhook_re_registers_it(hass: HomeAssistant) -> None:
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+    old_id = entry.data[CONF_WEBHOOK_ID]
+    assert old_id in _webhook_ids(hass)
+
+    result = await _open_bridge_step(hass, entry)
+    await _configure(
+        hass, result["flow_id"], {CONF_HOUSEHOLD_LIST: "Family", "rotate_webhook": True}
+    )
+    await hass.async_block_till_done()
+
+    new_id = entry.data[CONF_WEBHOOK_ID]
+    assert new_id != old_id
+    assert new_id in _webhook_ids(hass)
+    assert old_id not in _webhook_ids(hass)
+    assert hass.data[DOMAIN][entry.entry_id]["bridge"].webhook_id == new_id
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert new_id not in _webhook_ids(hass)
+
+
+def _member_dict(slug: str, apple_list: str = "", preset: str = "school-age") -> dict[str, Any]:
+    return Member(
+        slug=slug,
+        name=slug.capitalize(),
+        color="#f5c89c",
+        avatar=None,
+        created_at=datetime(2024, 1, 1, tzinfo=UTC),
+        preset=preset,
+        todo_entity_id=f"todo.{slug}",
+        streak_counter_id=f"counter.{slug}_streak",
+        apple_list=apple_list,
+    ).to_dict()
+
+
+async def test_add_member_stores_apple_list(hass: HomeAssistant) -> None:
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+
+    result = await _init_options_flow(hass, entry)
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "manage_members"})
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "add_member"})
+    result = await _configure(
+        hass,
+        result["flow_id"],
+        {"name": "Anna", "color": [245, 200, 156], "preset": "school-age", "apple_list": " Anna "},
+    )
+
+    assert result["step_id"] == "manage_members"
+    assert entry.data[CONF_MEMBERS][0]["apple_list"] == "Anna"
+
+
+async def test_add_member_rejects_the_household_list(hass: HomeAssistant) -> None:
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+
+    result = await _init_options_flow(hass, entry)
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "manage_members"})
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "add_member"})
+    result = await _configure(
+        hass,
+        result["flow_id"],
+        {"name": "Anna", "color": [245, 200, 156], "preset": "school-age", "apple_list": "family"},
+    )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["errors"] == {"apple_list": "apple_list_conflict"}
+    assert entry.data[CONF_MEMBERS] == []
+
+
+async def test_edit_member_updates_apple_list_and_keeps_it_on_other_edits(
+    hass: HomeAssistant,
+) -> None:
+    entry = _make_entry(
+        hass, members=[_member_dict("anna", apple_list="Anna"), _member_dict("ben")]
+    )
+    await _setup_entry(hass, entry)
+
+    result = await _init_options_flow(hass, entry)
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "manage_members"})
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_member"})
+    result = await _configure(hass, result["flow_id"], {"member_slug": "ben"})
+    assert result["step_id"] == "edit_member"
+
+    # Ben takes Anna's list → conflict.
+    result = await _configure(
+        hass,
+        result["flow_id"],
+        {"name": "Ben", "color": [1, 2, 3], "preset": "toddler", "apple_list": "anna"},
+    )
+    assert result["errors"] == {"apple_list": "apple_list_conflict"}
+
+    # A different list is fine, and Anna's mapping is untouched by editing Ben.
+    result = await _configure(
+        hass,
+        result["flow_id"],
+        {"name": "Ben", "color": [1, 2, 3], "preset": "toddler", "apple_list": "Ben"},
+    )
+    assert result["step_id"] == "manage_members"
+    by_slug = {m["slug"]: m for m in entry.data[CONF_MEMBERS]}
+    assert by_slug["ben"]["apple_list"] == "Ben"
+    assert by_slug["ben"]["preset"] == "toddler"
+    assert by_slug["anna"]["apple_list"] == "Anna"
+
+
+async def test_edit_member_clearing_the_list_drops_its_repairs_issue(
+    hass: HomeAssistant,
+) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    entry = _make_entry(hass, members=[_member_dict("anna", apple_list="Anna")])
+    await _setup_entry(hass, entry)
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        "apple_list_missing_anna",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="apple_list_missing",
+    )
+
+    result = await _init_options_flow(hass, entry)
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "manage_members"})
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_member"})
+    result = await _configure(hass, result["flow_id"], {"member_slug": "anna"})
+    await _configure(
+        hass,
+        result["flow_id"],
+        {"name": "Anna", "color": [1, 2, 3], "preset": "school-age", "apple_list": ""},
+    )
+
+    assert entry.data[CONF_MEMBERS][0]["apple_list"] == ""
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "apple_list_missing_anna") is None
+
+
+async def test_rename_keeps_the_apple_list(hass: HomeAssistant) -> None:
+    entry = _make_entry(hass, members=[_member_dict("anna", apple_list="Anna")])
+    await _setup_entry(hass, entry)
+
+    result = await _init_options_flow(hass, entry)
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "manage_members"})
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_member"})
+    result = await _configure(hass, result["flow_id"], {"member_slug": "anna"})
+    result = await _configure(
+        hass,
+        result["flow_id"],
+        {
+            "name": "Anna-Maria",
+            "color": [245, 200, 156],
+            "preset": "school-age",
+            "apple_list": "Anna",
+        },
+    )
+    assert result["step_id"] == "rename_confirm"
+    await _configure(hass, result["flow_id"], {"confirm": True})
+
+    (member,) = entry.data[CONF_MEMBERS]
+    assert member["slug"] == "anna_maria"
+    assert member["apple_list"] == "Anna"
+
+
+async def test_deleting_a_preset_keeps_members_apple_lists(hass: HomeAssistant) -> None:
+    entry = _make_entry(hass, members=[_member_dict("anna", apple_list="Anna", preset="mine")])
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            "custom_presets": [{"slug": "mine", "display_name": "Mine", "routines": []}],
+        },
+    )
+    await _setup_entry(hass, entry)
+
+    result = await _init_options_flow(hass, entry)
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_templates"})
+    result = await _configure(
+        hass, result["flow_id"], {"next_step_id": "manage_existing_preset"}
+    )
+    result = await _configure(hass, result["flow_id"], {"preset_slug": "mine"})
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "delete_preset_confirm"})
+    await _configure(hass, result["flow_id"], {"confirm": True})
+
+    (member,) = entry.data[CONF_MEMBERS]
+    assert member["preset"] == "adult-none"
+    assert member["apple_list"] == "Anna"
+
+
+def _raise_missing_list_issue(hass: HomeAssistant, target: str) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        f"apple_list_missing_{target}",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="apple_list_missing",
+    )
+
+
+async def test_changing_the_household_list_drops_its_repairs_issue(hass: HomeAssistant) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+    _raise_missing_list_issue(hass, "household")
+
+    result = await _open_bridge_step(hass, entry)
+    await _configure(hass, result["flow_id"], {CONF_HOUSEHOLD_LIST: ""})
+
+    assert entry.data[CONF_APPLE_BRIDGE][CONF_HOUSEHOLD_LIST] == ""
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "apple_list_missing_household") is None
+
+
+async def test_resaving_the_same_household_list_keeps_its_repairs_issue(
+    hass: HomeAssistant,
+) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+    _raise_missing_list_issue(hass, "household")
+
+    result = await _open_bridge_step(hass, entry)
+    await _configure(hass, result["flow_id"], {CONF_HOUSEHOLD_LIST: "family"})
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "apple_list_missing_household") is not None
+
+
+async def test_rename_drops_the_old_slugs_repairs_issue(hass: HomeAssistant) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    entry = _make_entry(hass, members=[_member_dict("anna", apple_list="Anna")])
+    await _setup_entry(hass, entry)
+    _raise_missing_list_issue(hass, "anna")
+
+    result = await _init_options_flow(hass, entry)
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "manage_members"})
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_member"})
+    result = await _configure(hass, result["flow_id"], {"member_slug": "anna"})
+    result = await _configure(
+        hass,
+        result["flow_id"],
+        {"name": "Anna-Maria", "color": [1, 2, 3], "preset": "school-age", "apple_list": "Anna"},
+    )
+    await _configure(hass, result["flow_id"], {"confirm": True})
+
+    assert entry.data[CONF_MEMBERS][0]["slug"] == "anna_maria"
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "apple_list_missing_anna") is None

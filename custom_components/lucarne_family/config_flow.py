@@ -1,32 +1,33 @@
 """Config flow and options flow for the Lucarne Family integration."""
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
-import secrets
 from typing import Any
-from urllib.parse import urlparse
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components import webhook
 from homeassistant.core import callback
 from homeassistant.helpers import selector
+from homeassistant.helpers.network import NoURLAvailableError
 
 from . import seed_preset_routines
 from .const import (
+    CONF_APPLE_BRIDGE,
     CONF_CUSTOM_PRESETS,
     CONF_FAMILY_NAME,
+    CONF_HOUSEHOLD_LIST,
     CONF_MEMBERS,
     CONF_RESET_TIME,
-    CONF_ROUND_TRIP,
-    CONF_ROUND_TRIP_DEVICE_NAME,
-    CONF_ROUND_TRIP_ENABLED,
-    CONF_ROUND_TRIP_SECRET,
-    CONF_ROUND_TRIP_WEBHOOK_URL,
     CONF_STREAK_CHECK_TIME,
+    CONF_WEBHOOK_ID,
+    DEFAULT_HOUSEHOLD_LIST,
     DEFAULT_RESET_TIME,
     DEFAULT_STREAK_CHECK_TIME,
     DOMAIN,
+    HOUSEHOLD_SLUG,
     PRESET_ADULT_NONE,
     PRESET_SCHOOL_AGE,
 )
@@ -104,13 +105,9 @@ def _default_entry_data(family_name: str) -> dict[str, Any]:
         CONF_MEMBERS: [],
         CONF_RESET_TIME: DEFAULT_RESET_TIME,
         CONF_STREAK_CHECK_TIME: DEFAULT_STREAK_CHECK_TIME,
-        CONF_ROUND_TRIP: {
-            CONF_ROUND_TRIP_ENABLED: False,
-            CONF_ROUND_TRIP_WEBHOOK_URL: "",
-            CONF_ROUND_TRIP_SECRET: "",
-            CONF_ROUND_TRIP_DEVICE_NAME: "Sync device",
-        },
         CONF_CUSTOM_PRESETS: [],
+        CONF_WEBHOOK_ID: webhook.async_generate_id(),
+        CONF_APPLE_BRIDGE: {CONF_HOUSEHOLD_LIST: DEFAULT_HOUSEHOLD_LIST},
     }
 
 
@@ -118,6 +115,9 @@ class LucarneFamilyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle the initial config flow (runs once at install)."""
 
     VERSION = 1
+    # 1.2: Apple Reminders bridge — webhook_id + apple_bridge seeded, round_trip
+    # dropped (see __init__.async_migrate_entry).
+    MINOR_VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -150,12 +150,44 @@ class LucarneFamilyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return LucarneFamilyOptionsFlow(config_entry)
 
 
-def _validate_url(url: str) -> bool:
-    """Return True if url has http/https scheme and a non-empty host."""
-    if not url:
-        return False
-    parsed = urlparse(url)
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+def _list_key(name: str) -> str:
+    return name.strip().casefold()
+
+
+def _validate_apple_list(
+    name: str,
+    members: list[Member],
+    household_list: str,
+    *,
+    exclude_slug: str | None,
+) -> str | None:
+    """Error key when ``name`` is already mapped to another list, else None.
+
+    Two targets sharing one Reminders list would make the receiver route every
+    reminder in it to whichever target it checks first.
+    """
+    key = _list_key(name)
+    if not key:
+        return None
+    if exclude_slug != HOUSEHOLD_SLUG and _list_key(household_list) == key:
+        return "apple_list_conflict"
+    for m in members:
+        if m.slug != exclude_slug and _list_key(m.apple_list) == key:
+            return "apple_list_conflict"
+    return None
+
+
+def _apple_list_selector(available_lists: list[str]) -> Any:
+    """Free text until the bridge has reported the Mac's lists, then a dropdown."""
+    if not available_lists:
+        return str
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=available_lists,
+            custom_value=True,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
 
 
 class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
@@ -188,7 +220,7 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         return self.async_show_menu(
             step_id="init",
-            menu_options=["manage_members", "edit_schedule", "edit_round_trip", "edit_templates"],
+            menu_options=["manage_members", "edit_schedule", "edit_apple_bridge", "edit_templates"],
         )
 
     async def async_step_back_to_init(
@@ -204,69 +236,103 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
         """
         return await self.async_step_init()
 
-    async def async_step_edit_round_trip(
+    def _bridge_runtime(self) -> Any:
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get("bridge") if isinstance(entry_data, dict) else None
+
+    def _available_lists(self) -> list[str]:
+        runtime = self._bridge_runtime()
+        return list(runtime.available_lists) if runtime is not None else []
+
+    def _household_list(self) -> str:
+        bridge: dict[str, Any] = self._entry.data.get(CONF_APPLE_BRIDGE, {})
+        return str(bridge.get(CONF_HOUSEHOLD_LIST) or "")
+
+    async def async_step_edit_apple_bridge(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         errors: dict[str, str] = {}
-        current_rt: dict[str, Any] = self._entry.data.get(CONF_ROUND_TRIP, {})
+        current: dict[str, Any] = dict(self._entry.data.get(CONF_APPLE_BRIDGE, {}))
 
         if user_input is not None:
-            enabled = user_input.get(CONF_ROUND_TRIP_ENABLED, False)
-            webhook_url = (user_input.get(CONF_ROUND_TRIP_WEBHOOK_URL) or "").strip()
-            secret = (user_input.get(CONF_ROUND_TRIP_SECRET) or "").strip()
-            device_name = (user_input.get(CONF_ROUND_TRIP_DEVICE_NAME) or "Sync device").strip()
-
-            # Rotate the secret in place before validation so a generated value
-            # both passes the >=32-char check and survives alongside the user's
-            # other in-flight edits.
-            if user_input.get("generate_secret"):
-                secret = secrets.token_hex(16)
-
-            if enabled:
-                if not _validate_url(webhook_url):
-                    errors[CONF_ROUND_TRIP_WEBHOOK_URL] = "invalid_url"
-                if len(secret) < 32:
-                    errors[CONF_ROUND_TRIP_SECRET] = "secret_too_short"
-
+            household_list = (user_input.get(CONF_HOUSEHOLD_LIST) or "").strip()
+            err = _validate_apple_list(
+                household_list, self._get_members(), "", exclude_slug=HOUSEHOLD_SLUG
+            )
+            if err:
+                errors[CONF_HOUSEHOLD_LIST] = err
             if not errors:
+                if _list_key(household_list) != _list_key(self._household_list()):
+                    from .apple_bridge import async_clear_repairs_for_target
+
+                    async_clear_repairs_for_target(self.hass, HOUSEHOLD_SLUG)
                 new_data = {
                     **self._entry.data,
-                    CONF_ROUND_TRIP: {
-                        CONF_ROUND_TRIP_ENABLED: enabled,
-                        CONF_ROUND_TRIP_WEBHOOK_URL: webhook_url,
-                        CONF_ROUND_TRIP_SECRET: secret,
-                        CONF_ROUND_TRIP_DEVICE_NAME: device_name,
-                    },
+                    CONF_APPLE_BRIDGE: {**current, CONF_HOUSEHOLD_LIST: household_list},
                 }
+                if user_input.get("rotate_webhook"):
+                    # __init__.async_options_updated re-registers under the new id.
+                    new_data[CONF_WEBHOOK_ID] = webhook.async_generate_id()
                 self.hass.config_entries.async_update_entry(self._entry, data=new_data)
                 return await self.async_step_init()
 
         schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_ROUND_TRIP_ENABLED,
-                    default=current_rt.get(CONF_ROUND_TRIP_ENABLED, False),
-                ): bool,
                 vol.Optional(
-                    CONF_ROUND_TRIP_WEBHOOK_URL,
-                    default=current_rt.get(CONF_ROUND_TRIP_WEBHOOK_URL, ""),
-                ): str,
-                vol.Optional(
-                    CONF_ROUND_TRIP_SECRET,
-                    default=current_rt.get(CONF_ROUND_TRIP_SECRET, ""),
-                ): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-                ),
-                vol.Optional(
-                    CONF_ROUND_TRIP_DEVICE_NAME,
-                    default=current_rt.get(CONF_ROUND_TRIP_DEVICE_NAME, "Sync device"),
-                ): str,
-                vol.Optional("generate_secret", default=False): bool,
+                    CONF_HOUSEHOLD_LIST, default=current.get(CONF_HOUSEHOLD_LIST, "")
+                ): _apple_list_selector(self._available_lists()),
+                vol.Optional("rotate_webhook", default=False): bool,
             }
         )
         return self.async_show_form(
-            step_id="edit_round_trip", data_schema=schema, errors=errors
+            step_id="edit_apple_bridge",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders=self._bridge_placeholders(),
         )
+
+    def _bridge_placeholders(self) -> dict[str, str]:
+        webhook_id = str(self._entry.data.get(CONF_WEBHOOK_ID) or "")
+        try:
+            url = webhook.async_generate_url(self.hass, webhook_id, prefer_external=False)
+        except NoURLAvailableError:
+            url = ""
+        if url:
+            install_command = f"lucarne-bridge install {url}"
+        else:
+            install_command = (
+                "Set an internal URL under Settings → System → Network, "
+                "then reopen this dialog for the install command."
+            )
+        runtime = self._bridge_runtime()
+        status = runtime.status if runtime is not None else None
+        if status is None:
+            last_sync = "never"
+        elif status.error:
+            last_sync = f"{status.synced_at:%Y-%m-%d %H:%M} UTC from {status.host}: {status.error}"
+        else:
+            parts = [
+                f"{status.received} received",
+                f"{status.created} created",
+                f"{status.updated} updated",
+                f"{status.completed_in_ha} completed here",
+                f"{status.sent_complete} sent back",
+            ]
+            if status.skipped_lists:
+                parts.append(f"skipped: {', '.join(status.skipped_lists)}")
+            if status.unmapped_lists:
+                parts.append(f"not mapped: {', '.join(status.unmapped_lists)}")
+            last_sync = (
+                f"{status.synced_at:%Y-%m-%d %H:%M} UTC from {status.host} "
+                f"(bridge {status.bridge_version or '?'}): {', '.join(parts)}"
+            )
+        available = self._available_lists()
+        return {
+            "webhook_url": url or "(no URL configured)",
+            "install_command": install_command,
+            "last_sync": last_sync,
+            "available_lists": ", ".join(available) if available else "(none reported yet)",
+        }
 
     async def async_step_edit_templates(
         self, user_input: dict[str, Any] | None = None
@@ -505,16 +571,7 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
 
             if affected:
                 migrated = [
-                    Member(
-                        slug=m.slug,
-                        name=m.name,
-                        color=m.color,
-                        avatar=m.avatar,
-                        created_at=m.created_at,
-                        preset=PRESET_ADULT_NONE if m.preset == slug else m.preset,
-                        todo_entity_id=m.todo_entity_id,
-                        streak_counter_id=m.streak_counter_id,
-                    )
+                    dataclasses.replace(m, preset=PRESET_ADULT_NONE) if m.preset == slug else m
                     for m in members
                 ]
                 await self._save_members(migrated)
@@ -700,6 +757,7 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
             name = user_input.get("name", "").strip()
             color = _normalize_color(user_input.get("color"))
             preset = user_input.get("preset", PRESET_SCHOOL_AGE)
+            apple_list = (user_input.get("apple_list") or "").strip()
 
             err = _validate_name(name)
             if err:
@@ -707,6 +765,11 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
             color_err = _validate_color(color)
             if color_err:
                 errors["color"] = color_err
+            list_err = _validate_apple_list(
+                apple_list, self._get_members(), self._household_list(), exclude_slug=None
+            )
+            if list_err:
+                errors["apple_list"] = list_err
 
             if not errors:
                 slug = _make_slug(name)
@@ -730,6 +793,7 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                             avatar=None,
                             created_at=datetime.now(UTC),
                             preset=preset,
+                            apple_list=apple_list,
                         )
 
                         # Create managed entities and record their ids
@@ -753,13 +817,8 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                             errors["base"] = "entity_create_failed"
 
                         if not errors:
-                            new_member = Member(
-                                slug=slug,
-                                name=name,
-                                color=color,
-                                avatar=None,
-                                created_at=new_member.created_at,
-                                preset=preset,
+                            new_member = dataclasses.replace(
+                                new_member,
                                 todo_entity_id=todo_id,
                                 streak_counter_id=counter_id,
                             )
@@ -795,6 +854,9 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                 vol.Required("name"): str,
                 vol.Required("color", default=_hex_to_rgb("#4a90e2")): selector.ColorRGBSelector(),
                 vol.Required("preset", default=PRESET_SCHOOL_AGE): vol.In(preset_options),
+                vol.Optional("apple_list", default=""): _apple_list_selector(
+                    self._available_lists()
+                ),
             }
         )
         return self.async_show_form(step_id="add_member", data_schema=schema, errors=errors)
@@ -814,6 +876,7 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
             name = user_input.get("name", "").strip()
             color = _normalize_color(user_input.get("color"))
             preset = user_input.get("preset", PRESET_SCHOOL_AGE)
+            apple_list = (user_input.get("apple_list") or "").strip()
 
             err = _validate_name(name)
             if err:
@@ -821,6 +884,14 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
             color_err = _validate_color(color)
             if color_err:
                 errors["color"] = color_err
+            list_err = _validate_apple_list(
+                apple_list,
+                members,
+                self._household_list(),
+                exclude_slug=self._selected_member_slug,
+            )
+            if list_err:
+                errors["apple_list"] = list_err
 
             target = next(
                 (m for m in members if m.slug == self._selected_member_slug), None
@@ -840,24 +911,24 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                     "name": name,
                     "color": color,
                     "preset": preset,
+                    "apple_list": apple_list,
                 }
                 return await self.async_step_rename_confirm()
 
             if not errors:
                 updated = [
-                    Member(
-                        slug=m.slug,
-                        name=name if m.slug == self._selected_member_slug else m.name,
-                        color=color if m.slug == self._selected_member_slug else m.color,
-                        avatar=m.avatar,
-                        created_at=m.created_at,
-                        preset=preset if m.slug == self._selected_member_slug else m.preset,
-                        todo_entity_id=m.todo_entity_id,
-                        streak_counter_id=m.streak_counter_id,
+                    dataclasses.replace(
+                        m, name=name, color=color, preset=preset, apple_list=apple_list
                     )
+                    if m.slug == self._selected_member_slug
+                    else m
                     for m in members
                 ]
                 await self._save_members(updated)
+                if target is not None and _list_key(target.apple_list) != _list_key(apple_list):
+                    from .apple_bridge import async_clear_repairs_for_target
+
+                    async_clear_repairs_for_target(self.hass, target.slug)
                 self._selected_member_slug = None
                 return await self.async_step_manage_members()
 
@@ -884,6 +955,9 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                     "color", default=_hex_to_rgb(target.color)
                 ): selector.ColorRGBSelector(),
                 vol.Required("preset", default=target.preset): vol.In(preset_options),
+                vol.Optional("apple_list", default=target.apple_list): _apple_list_selector(
+                    self._available_lists()
+                ),
             }
         )
         return self.async_show_form(step_id="edit_member", data_schema=schema, errors=errors)
@@ -957,21 +1031,26 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                     sel = self._selected_member_slug
                     pend = self._pending_rename
                     updated = [
-                        Member(
-                            slug=new_slug if m.slug == sel else m.slug,
-                            name=pend["name"] if m.slug == sel else m.name,
-                            color=pend["color"] if m.slug == sel else m.color,
-                            avatar=m.avatar,
-                            created_at=m.created_at,
-                            preset=pend["preset"] if m.slug == sel else m.preset,
-                            todo_entity_id=new_todo_id if m.slug == sel else m.todo_entity_id,
-                            streak_counter_id=(
-                                new_counter_id if m.slug == sel else m.streak_counter_id
-                            ),
+                        dataclasses.replace(
+                            m,
+                            slug=new_slug,
+                            name=pend["name"],
+                            color=pend["color"],
+                            preset=pend["preset"],
+                            apple_list=pend.get("apple_list", m.apple_list),
+                            todo_entity_id=new_todo_id,
+                            streak_counter_id=new_counter_id,
                         )
+                        if m.slug == sel
+                        else m
                         for m in members
                     ]
                     await self._save_members(updated)
+                    # The issue is keyed by slug; the next sync raises it again
+                    # under the new one if the list is still missing.
+                    from .apple_bridge import async_clear_repairs_for_target
+
+                    async_clear_repairs_for_target(self.hass, sel or "")
                     self._selected_member_slug = None
                     self._pending_rename = None
                     return await self.async_step_manage_members()
@@ -1054,6 +1133,7 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                     await self._sanitize_rotating_tasks_after_removal(
                         removed_slug, remaining
                     )
+                    await self._forget_apple_sync_after_removal(removed_slug)
                     self._selected_member_slug = None
                     return await self.async_step_manage_members()
 
@@ -1068,6 +1148,26 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="remove_member", data_schema=schema, errors=errors
         )
+
+    async def _forget_apple_sync_after_removal(self, removed_slug: str | None) -> None:
+        """Drop the removed member's Reminders sync rows and missing-list issue.
+
+        The rows can never be reconciled again — their list is gone — and the
+        bridge stops receiving that list on its next GET.
+        """
+        if not removed_slug:
+            return
+        from .apple_bridge import async_clear_repairs_for_target
+        from .store import LucarneFamilyStore
+
+        store: LucarneFamilyStore = self.hass.data[DOMAIN][self._entry.entry_id]["store"]
+        try:
+            await store.async_delete_apple_sync_state_for_member(removed_slug)
+        except Exception as exc:
+            # Rows that outlive the member would check reminders off in Apple
+            # if the same slug is ever re-added, so this must be visible.
+            _LOGGER.warning("Could not drop Reminders sync rows for %r: %s", removed_slug, exc)
+        async_clear_repairs_for_target(self.hass, removed_slug)
 
     async def _sanitize_rotating_tasks_after_removal(
         self, removed_slug: str | None, remaining: list[Member]

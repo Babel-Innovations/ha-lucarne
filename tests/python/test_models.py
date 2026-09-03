@@ -69,3 +69,20 @@ def test_member_preserves_all_fields() -> None:
     assert d["preset"] == "school-age"
     assert d["todo_entity_id"] == "todo.anna"
     assert d["streak_counter_id"] == "counter.anna_streak"
+
+
+def test_member_apple_list_defaults_blank_and_round_trips() -> None:
+    member = _make_member()
+    assert member.apple_list == ""
+    assert Member.from_dict(member.to_dict()).apple_list == ""
+
+    synced = Member.from_dict({**member.to_dict(), "apple_list": "Anna"})
+    assert synced.apple_list == "Anna"
+    assert synced.to_dict()["apple_list"] == "Anna"
+
+
+def test_member_from_dict_tolerates_pre_bridge_data() -> None:
+    """Entries written before the bridge field existed load with a blank list."""
+    data = _make_member().to_dict()
+    del data["apple_list"]
+    assert Member.from_dict(data).apple_list == ""

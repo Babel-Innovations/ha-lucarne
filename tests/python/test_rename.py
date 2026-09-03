@@ -60,12 +60,6 @@ def _make_entry(
             CONF_MEMBERS: members or [],
             "reset_time": DEFAULT_RESET_TIME,
             "streak_check_time": DEFAULT_STREAK_CHECK_TIME,
-            "round_trip": {
-                "enabled": False,
-                "webhook_url": "",
-                "secret": "",
-                "device_name": "Sync device",
-            },
             "custom_presets": [],
         },
     )

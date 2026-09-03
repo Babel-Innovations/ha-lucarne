@@ -209,29 +209,13 @@ The frontend `family-subscription.ts` subscribes to this event to refresh member
 
 ---
 
-### lucarne_family_apple_writeback_requested
+### Removed — lucarne_family_apple_writeback_requested
 
-Fired when a task with `source == "apple"` **and a non-empty `apple_uid`** (set by the Apple
-sentinel backfill when the item first appeared) flips to `completed` **and**
-`round_trip.enabled == true` in the Options Flow config. A future subscriber is responsible for
-the POST to the Reminders bridge. See
-[`docs/reminders-bridge.md`](reminders-bridge.md#round-trip-writeback) for the full protocol,
-accessor contract, and why `webhook_url`/`secret` are excluded from the payload.
-
-**Payload:**
-
-```yaml
-event_type: lucarne_family_apple_writeback_requested
-event_data:
-  apple_uid: "Apple-UUID-string"   # from [apple:UUID] sentinel embedded by the bridge
-  status: "completed"
-  timestamp: "2026-05-25T14:30:00+00:00"   # UTC ISO-8601
-  device_name: "Mac mini"          # from Options Flow config (for receiver identification)
-```
-
-> **Security note**: `webhook_url` and `secret` are intentionally absent. HA bus events are
-> visible to all integrations and any user with Developer Tools access. Secrets stay in
-> `entry.data` only; retrieve them via `get_round_trip_config(hass)`.
+Fired by 1.x releases before the bridge could write back. The Apple Reminders bridge now
+learns what to check off from the webhook response
+([reminders-bridge.md](reminders-bridge.md#protocol-for-developers)), so the event and the
+`round_trip` options that gated it are gone. Nothing replaces it: there is no HA-side signal
+for "the Mac checked this off" beyond the task's own state change.
 
 ---
 

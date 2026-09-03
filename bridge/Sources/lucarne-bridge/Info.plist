@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.babel-innovations.lucarne-bridge</string>
+  <key>CFBundleName</key>
+  <string>lucarne-bridge</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.0.0-dev</string>
+  <key>CFBundleVersion</key>
+  <string>0.0.0-dev</string>
+  <key>NSHumanReadableCopyright</key>
+  <string>Lucarne Family — Apple Reminders bridge</string>
+  <key>NSRemindersFullAccessUsageDescription</key>
+  <string>lucarne-bridge mirrors the Reminders lists you map in Home Assistant into Lucarne, and checks reminders off when tasks are completed there.</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>lucarne-bridge mirrors the Reminders lists you map in Home Assistant into Lucarne, and checks reminders off when tasks are completed there.</string>
+</dict>
+</plist>

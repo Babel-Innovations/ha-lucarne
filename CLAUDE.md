@@ -39,15 +39,14 @@ custom_components/
     avatar_service.py         Avatar upload: validates, writes to /local/lucarne/avatars/, fires event
     member_service.py         set_member_avatar service: emoji or path avatar, fires member_updated
     websocket_api.py          WS handler for lucarne_family/get_family command
+    apple_bridge.py           Apple Reminders bridge receiver: GET mapping / POST sync webhook, response-driven writeback
     apple_sentinel_backfill.py Extracts [apple:UUID] from item descriptions → source=apple metadata
     task_locks.py             Per-uid asyncio lock shared by every task_metadata INSERT + delete_task (#114)
     presets.py                Routine preset definitions (school-age kid, toddler, adult)
     models.py, const.py       Dataclasses and constants
     frontend/ha-lucarne.js    Built card bundle (committed; SERVED by async_setup, never registered)
     frontend/ha-lucarne-loader.js  Built loader shim (committed; the ONLY registered frontend module)
-blueprints/automation/
-  lucarne_reminders_sync.yaml Only remaining blueprint (webhook receiver for Reminders bridge)
-bridge/                       Mac mini launchd bridge setup instructions
+bridge/                       SwiftPM package: the lucarne-bridge macOS CLI (EventKit → webhook), its installer and tap formula
 docs/                         Architecture, integration, services, events docs
 tests/                        Node test suites (components + shared), pytest suites (Python)
   setup/ha-mock.mjs           Shared HA stub for Lit component tests
@@ -113,6 +112,7 @@ pip install -e ".[dev]"
 ```bash
 npm run build && npm run test:coverage && npm run lint && npm run typecheck
 pytest tests/python/
+(cd bridge && swift build && swift test)   # only when bridge/** changed
 ```
 
 `build` runs **first** so `tests/build/bundle-syntax.test.ts` parses the bundle you
@@ -319,7 +319,27 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Avatar writes**: Only permitted write path under `<config>/www/` is `/local/lucarne/avatars/`. `avatar_service.py` enforces this; tests must cover path-traversal cases.
 - **SQLite file in `<config>/` root**: Name pattern: `lucarne_family_<entry_id>.db`. Never hardcode the entry ID.
 - **Avatar center-square crop is deferred**: The upload modal accepts any aspect ratio; `avatar_service.py` stores raw uploaded bytes. A future spec should add `PIL ImageOps.fit` centering in `_write_avatar`. Do not add it without a spec.
-- **Round-trip event vs POST**: `completion_listener.py` fires `lucarne_family_apple_writeback_requested` when `round_trip.enabled == true` but does **not** POST to the webhook. The POST is deferred to a future spec. Future subscribers **must** call `get_round_trip_config(hass)` from `__init__.py` — never read `entry.data["round_trip"]` directly, to survive storage layout changes.
+- **The Apple Reminders bridge is response-driven; HA never pushes to the Mac.** `apple_bridge.py`
+  serves one webhook per entry (`GET` = which lists to send, `POST` = the open reminders of
+  those lists) and answers the `POST` with `{"complete": [apple ids]}` — that response *is* the
+  HA → Apple direction. Don't add an outbound request, an event subscriber, or a second
+  credential; the old `round_trip` config and `lucarne_family_apple_writeback_requested` event
+  were removed for exactly that reason. Rules the receiver inherits from the rest of the
+  integration, all pinned by `tests/python/test_apple_bridge.py`: items are matched by the
+  `[apple:UUID]` sentinel only (never by title — that was the blueprint's duplicate-title bug);
+  a list that is not readable (entity missing, `unavailable`, `todo_items is None`) is
+  **skipped**, never treated as empty, because every write is driven by an absence
+  (`reconcile.readable_todo_entity` is the shared guard); the create path holds the uid lock
+  across `async_create_todo_item` *and* the locked backfill INSERT (#114); an item completed in
+  HA stays completed and is re-reported until Apple confirms; a reminder is **never deleted** in
+  Apple, only completed. `apple_sync_state` rows exist to make an HA-side delete observable
+  (row present, item gone ⇒ report it) and are dropped only when the id leaves Apple's active
+  set — dropping them earlier lets a bridge that failed to complete the reminder re-create the
+  task as new. Two HA facts shape the handler: HA's webhook dispatcher turns any exception
+  into a silent `200`, so the handler returns its own JSON `4xx`/`5xx`; and `webhook_id` is the
+  credential, so the webhook is registered with `local_only=False` on purpose (Tailscale). The
+  Mac's reported list names live in `BridgeRuntime` (`hass.data`), never in `entry.data` — a
+  five-minute `POST` must not rewrite the config entry or fire the options-update listener.
 - **`set_member_avatar` emoji validation**: Uses explicit Unicode block ranges (U+1F000–U+1FAFF, U+2300–U+27FF, U+2B00–U+2BFF, U+1F1E0–U+1F1FF). Requires at least one base-emoji codepoint; allows ZWJ-joined compound emoji (e.g., family/profession glyphs); rejects ASCII text, invisible-only strings, and unjoined back-to-back emoji.
 - **A task exists because the todo item exists, not because `task_metadata` has a row**:
   anything added outside `lucarne_family.add_task` — HA's to-do panel, voice, the Companion
@@ -572,7 +592,8 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - **Don't** write a regex literal using `\p{...}`, lookbehind, or the `v` flag — use `new RegExp` with a fallback.
 - **Don't** override `setConfig()` or `render()` in a card — use `applyConfig()` / `renderContent()`.
 - **Don't** split the ESM bundle or re-introduce a separate HACS `plugin` distribution — the integration serves the single bundle and registers only the loader shim that imports it.
-- **Don't** implement the round-trip webhook POST without a spec — only the HA event is fired in v0.2.
+- **Don't** add an HA → Mac request to the Reminders bridge, or move its list names into `entry.data` — the `POST` response carries the writeback and `BridgeRuntime` holds the names (see the bridge pitfall).
+- **Don't** rebuild a `Member(...)` field by field in `config_flow.py` — use `dataclasses.replace`, or the next field (as `apple_list` was) silently drops on every edit.
 - **Don't** add server-side center-square crop to `avatar_service.py` without a spec — the deferred design is documented in CLAUDE.md and the phase-6 spec.
 
 ## Pointers
@@ -582,5 +603,5 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - Integration user guide: `docs/integration.md`
 - Service reference: `docs/services.md`
 - Event reference: `docs/events.md`
-- Reminders bridge setup: `bridge/README.md`
+- Reminders bridge: `docs/reminders-bridge.md` (setup, semantics, protocol); Swift sources under `bridge/`
 - Issue #101 root cause (read before touching the loader or the build target): the file header in `src/loader/boot.ts`, plus PR #115 and the issue thread

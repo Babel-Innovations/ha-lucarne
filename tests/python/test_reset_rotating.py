@@ -43,12 +43,6 @@ def _make_entry(
             "members": members_data,
             "reset_time": "04:00",
             "streak_check_time": "21:00",
-            "round_trip": {
-                "enabled": False,
-                "webhook_url": "",
-                "secret": "",
-                "device_name": "",
-            },
             "custom_presets": [],
         },
     )

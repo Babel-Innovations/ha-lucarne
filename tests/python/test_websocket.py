@@ -25,12 +25,6 @@ def _make_entry(
             "members": members or [],
             "reset_time": "04:00",
             "streak_check_time": "21:00",
-            "round_trip": {
-                "enabled": False,
-                "webhook_url": "",
-                "secret": "",
-                "device_name": "Sync device",
-            },
             "custom_presets": [],
         },
     )
@@ -104,6 +98,7 @@ async def test_get_family_returns_documented_shape(
     assert "color" in m
     assert "todo_entity_id" in m
     assert "streak_counter_id" in m
+    assert m["apple_list"] == ""
 
     # Task shape
     assert len(result["task_metadata"]) == 1

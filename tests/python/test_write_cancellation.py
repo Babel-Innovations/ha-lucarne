@@ -51,12 +51,6 @@ async def _make_store(hass: HomeAssistant, tmp_path: Path) -> LucarneFamilyStore
             "members": [],
             "reset_time": "04:00",
             "streak_check_time": "21:00",
-            "round_trip": {
-                "enabled": False,
-                "webhook_url": "",
-                "secret": "",
-                "device_name": "",
-            },
             "custom_presets": [],
         },
     )

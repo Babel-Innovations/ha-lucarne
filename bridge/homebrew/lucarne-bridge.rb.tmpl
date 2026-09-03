@@ -1,0 +1,30 @@
+# Rendered by .github/workflows/bridge-release.yml into
+# Babel-Innovations/homebrew-lucarne:Formula/lucarne-bridge.rb.
+class LucarneBridge < Formula
+  desc "Mirror Apple Reminders into Lucarne Family (Home Assistant)"
+  homepage "https://github.com/Babel-Innovations/ha-lucarne"
+  url "https://github.com/Babel-Innovations/ha-lucarne/releases/download/v__VERSION__/lucarne-bridge-__VERSION__-macos-universal.zip"
+  sha256 "__SHA256__"
+  version "__VERSION__"
+  license "__LICENSE__"
+
+  depends_on :macos => :ventura
+
+  def install
+    bin.install "lucarne-bridge"
+  end
+
+  def caveats
+    <<~EOS
+      Copy the install command from Home Assistant (Settings → Devices & services →
+      Lucarne Family → Configure → Apple Reminders bridge) and run it once:
+        lucarne-bridge install <webhook url>
+      The launchd agent runs #{HOMEBREW_PREFIX}/bin/lucarne-bridge, so upgrades need no
+      reinstall; `lucarne-bridge status` warns if the agent ever points at a missing file.
+    EOS
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/lucarne-bridge --version")
+  end
+end

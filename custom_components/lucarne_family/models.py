@@ -69,6 +69,9 @@ class Member:
     preset: str
     todo_entity_id: str = ""
     streak_counter_id: str = ""
+    # Name of the Apple Reminders list mirrored into this member's todo entity
+    # by the bridge; blank means the member is not synced.
+    apple_list: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -80,6 +83,7 @@ class Member:
             "preset": self.preset,
             "todo_entity_id": self.todo_entity_id,
             "streak_counter_id": self.streak_counter_id,
+            "apple_list": self.apple_list,
         }
 
     @classmethod
@@ -96,4 +100,5 @@ class Member:
             preset=data["preset"],
             todo_entity_id=data.get("todo_entity_id", ""),
             streak_counter_id=data.get("streak_counter_id", ""),
+            apple_list=data.get("apple_list", ""),
         )

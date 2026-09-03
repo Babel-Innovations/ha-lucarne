@@ -99,8 +99,8 @@ each comfortably, so 6 kids fit on one row.
 ```
 
 Add tasks (routines and chores) via the "+ Add task" button in each column, or via
-Settings → Devices & Services → Lucarne Family → Configure. Update the `lucarne_reminders_sync`
-blueprint instance's `list_mappings` if a member has an Apple Reminders list.
+Settings → Devices & Services → Lucarne Family → Configure. If a member has their own Apple
+Reminders list, set it under Edit member (see [reminders-bridge.md](reminders-bridge.md)).
 
 ---
 

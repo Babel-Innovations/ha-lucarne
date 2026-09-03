@@ -1,6 +1,7 @@
 """Tests for config flow (first-time setup)."""
 from __future__ import annotations
 
+import re
 from unittest.mock import patch
 
 from homeassistant import data_entry_flow
@@ -48,7 +49,10 @@ async def test_config_flow_happy_path(hass: HomeAssistant) -> None:
     assert entry.data[CONF_MEMBERS] == []
     assert entry.data["reset_time"] == DEFAULT_RESET_TIME
     assert entry.data["streak_check_time"] == DEFAULT_STREAK_CHECK_TIME
-    assert entry.data["round_trip"]["enabled"] is False
+    assert "round_trip" not in entry.data
+    assert re.fullmatch(r"[0-9a-f]{64}", entry.data["webhook_id"])
+    assert entry.data["apple_bridge"] == {"household_list": "Family"}
+    assert entry.minor_version == 2
 
 
 async def test_config_flow_empty_name_rejected(hass: HomeAssistant) -> None:

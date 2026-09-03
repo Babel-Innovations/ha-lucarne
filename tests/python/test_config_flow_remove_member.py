@@ -42,12 +42,6 @@ def _make_entry(
             CONF_MEMBERS: [_member(s).to_dict() for s in slugs],
             "reset_time": "04:00",
             "streak_check_time": "21:00",
-            "round_trip": {
-                "enabled": False,
-                "webhook_url": "",
-                "secret": "",
-                "device_name": "Sync device",
-            },
             "custom_presets": [],
         },
     )
@@ -244,3 +238,31 @@ async def test_remove_last_owner_deletes_task(
         row = await store.async_get_task_metadata("uid-rot-r3")
         assert row is None, "Task should have been deleted"
         assert any(e.data["uid"] == "uid-rot-r3" for e in delete_events)
+
+
+async def test_remove_member_forgets_its_reminders_sync_rows_and_issue(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    with patch(
+        "custom_components.lucarne_family.entity_manager.async_delete_member_entities",
+        new_callable=AsyncMock,
+    ):
+        _entry, store = await _setup(hass, tmp_path, slugs=["alice", "bob"])
+        await store.async_upsert_apple_sync_state("apple-a", "alice", "uid-a")
+        await store.async_upsert_apple_sync_state("apple-b", "bob", "uid-b")
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            "apple_list_missing_bob",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="apple_list_missing",
+        )
+
+        await _run_remove_member(hass, _entry, "bob")
+
+        assert await store.async_get_apple_sync_state("bob") == []
+        assert len(await store.async_get_apple_sync_state("alice")) == 1
+        assert ir.async_get(hass).async_get_issue(DOMAIN, "apple_list_missing_bob") is None

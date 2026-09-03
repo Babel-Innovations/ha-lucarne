@@ -6,9 +6,11 @@ import hashlib
 import logging
 import os
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from homeassistant.components import webhook
 from homeassistant.components.frontend import DATA_THEMES, add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.todo import TodoItem
@@ -20,6 +22,10 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.loader import async_get_integration
 
 from .const import (
+    CONF_APPLE_BRIDGE,
+    CONF_HOUSEHOLD_LIST,
+    CONF_WEBHOOK_ID,
+    DEFAULT_HOUSEHOLD_LIST,
     DOMAIN,
     FRONTEND_URL,
     LOADER_URL,
@@ -180,6 +186,47 @@ async def _async_register_theme(hass: HomeAssistant) -> None:
     _LOGGER.debug("Registered bundled %r theme", THEME_NAME)
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate a config entry written by an older version.
+
+    1.1 → 1.2 (Apple Reminders bridge): mint ``webhook_id``, seed ``apple_bridge``,
+    and drop the old ``round_trip`` block — its webhook URL / HMAC secret were
+    for a push to the Mac that was never built; the bridge now learns what to
+    complete from the webhook *response*.
+    """
+    if entry.version > 1:
+        return False
+    if entry.minor_version < 2:
+        data = _bridge_migrated_data(entry.data)
+        hass.config_entries.async_update_entry(entry, data=data, minor_version=2)
+        _LOGGER.info("Migrated Lucarne Family entry %s to 1.2", entry.entry_id)
+    return True
+
+
+def _bridge_migrated_data(data: Mapping[str, Any]) -> dict[str, Any]:
+    new_data = {k: v for k, v in data.items() if k != "round_trip"}
+    if not new_data.get(CONF_WEBHOOK_ID):
+        new_data[CONF_WEBHOOK_ID] = webhook.async_generate_id()
+    bridge = dict(new_data.get(CONF_APPLE_BRIDGE) or {})
+    bridge.setdefault(CONF_HOUSEHOLD_LIST, DEFAULT_HOUSEHOLD_LIST)
+    new_data[CONF_APPLE_BRIDGE] = bridge
+    return new_data
+
+
+def _register_bridge_webhook(hass: HomeAssistant, entry: ConfigEntry, webhook_id: str) -> None:
+    from .apple_bridge import async_handle_webhook
+
+    webhook.async_register(
+        hass,
+        DOMAIN,
+        f"Lucarne Family Apple Reminders bridge ({entry.title})",
+        webhook_id,
+        async_handle_webhook,
+        local_only=False,
+        allowed_methods=["GET", "POST"],
+    )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Lucarne Family from a config entry.
 
@@ -188,6 +235,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     2. Ensure entities (todo + counter entities exist before services reference them)
     3. Register services (must exist before managed automations can call them)
     4. Register WebSocket command (once per process, guarded)
+    4b. Register the Apple Reminders bridge webhook (needs the store + entities)
     5. Start completion listener (needs entity set from step 2)
     6. Write managed automations (time-change listeners call services from step 3)
     7. Register options-update listener (last, so re-setup uses the populated state)
@@ -224,6 +272,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_register_websocket_commands(hass)
 
+    # Step 4b: Apple Reminders bridge webhook. One per entry; the id is the
+    # bridge's credential and local_only is off on purpose (Tailscale).
+    from .apple_bridge import BridgeRuntime
+
+    if not entry.data.get(CONF_WEBHOOK_ID):
+        # An entry that skipped async_migrate_entry (tests build entries by hand).
+        hass.config_entries.async_update_entry(
+            entry, data=_bridge_migrated_data(entry.data)
+        )
+    webhook_id: str = entry.data[CONF_WEBHOOK_ID]
+    runtime = BridgeRuntime(webhook_id=webhook_id)
+    hass.data[DOMAIN][entry.entry_id]["bridge"] = runtime
+    _register_bridge_webhook(hass, entry, webhook_id)
+    # Read the id at unload time: async_options_updated may have rotated it.
+    entry.async_on_unload(lambda: webhook.async_unregister(hass, runtime.webhook_id))
+
     # Step 5: Start completion listener (state-change listener for managed entities).
     from .completion_listener import async_start_completion_listener
 
@@ -244,6 +308,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(async_options_updated))
 
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Drop the Reminders bridge's Repairs issues with the entry that raised them."""
+    from .apple_bridge import async_clear_all_repairs
+
+    async_clear_all_repairs(hass)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -284,6 +355,14 @@ async def async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None
     _LOGGER.debug("Options updated: %s", entry.entry_id)
 
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+
+    # Re-register the bridge webhook if the options flow rotated its id.
+    runtime = entry_data.get("bridge")
+    new_webhook_id = entry.data.get(CONF_WEBHOOK_ID)
+    if runtime is not None and new_webhook_id and runtime.webhook_id != new_webhook_id:
+        webhook.async_unregister(hass, runtime.webhook_id)
+        runtime.webhook_id = new_webhook_id
+        _register_bridge_webhook(hass, entry, new_webhook_id)
 
     # Rewire time-change listeners for new reset/streak times.
     old_unsub = entry_data.pop("unsub_automations", None)
@@ -399,44 +478,6 @@ async def _async_reconcile_member_entities(
                         "it may be an orphaned entity from a deleted member",
                         er_entry.entity_id,
                     )
-
-
-# ---------------------------------------------------------------------------
-# Round-trip config accessor
-# ---------------------------------------------------------------------------
-
-
-@dataclasses.dataclass(frozen=True)
-class RoundTripConfig:
-    """Typed container for the round-trip writeback configuration.
-
-    Callers MUST use get_round_trip_config() instead of reading entry.data
-    directly so storage layout changes don't break subscribers.
-    """
-
-    webhook_url: str
-    secret: str
-    device_name: str
-
-
-def get_round_trip_config(hass: HomeAssistant) -> RoundTripConfig | None:
-    """Return the round-trip config from the single lucarne_family config entry.
-
-    Returns None if the integration is not set up or round-trip is disabled.
-    Future-spec subscribers MUST call this accessor — never read entry.data directly.
-    """
-    entries = hass.config_entries.async_entries(DOMAIN)
-    if not entries:
-        return None
-    entry = entries[0]
-    rt = entry.data.get("round_trip", {})
-    if not rt.get("enabled"):
-        return None
-    return RoundTripConfig(
-        webhook_url=rt.get("webhook_url", ""),
-        secret=rt.get("secret", ""),
-        device_name=rt.get("device_name", "Sync device"),
-    )
 
 
 # ---------------------------------------------------------------------------

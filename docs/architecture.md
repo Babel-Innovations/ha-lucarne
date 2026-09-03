@@ -5,14 +5,18 @@
 ```
 Apple Reminders
       │
-      │  Shortcuts.app (ha-lucarne-sync)
-      │  every 300 s via launchd
+      │  lucarne-bridge (EventKit), every 300 s via launchd
       ▼
-    MacOS ──── POST /api/webhook/<secret> ────► Home Assistant
+     Mac ──── GET  /api/webhook/<id>  ◄── which lists, where they land ──┐
+         ──── POST /api/webhook/<id>  ── open reminders of those lists ──►│  Home Assistant
+         ◄─── {"complete": [ids]}     ── completed/deleted here ──────────┘
                                                      │
-                                              lucarne_reminders_sync
-                                              automation (blueprint)
-                                                     │ upsert by Apple UID
+                                          lucarne_family apple_bridge.py
+                                          (match by [apple:UUID] sentinel,
+                                           create/update/complete under the
+                                           uid lock; apple_sync_state rows
+                                           make an HA-side delete visible)
+                                                     │
                                                      ▼
                                             local_todo entities
                                         (todo.<slug>, todo.lucarne_household)
@@ -271,10 +275,16 @@ The config entry `data` dict has this shape (Phase 2):
   ],
   "reset_time": "04:00",
   "streak_check_time": "21:00",
-  "round_trip": { "enabled": false, "webhook_url": "", "secret": "", "device_name": "Sync device" },
-  "custom_presets": []
+  "custom_presets": [],
+  "webhook_id": "6f1c…(64 hex)",
+  "apple_bridge": { "household_list": "Family" }
 }
 ```
+
+`webhook_id` is the Apple Reminders bridge's credential (see
+[reminders-bridge.md](reminders-bridge.md)); each member carries an optional `apple_list`.
+Entries written before 1.2 are migrated by `async_migrate_entry`, which mints the id and drops
+the old `round_trip` block.
 
 ### Storage split
 
@@ -283,6 +293,7 @@ The config entry `data` dict has this shape (Phase 2):
 | Members | `config_entry.data["members"]` | Bounded (~5), visible in HA backups, easily debuggable via `.storage/core.config_entries` |
 | Task metadata | SQLite (`lucarne_family_<entry_id>.db`, table `task_metadata`) | Unbounded — could be thousands; SQLite handles this cleanly |
 | Completion history | SQLite (`completion_log` table) | Append-only audit log; foundation for streak computation and future rewards |
+| Reminders sync state | SQLite (`apple_sync_state` table) | One row per Apple id the bridge receiver created; makes an HA-side delete reportable back to the Mac |
 | Avatar files | `<config>/www/lucarne/avatars/` | Binary files stay off the database; path reference in member data |
 
 ### The todo entity owns existence; `task_metadata` is enrichment
@@ -292,8 +303,8 @@ Lucarne-specific extras — type, icon, recurrence, assignee, time-of-day, rotat
 owners — and may legitimately be absent.
 
 Anything created outside `lucarne_family.add_task` arrives without one: HA's to-do
-panel, voice, the Companion app, an agent/MCP `todo.add_item` call, the Reminders
-bridge. Such an item still renders in the cards, because `buildRenderableTasks`
+panel, voice, the Companion app, an agent/MCP `todo.add_item` call (the Reminders
+bridge writes its row itself, inside the same uid lock as the item). Such an item still renders in the cards, because `buildRenderableTasks`
 (`src/shared/family-subscription.ts`) synthesizes fallback metadata for uids it
 doesn't recognize. Treating the table as the *existence* check therefore produced a
 row that looked normal but could not be deleted, toggled, or edited (issue #111).
@@ -649,13 +660,11 @@ See [features/chores-card/README.md](../features/chores-card/README.md) for the 
 
 ## Blueprints
 
-One automation blueprint ships under `blueprints/automation/`:
-
-- **lucarne_reminders_sync** — webhook receiver, diffs by Apple UID, upserts into `local_todo`
-
-Daily routine reset and streak checks are now managed by the `lucarne_family` integration via
-in-process time-change listeners (configured via the integration's Options Flow). The former
-`lucarne_chores_daily_reset` and `lucarne_chores_streak_advance` blueprints have been retired.
+None ship. The Apple Reminders webhook is received by the integration itself
+(`apple_bridge.py`), and the daily routine reset and streak checks are in-process
+time-change listeners configured through the Options Flow. The former
+`lucarne_reminders_sync`, `lucarne_chores_daily_reset` and `lucarne_chores_streak_advance`
+blueprints have all been retired.
 
 ## Build
 

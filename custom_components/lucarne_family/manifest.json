@@ -4,7 +4,7 @@
   "after_dependencies": ["frontend"],
   "codeowners": ["@Babel-Innovations"],
   "config_flow": true,
-  "dependencies": ["counter", "file_upload", "http", "local_todo"],
+  "dependencies": ["counter", "file_upload", "http", "local_todo", "webhook"],
   "documentation": "https://github.com/Babel-Innovations/ha-lucarne",
   "integration_type": "service",
   "iot_class": "local_push",

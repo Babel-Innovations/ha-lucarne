@@ -21,7 +21,7 @@
         "menu_options": {
           "manage_members": "Manage members",
           "edit_schedule": "Edit schedule",
-          "edit_round_trip": "Apple Reminders sync",
+          "edit_apple_bridge": "Apple Reminders bridge",
           "edit_templates": "Routine presets"
         }
       },
@@ -40,7 +40,8 @@
         "data": {
           "name": "Name",
           "color": "Color",
-          "preset": "Starting routines"
+          "preset": "Starting routines",
+          "apple_list": "Apple Reminders list (optional)"
         }
       },
       "edit_member": {
@@ -50,7 +51,8 @@
           "member_slug": "Member to edit",
           "name": "Name",
           "color": "Color",
-          "preset": "Routine preset"
+          "preset": "Routine preset",
+          "apple_list": "Apple Reminders list (optional)"
         }
       },
       "remove_member": {
@@ -75,15 +77,12 @@
           "streak_check_time": "Streak check time (HH:MM)"
         }
       },
-      "edit_round_trip": {
-        "title": "Apple Reminders sync",
-        "description": "When enabled, completing an Apple Reminders item fires an event so a bridge can mark it done in Reminders too.",
+      "edit_apple_bridge": {
+        "title": "Apple Reminders bridge",
+        "description": "Mirror Apple Reminders lists into Lucarne with the `lucarne-bridge` app on a Mac that is signed in to iCloud.\n\n**Install on the Mac** (one line, then approve the Reminders prompt):\n\n`{install_command}`\n\nWebhook URL: `{webhook_url}`\n\nLast sync: {last_sync}\n\nLists the Mac reported: {available_lists}\n\nThe household list lands in the shared column. Give a member their own list under Manage members → Edit member. Completing or deleting a synced task here checks it off in Reminders on the next sync.",
         "data": {
-          "enabled": "Enable sync",
-          "webhook_url": "Webhook URL (http:// or https://)",
-          "secret": "Webhook secret (min 32 characters)",
-          "device_name": "Device name (shown in payloads)",
-          "generate_secret": "Generate a new random secret on submit"
+          "household_list": "Reminders list for the household (blank = none)",
+          "rotate_webhook": "Generate a new webhook URL (re-run the install command on the Mac afterwards)"
         }
       },
       "edit_templates": {
@@ -159,9 +158,14 @@
       "entity_rename_failed": "Failed to rename the member's entities. Check the logs and try again.",
       "entity_create_failed": "Failed to create the member's entities. Check the logs and try again.",
       "entity_delete_failed": "Failed to delete the member's entities. Check the logs and try again.",
-      "invalid_url": "Enter a valid URL starting with http:// or https://",
-      "secret_too_short": "Secret must be at least 32 characters.",
-      "invalid_rrule": "Not a valid recurrence rule. Example: FREQ=DAILY or FREQ=WEEKLY;BYDAY=MO"
+      "invalid_rrule": "Not a valid recurrence rule. Example: FREQ=DAILY or FREQ=WEEKLY;BYDAY=MO",
+      "apple_list_conflict": "That Reminders list is already mapped to another member or to the household."
+    }
+  },
+  "issues": {
+    "apple_list_missing": {
+      "title": "Apple Reminders list \"{list}\" not found",
+      "description": "Lucarne maps the Reminders list \"{list}\" to {target}, but {host} does not have a list with that name. Lists it reported: {available}. Rename the list in Reminders, or fix the name under Settings → Devices & services → Lucarne Family → Configure."
     }
   }
 }

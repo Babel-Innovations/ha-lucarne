@@ -5,18 +5,20 @@ from custom_components.lucarne_family.const import (
     AVATAR_ALLOWED_MIME,
     AVATAR_MAX_BYTES,
     AVATAR_MAX_PIXELS,
+    BRIDGE_PROTOCOL_VERSION,
+    BRIDGE_SYNC_INTERVAL,
+    CONF_APPLE_BRIDGE,
     CONF_FAMILY_NAME,
+    CONF_HOUSEHOLD_LIST,
     CONF_MEMBERS,
     CONF_RESET_TIME,
-    CONF_ROUND_TRIP,
-    CONF_ROUND_TRIP_DEVICE_NAME,
-    CONF_ROUND_TRIP_ENABLED,
-    CONF_ROUND_TRIP_SECRET,
-    CONF_ROUND_TRIP_WEBHOOK_URL,
     CONF_STREAK_CHECK_TIME,
+    CONF_WEBHOOK_ID,
+    DEFAULT_HOUSEHOLD_LIST,
     DEFAULT_RESET_TIME,
     DEFAULT_STREAK_CHECK_TIME,
     DOMAIN,
+    ISSUE_APPLE_LIST_MISSING,
     PRESET_ADULT_NONE,
     PRESET_CUSTOM,
     PRESET_SCHOOL_AGE,
@@ -43,11 +45,6 @@ def test_conf_keys_exist() -> None:
     assert CONF_MEMBERS == "members"
     assert CONF_RESET_TIME == "reset_time"
     assert CONF_STREAK_CHECK_TIME == "streak_check_time"
-    assert CONF_ROUND_TRIP == "round_trip"
-    assert CONF_ROUND_TRIP_ENABLED == "enabled"
-    assert CONF_ROUND_TRIP_WEBHOOK_URL == "webhook_url"
-    assert CONF_ROUND_TRIP_SECRET == "secret"
-    assert CONF_ROUND_TRIP_DEVICE_NAME == "device_name"
 
 
 def test_preset_slugs() -> None:
@@ -63,3 +60,13 @@ def test_avatar_limits() -> None:
     assert "image/png" in AVATAR_ALLOWED_MIME
     assert "image/jpeg" in AVATAR_ALLOWED_MIME
     assert "image/webp" in AVATAR_ALLOWED_MIME
+
+
+def test_apple_bridge_keys() -> None:
+    assert CONF_WEBHOOK_ID == "webhook_id"
+    assert CONF_APPLE_BRIDGE == "apple_bridge"
+    assert CONF_HOUSEHOLD_LIST == "household_list"
+    assert DEFAULT_HOUSEHOLD_LIST == "Family"
+    assert BRIDGE_PROTOCOL_VERSION == 1
+    assert BRIDGE_SYNC_INTERVAL == 300
+    assert ISSUE_APPLE_LIST_MISSING == "apple_list_missing"
