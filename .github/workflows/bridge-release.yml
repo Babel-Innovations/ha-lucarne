@@ -1,6 +1,6 @@
 name: Bridge release
 
-# Builds, signs, notarizes and attaches the macOS bridge binary to every
+# Builds, signs, attaches and then notarizes the macOS bridge binary on every
 # published GitHub release (scripts/create-release.sh and create-prerelease.sh
 # both publish one). Signing and the Homebrew tap update are skipped when their
 # secrets are absent, so forks still get an unsigned build.
@@ -128,6 +128,16 @@ jobs:
           [ -x lucarne-bridge ] || { echo "binary is not at the archive root"; ls -R; exit 1; }
           ./lucarne-bridge --version | grep -qx "$VERSION"
 
+      # Upload before waiting on Apple. A bare executable cannot be stapled, so
+      # the published zip is exactly what gets notarized: Gatekeeper looks the
+      # ticket up online, and the asset turns "notarized" the moment Apple
+      # accepts it. A slow notary queue (30+ min on first submissions) must not
+      # leave the release without its binary; a *rejection* still fails the job.
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "dist/$ASSET" "dist/$ASSET.sha256" --clobber
+
       - name: Notarize
         if: env.HAS_SIGNING == 'true'
         env:
@@ -136,16 +146,35 @@ jobs:
           NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          set -o pipefail
           echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-          xcrun notarytool submit "dist/$ASSET" \
-            --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
-            --team-id "$APPLE_TEAM_ID" --wait --timeout 30m
-          rm -f "$RUNNER_TEMP/notary.p8"
+          AUTH=(--key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --team-id "$APPLE_TEAM_ID")
+          SUBMISSION="$(xcrun notarytool submit "dist/$ASSET" "${AUTH[@]}" --output-format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+          echo "submission $SUBMISSION"
+          # Poll ourselves instead of --wait so the overall budget is explicit
+          # (the job limit is 6 h) and the final verdict is logged in full. A
+          # single failed status read must not end a three-hour wait.
+          STATUS="In Progress"
+          for i in $(seq 1 120); do
+            [ "$i" -eq 1 ] || sleep 90
+            STATUS="$(xcrun notarytool info "$SUBMISSION" "${AUTH[@]}" --output-format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')" || STATUS="In Progress"
+            [ "$STATUS" = "In Progress" ] || break
+          done
+          echo "notarization status: $STATUS"
+          case "$STATUS" in
+            Accepted) ;;
+            "In Progress")
+              echo "::error::Apple has not finished notarizing submission $SUBMISSION after 3 h. The signed asset is on the release and becomes notarized when Apple accepts; check with: xcrun notarytool info $SUBMISSION"
+              exit 1 ;;
+            *)
+              xcrun notarytool log "$SUBMISSION" "${AUTH[@]}" || true
+              echo "::error::Notarization of submission $SUBMISSION ended with '$STATUS'. The signed asset on the release will NOT pass Gatekeeper for browser downloads; fix and re-run with workflow_dispatch."
+              exit 1 ;;
+          esac
 
-      - name: Upload release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" "dist/$ASSET" "dist/$ASSET.sha256" --clobber
+      - name: Remove notary key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/notary.p8"
 
       - name: Remove signing keychain
         if: always() && env.KEYCHAIN != ''

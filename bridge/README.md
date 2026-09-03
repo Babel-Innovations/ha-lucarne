@@ -53,12 +53,17 @@ absolute path of the binary you install from:
 
 1. checks out the tag, stamps the version into Info.plist, builds the universal binary;
 2. if the signing secrets are present, imports the Developer ID certificate into a
-   temporary keychain, signs with the hardened runtime, and notarizes the zip with an
-   App Store Connect API key (`xcrun notarytool … --wait`). Bare executables cannot be
-   stapled; Gatekeeper fetches the ticket online. Without the secrets (forks, PRs from
-   forks) it logs "unsigned build" and continues;
+   temporary keychain and signs with the hardened runtime. Without the secrets (forks,
+   PRs from forks) it logs "unsigned build" and continues;
 3. uploads `lucarne-bridge-<version>-macos-universal.zip` and its `.sha256` to the release;
-4. for a stable release, renders `homebrew/lucarne-bridge.rb.tmpl` and pushes it to
+4. with the same secrets present, submits the zip to Apple's notary service using the App
+   Store Connect API key and polls for up to three hours (exhausting that fails the job
+   like a rejection would). Upload comes first on purpose: a bare executable cannot be
+   stapled, Gatekeeper fetches the ticket online, so the already-published zip becomes
+   notarized the moment Apple accepts it — and Apple's queue can take well over 30 min on a
+   team's first submission. A rejection fails the job (with `notarytool log` output) but
+   leaves the signed asset in place;
+5. for a stable release, renders `homebrew/lucarne-bridge.rb.tmpl` and pushes it to
    `Babel-Innovations/homebrew-lucarne` (`Formula/lucarne-bridge.rb`) over SSH with the deploy key.
 
 Repository secrets it reads (all optional; signing needs the first six together):
