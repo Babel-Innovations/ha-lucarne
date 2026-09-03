@@ -59,7 +59,7 @@ absolute path of the binary you install from:
    forks) it logs "unsigned build" and continues;
 3. uploads `lucarne-bridge-<version>-macos-universal.zip` and its `.sha256` to the release;
 4. for a stable release, renders `homebrew/lucarne-bridge.rb.tmpl` and pushes it to
-   `Babel-Innovations/homebrew-lucarne` (`Formula/lucarne-bridge.rb`).
+   `Babel-Innovations/homebrew-lucarne` (`Formula/lucarne-bridge.rb`) over SSH with the deploy key.
 
 Repository secrets it reads (all optional; signing needs the first six together):
 
@@ -71,7 +71,7 @@ Repository secrets it reads (all optional; signing needs the first six together)
 | `NOTARY_KEY_ID` | App Store Connect API key id |
 | `NOTARY_ISSUER_ID` | App Store Connect issuer id |
 | `NOTARY_KEY_P8_BASE64` | the API key `.p8`, base64 |
-| `TAP_GITHUB_TOKEN` | PAT with `contents: write` on `homebrew-lucarne` (skip to leave the tap alone) |
+| `TAP_DEPLOY_KEY` | private half of a write-enabled deploy key on `homebrew-lucarne` (skip to leave the tap alone) |
 
 `.github/workflows/bridge.yml` builds and tests the package on every PR that touches
 `bridge/`.

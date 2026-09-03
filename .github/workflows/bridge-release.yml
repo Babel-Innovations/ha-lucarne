@@ -64,7 +64,7 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
           NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
         run: |
           if [ -n "$MACOS_CERT_P12_BASE64" ] && [ -n "$MACOS_CERT_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ] \
              && [ -n "$NOTARY_KEY_ID" ] && [ -n "$NOTARY_ISSUER_ID" ] && [ -n "$NOTARY_KEY_P8_BASE64" ]; then
@@ -75,7 +75,7 @@ jobs:
           fi
           # The stable tap gets stable releases only, whichever event ran us.
           TAP_ELIGIBLE=false
-          if [ -n "$TAP_GITHUB_TOKEN" ] && [ "$RELEASE_IS_PRERELEASE" != "true" ]; then
+          if [ -n "$TAP_DEPLOY_KEY" ] && [ "$RELEASE_IS_PRERELEASE" != "true" ]; then
             case "$TAG" in
               *-pre-*) ;;
               *) TAP_ELIGIBLE=true ;;
@@ -154,12 +154,18 @@ jobs:
       - name: Update Homebrew tap
         if: env.TAP_ELIGIBLE == 'true'
         env:
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
         run: |
           SHA256="$(cut -d ' ' -f 1 "dist/$ASSET.sha256")"
           LICENSE="$(sed -n '1s/^\(.*\) License$/\1/p' LICENSE | tr -d '\r')"
           [ -n "$LICENSE" ] || LICENSE="MIT"
-          git clone --depth 1 "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/Babel-Innovations/homebrew-lucarne.git" tap
+          # A write-scoped deploy key on homebrew-lucarne, not a personal token.
+          mkdir -p "$RUNNER_TEMP/ssh"
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$RUNNER_TEMP/ssh/tap_key"
+          chmod 600 "$RUNNER_TEMP/ssh/tap_key"
+          ssh-keyscan -t ed25519 github.com > "$RUNNER_TEMP/ssh/known_hosts" 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/ssh/tap_key -o UserKnownHostsFile=$RUNNER_TEMP/ssh/known_hosts -o IdentitiesOnly=yes"
+          git clone --depth 1 "git@github.com:Babel-Innovations/homebrew-lucarne.git" tap
           mkdir -p tap/Formula
           sed -e "s/__VERSION__/$VERSION/g" -e "s/__SHA256__/$SHA256/g" -e "s/__LICENSE__/$LICENSE/g" \
             bridge/homebrew/lucarne-bridge.rb.tmpl > tap/Formula/lucarne-bridge.rb
