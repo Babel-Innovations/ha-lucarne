@@ -180,6 +180,15 @@ remove workflows, and [docs/cards.md](docs/cards.md) for the card YAML reference
 
 ---
 
+## Apple Reminders (optional)
+
+The Home Assistant Companion app can mirror an Apple Reminders list into any Lucarne column,
+in both directions, from one phone: Settings → Labs → Reminders sync, then map the list to
+`todo.lucarne_household` or `todo.<member>`. See
+[docs/reminders-bridge.md](docs/reminders-bridge.md).
+
+---
+
 ## Custom events
 
 The integration fires `lucarne_family_all_routines_done` when all of a member's
