@@ -345,8 +345,8 @@ subscription; if `show_streak` is enabled, it renders 0.
 
 ## Round-trip readiness (v0.2)
 
-The integration can fire a round-trip event when apple-synced items are completed in HA, so a
-future subscriber can mark the corresponding Apple Reminder complete on the Mac mini.
+Superseded: the Companion app's Reminders sync propagates completion itself. The options
+below remain for installs that enabled them; they only fire an HA event.
 
 ### Enable round-trip config
 
@@ -354,10 +354,10 @@ future subscriber can mark the corresponding Apple Reminder complete on the Mac 
 
 | Field | Description |
 |-------|-------------|
-| Enable round-trip | Toggle. Leave off until the future receiver is deployed. |
-| Webhook URL | The URL the future subscriber will POST to (e.g. `http://mac-mini.local:9123/writeback`). |
-| Shared secret | Min 32 characters. Used for HMAC-SHA256 signing by the future subscriber. |
-| Sync device name | Displayed in the event payload for receiver identification. Default: "Sync device". |
+| Enable round-trip | Toggle. Leave off. |
+| Webhook URL | Stored but never called (e.g. `http://mac-mini.local:9123/writeback`). |
+| Shared secret | Min 32 characters. Stored; nothing signs with it. |
+| Sync device name | Copied into the event payload. Default: "Sync device". |
 
 ### What happens when enabled
 
@@ -366,14 +366,15 @@ the integration fires `lucarne_family_apple_writeback_requested` on the HA bus. 
 contains `apple_uid`, `status`, `timestamp`, and `device_name`. **The webhook URL and secret are
 never in the event.** Tasks without an `apple_uid` (e.g. added manually) do not trigger the event.
 
-The actual POST to the bridge is deferred — no HTTP request is made in v0.2. Enable this now
-to verify events appear in **Developer Tools → Events**, then wire the subscriber in the next spec.
+No HTTP request is ever made; the event fires on the bus only.
 
 ### What is missing
 
-The webhook POST and HMAC signing are not implemented yet. See
-[`docs/reminders-bridge.md` — Round-trip writeback](reminders-bridge.md#round-trip-writeback)
-for the full protocol and the subscriber accessor contract (`get_round_trip_config(hass)`).
+Nothing consumes the event: the Mac-side receiver was never built, and the Companion app's
+two-way Reminders sync made it unnecessary — see
+[`docs/reminders-bridge.md`](reminders-bridge.md#round-trip-writeback). Leave the toggle off.
+The `get_round_trip_config(hass)` accessor remains the only supported way to read the stored
+settings should anything ever need them.
 
 ---
 
