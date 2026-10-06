@@ -2095,7 +2095,7 @@ function sr(e) {
 }
 var cr = (ir = class extends V {
 	constructor(...e) {
-		super(...e), this.memberColor = "#a8d8b9", this.compact = !1, this.members = [], this.showNotes = !1, this.owner = null, this.notToday = !1, this._noteExpanded = !1, this._noteAnimating = !1, this._noteAnim = null, this._pressTimer = null, this._longPressed = !1, this._notePress = !1;
+		super(...e), this.memberColor = "#a8d8b9", this.compact = !1, this.members = [], this.showNotes = !1, this.owner = null, this.notToday = !1, this._noteExpanded = !1, this._noteAnimating = !1, this._noteAnim = null, this._pressTimer = null, this._longPressed = !1, this._notePress = !1, this._nextDateKey = "";
 	}
 	_onPointerDown(e) {
 		this._longPressed = !1, this._notePress = !1, this._pressTimer = setTimeout(() => {
@@ -2176,14 +2176,14 @@ var cr = (ir = class extends V {
 				}
 			}
 		}
-		let o = this.notToday ? _n(en(this.task.metadata.recurrence)) : void 0;
+		let o = this.notToday ? this._nextDate() : void 0;
 		return L`
       <div
         class="row"
         style="--member-color:${this.memberColor}"
         role=${this.notToday ? "button" : "checkbox"}
         aria-checked=${this.notToday ? z : e}
-        aria-label=${this.notToday ? `Edit ${this.task.summary}, not due today` : this._rowLabel(n, a)}
+        aria-label=${this.notToday ? `Edit ${this.task.summary}, not due today${o ? `, next ${this._formatNext(o)}` : ""}` : this._rowLabel(n, a)}
         aria-describedby=${i ? "task-note" : z}
         tabindex="0"
         @click=${this._onClick}
@@ -2211,6 +2211,10 @@ var cr = (ir = class extends V {
         ${o ? L`<span class="due">${this._formatNext(o)}</span>` : ""}
       </div>
     `;
+	}
+	_nextDate() {
+		let e = `${this.task.metadata.recurrence}|${gn(/* @__PURE__ */ new Date())}`;
+		return e !== this._nextDateKey && (this._nextDateKey = e, this._nextDateValue = _n(en(this.task.metadata.recurrence))), this._nextDateValue;
 	}
 	_formatNext(e) {
 		let [t, n, r] = e.split("-").map(Number);
