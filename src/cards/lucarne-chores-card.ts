@@ -516,7 +516,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
     this._editTimers.clear();
   }
 
-  private _resolveMembers(): Array<{ member: MemberSummary; tasks: RenderableTask[]; streak: number }> {
+  private _resolveMembers(): Array<{ member: MemberSummary; tasks: RenderableTask[]; notToday: RenderableTask[]; streak: number }> {
     if (!this._config || !this._familyState) return [];
     const { members: slugs } = this._config;
     // Hidden members stay in `members` (to keep their slot in the editor's
@@ -617,10 +617,20 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
       return false;
     };
 
+    // The routines passesOwnFilter hid only because their RRULE skips today.
+    // They sit behind the column's collapsed "not due today" toggle so they can
+    // still be reached to edit or delete (#133).
+    const isNotToday = (t: RenderableTask): boolean => {
+      if (!showRoutines || t.metadata.type !== 'routine' || isStale(t)) return false;
+      const parsed = parseRRule(t.metadata.recurrence);
+      if (parsed.mode === 'none' || parsed.mode === 'unknown') return false;
+      return !isRoutineDueToday(parsed, now);
+    };
+
     const optimisticAdds = [...this._optimisticAdds.values()];
     const householdUids = new Set(householdTasks.map((t) => t.uid));
 
-    const result: Array<{ member: MemberSummary; tasks: RenderableTask[]; streak: number }> = [];
+    const result: Array<{ member: MemberSummary; tasks: RenderableTask[]; notToday: RenderableTask[]; streak: number }> = [];
     for (const slug of slugs) {
       if (hidden.has(slug)) continue;
       const member =
@@ -635,6 +645,12 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
         .map(applyEdit);
       const existingUids = new Set(allTasks.map((t) => t.uid));
       const ownTasks = allTasks.filter(passesOwnFilter).map(applyOptimistic);
+      const notToday = [
+        ...allTasks,
+        ...optimisticAdds.filter(
+          (t) => t.metadata.member_slug === slug && !existingUids.has(t.uid) && !this._deletedUids.has(t.uid),
+        ),
+      ].filter(isNotToday);
 
       // Optimistic non-rotating adds for this column, filtered like real tasks and
       // skipped if the real task already arrived (belt-and-suspenders vs `_onFamilyState`).
@@ -673,7 +689,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
       }
 
       const streak = this._familyState.streakByMember.get(slug) ?? 0;
-      result.push({ member, tasks, streak });
+      result.push({ member, tasks, notToday, streak });
     }
     return result;
   }
@@ -775,12 +791,14 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
           @add-task-clicked=${this._handleAddTask}
           @task-toggle=${this._handleTaskToggle}
           @task-long-press=${this._handleLongPress}
+          @task-edit=${this._handleLongPress}
         >
-          ${resolvedMembers.map(({ member, tasks, streak }) => html`
+          ${resolvedMembers.map(({ member, tasks, notToday, streak }) => html`
             <div class="member-cell">
               <lucarne-member-column
                 .member=${member}
                 .tasks=${tasks}
+                .notTodayTasks=${notToday}
                 .streak=${streak}
                 .members=${allMembers}
                 ?show-routines=${showRoutines}

@@ -845,3 +845,30 @@ describe('lucarne-task-row note expand animation', () => {
     assert.ok(!(shadow(el, '.note') as HTMLElement).classList.contains('animating'));
   });
 });
+
+describe('not-today rows (#133)', () => {
+  const offDay = () =>
+    makeTask({ metadata: { ...makeTask().metadata, recurrence: 'DTSTART:20991005\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2' } });
+
+  it('a tap asks for the editor instead of toggling', async () => {
+    const el = makeEl(offDay());
+    el.notToday = true;
+    await el.updateComplete;
+    const fired: string[] = [];
+    for (const type of ['task-toggle', 'task-edit']) el.addEventListener(type, () => fired.push(type));
+    (shadow(el, '.row') as HTMLElement).click();
+    assert.deepEqual(fired, ['task-edit']);
+  });
+
+  it('is a button, not a checkbox, and shows the next date', async () => {
+    const el = makeEl(offDay());
+    el.notToday = true;
+    await el.updateComplete;
+    const row = shadow(el, '.row') as HTMLElement;
+    assert.equal(row.getAttribute('role'), 'button');
+    assert.equal(row.hasAttribute('aria-checked'), false);
+    assert.equal(row.getAttribute('aria-label'), 'Edit Brush teeth, not due today');
+    const expected = new Date(2099, 9, 5).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    assert.equal(shadow(el, '.due')!.textContent, expected);
+  });
+});

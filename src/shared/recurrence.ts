@@ -9,6 +9,11 @@
  *  monthly-d | FREQ=MONTHLY;BYMONTHDAY=<1-31>[;INTERVAL=N]
  *  monthly-n | FREQ=MONTHLY;BYDAY=<+/-N><DAY>[;INTERVAL=N]
  *  yearly    | FREQ=YEARLY;BYMONTH=<1-12>;BYMONTHDAY=<1-31>[;INTERVAL=N]
+ *
+ * Any of the five may carry a start date, RFC 5545 style:
+ *   DTSTART:<YYYYMMDD>\nRRULE:<one of the rules above>
+ * It anchors the INTERVAL phase (which fortnight, which alternate month) and
+ * nothing fires before it. Without one, rules anchor to 1970-01-01.
  */
 
 export type RecurrenceMode =
@@ -29,28 +34,34 @@ export interface RecurrenceNone {
 export interface RecurrenceDaily {
   mode: 'daily';
   interval?: number;
+  /** ISO date (YYYY-MM-DD) from DTSTART; absent → 1970-01-01. */
+  start?: string;
 }
 export interface RecurrenceWeekly {
   mode: 'weekly';
   days: WeekdayCode[];
   interval?: number;
+  start?: string;
 }
 export interface RecurrenceMonthlyDate {
   mode: 'monthly-date';
   dayOfMonth: number;
   interval?: number;
+  start?: string;
 }
 export interface RecurrenceMonthlyNth {
   mode: 'monthly-nth';
   nth: number;
   day: WeekdayCode;
   interval?: number;
+  start?: string;
 }
 export interface RecurrenceYearly {
   mode: 'yearly';
   month: number;
   dayOfMonth: number;
   interval?: number;
+  start?: string;
 }
 export interface RecurrenceUnknown {
   mode: 'unknown';
@@ -66,11 +77,31 @@ export type ParsedRecurrence =
   | RecurrenceYearly
   | RecurrenceUnknown;
 
+const DTSTART_RE = /^DTSTART:(\d{4})(\d{2})(\d{2})\nRRULE:(.+)$/;
+
 /** Parse RRULE string into structured form. Unknown patterns return {mode:'unknown', raw}. */
 export function parseRRule(rrule: string): ParsedRecurrence {
   if (!rrule || rrule.trim() === '') return { mode: 'none' };
 
-  const parts = rrule.trim().split(';');
+  const m = rrule.trim().match(DTSTART_RE);
+  if (!m) return parseRule(rrule, rrule.trim());
+  const [, y, mo, d, rule] = m;
+  const start = `${y}-${mo}-${d}`;
+  const parsed = parseRule(rrule, rule);
+  if (parsed.mode === 'unknown' || parsed.mode === 'none' || !isRealDate(start)) {
+    return { mode: 'unknown', raw: rrule };
+  }
+  return { ...parsed, start };
+}
+
+function isRealDate(iso: string): boolean {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+function parseRule(rrule: string, rule: string): ParsedRecurrence {
+  const parts = rule.split(';');
   const props: Record<string, string> = {};
   for (const p of parts) {
     const eq = p.indexOf('=');
@@ -145,6 +176,12 @@ export function parseRRule(rrule: string): ParsedRecurrence {
 /** Build RRULE string from structured form. */
 export function buildRRule(parsed: Exclude<ParsedRecurrence, RecurrenceUnknown>): string {
   if (parsed.mode === 'none') return '';
+  const rule = buildRule(parsed);
+  if (!parsed.start) return rule;
+  return `DTSTART:${parsed.start.replace(/-/g, '')}\nRRULE:${rule}`;
+}
+
+function buildRule(parsed: Exclude<ParsedRecurrence, RecurrenceUnknown | RecurrenceNone>): string {
 
   if (parsed.mode === 'daily') {
     let s = 'FREQ=DAILY';
@@ -180,9 +217,18 @@ export function buildRRule(parsed: Exclude<ParsedRecurrence, RecurrenceUnknown>)
   return '';
 }
 
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 /** Friendly summary for display next to the picker. */
 export function friendlySummary(rrule: string): string {
   const parsed = parseRRule(rrule);
+  const base = summarize(parsed);
+  if (!('start' in parsed) || !parsed.start) return base;
+  const [y, m, d] = parsed.start.split('-').map(Number);
+  return `${base}, starting ${MONTH_SHORT[m - 1]} ${d}, ${y}`;
+}
+
+function summarize(parsed: ParsedRecurrence): string {
   if (parsed.mode === 'none') return 'One-off (no repeat)';
   if (parsed.mode === 'unknown') return 'Custom recurrence (not editable here)';
 
@@ -250,10 +296,13 @@ function nthLabel(n: number): string {
   return `${n}th`;
 }
 
-const EPOCH = new Date(Date.UTC(1970, 0, 1));
-
-function utcDaysSinceEpoch(d: Date): number {
+function utcDays(d: Date): number {
   return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
+}
+
+function isoUtcDays(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
 }
 
 function nthWeekdayOfMonth(d: Date, nth: number, weekday: number): boolean {
@@ -275,50 +324,80 @@ const JS_DAY: Record<string, number> = {
 
 /**
  * Returns true if the parsed recurrence fires on `today`.
- * Interval rules are anchored to 1970-01-01, matching recurrence.py.
+ * Mirrors dateutil, which recurrence.py uses: the INTERVAL phase counts from
+ * `start` (1970-01-01 when absent), weeks begin on Monday (RFC 5545's default
+ * WKST), and nothing fires before `start`. tests/fixtures/recurrence-cases.json
+ * pins both engines to the same answers.
  * `unknown` and `none` always return false.
  */
 export function isRoutineDueToday(parsed: ParsedRecurrence, today: Date = new Date()): boolean {
   if (parsed.mode === 'none' || parsed.mode === 'unknown') return false;
 
-  const interval = ('interval' in parsed && parsed.interval) ? parsed.interval : 1;
-  const daysSince = utcDaysSinceEpoch(today) - utcDaysSinceEpoch(EPOCH);
+  const interval = parsed.interval ?? 1;
+  const start = parsed.start ?? '1970-01-01';
+  const day = utcDays(today);
+  const startDay = isoUtcDays(start);
+  if (day < startDay) return false;
+  const [startYear, startMonth] = start.split('-').map(Number);
+  const monthsSince = (today.getFullYear() - startYear) * 12 + today.getMonth() + 1 - startMonth;
 
   if (parsed.mode === 'daily') {
-    return daysSince % interval === 0;
+    return (day - startDay) % interval === 0;
   }
 
   if (parsed.mode === 'weekly') {
     const weekday = today.getDay();
     const inDays = parsed.days.some((d) => JS_DAY[d] === weekday);
     if (!inDays) return false;
-    if (interval === 1) return true;
-    const weeksSince = Math.floor(daysSince / 7);
+    // 1970-01-01 epoch day 0 was a Thursday: (epochDay + 3) % 7 is days since Monday.
+    const startMonday = startDay - (((startDay + 3) % 7) + 7) % 7;
+    const weeksSince = Math.floor((day - startMonday) / 7);
     return weeksSince % interval === 0;
   }
 
   if (parsed.mode === 'monthly-date') {
     if (today.getDate() !== parsed.dayOfMonth) return false;
-    if (interval === 1) return true;
-    const monthsSince = (today.getFullYear() - 1970) * 12 + today.getMonth();
     return monthsSince % interval === 0;
   }
 
   if (parsed.mode === 'monthly-nth') {
     const weekday = JS_DAY[parsed.day];
     if (!nthWeekdayOfMonth(today, parsed.nth, weekday)) return false;
-    if (interval === 1) return true;
-    const monthsSince = (today.getFullYear() - 1970) * 12 + today.getMonth();
     return monthsSince % interval === 0;
   }
 
   if (parsed.mode === 'yearly') {
     if (today.getMonth() + 1 !== parsed.month) return false;
     if (today.getDate() !== parsed.dayOfMonth) return false;
-    if (interval === 1) return true;
-    const yearsSince = today.getFullYear() - 1970;
-    return yearsSince % interval === 0;
+    return (today.getFullYear() - startYear) % interval === 0;
   }
 
   return false;
+}
+
+/** Local calendar date as YYYY-MM-DD. */
+export function isoDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * First day on or after `from` that the rule fires, as YYYY-MM-DD.
+ * Searches eight years per interval step, enough for a Feb 29 yearly rule to
+ * cross a skipped century leap year, capped so a huge INTERVAL cannot stall a
+ * render.
+ */
+export function nextOccurrence(parsed: ParsedRecurrence, from: Date = new Date()): string | undefined {
+  if (parsed.mode === 'none' || parsed.mode === 'unknown') return undefined;
+  const limit = Math.min(2922 * (parsed.interval ?? 1), 400_000);
+  let day = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 12);
+  if (parsed.start && parsed.start > isoDate(day)) {
+    const [y, m, d] = parsed.start.split('-').map(Number);
+    day = new Date(y, m - 1, d, 12);
+  }
+  for (let i = 0; i <= limit; i++) {
+    if (isRoutineDueToday(parsed, day)) return isoDate(day);
+    day.setDate(day.getDate() + 1);
+  }
+  return undefined;
 }

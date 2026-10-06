@@ -1,4 +1,4 @@
-import { describe, it, afterEach } from 'node:test';
+import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LucarneAddTaskPopover } from '../../src/components/add-task-popover.js';
 import type { MemberSummary, HomeAssistant } from '../../src/shared/types.js';
@@ -701,5 +701,62 @@ describe('lucarne-add-task-popover', () => {
     const call = fakeHass.calls.callService[0] as any;
     assert.equal(call.payload.type, 'chore');
     assert.ok(!('recurrence' in call.payload), `chore must not carry recurrence (got ${JSON.stringify(call.payload)})`);
+  });
+
+  describe('starting date for an interval routine (#133)', () => {
+    afterEach(() => mock.timers.reset());
+
+    async function pickFortnightlyMonday(el: LucarneAddTaskPopover) {
+      const set = async (sel: string, value: string, type = 'change') => {
+        const input = shadow(el, sel) as HTMLInputElement | HTMLSelectElement;
+        input.value = value;
+        input.dispatchEvent(type === 'input' ? new InputEvent('input', { bubbles: true }) : new Event('change', { bubbles: true }));
+        await el.updateComplete;
+      };
+      await set('#at-summary', 'Red & Yellow bins', 'input');
+      await set('#at-type', 'routine');
+      await set('#at-recurrence', 'weekly');
+      const monday = [...el.shadowRoot!.querySelectorAll('.day-btn')].find((b) => b.textContent === 'Mon') as HTMLButtonElement;
+      monday.click();
+      await el.updateComplete;
+      await set('.recurrence-extra input[type="number"]', '2');
+      return set;
+    }
+
+    async function submitted(el: LucarneAddTaskPopover) {
+      (shadow(el, '.btn-submit') as HTMLButtonElement).click();
+      await new Promise((r) => setTimeout(r, 50));
+      const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+      return (fakeHass.calls.callService[0] as any).payload.recurrence as string;
+    }
+
+    it('hides the starting date for a weekly rule', async () => {
+      const el = makeEl();
+      await el.updateComplete;
+      const set = await pickFortnightlyMonday(el);
+      await set('.recurrence-extra input[type="number"]', '1');
+      assert.equal(shadow(el, '#at-start'), null);
+    });
+
+    it('defaults to the nearest matching day and sends it as DTSTART', async () => {
+      mock.timers.enable({ apis: ['Date'], now: new Date(2026, 9, 6, 9) }); // a Tuesday
+      const el = makeEl();
+      await el.updateComplete;
+      await pickFortnightlyMonday(el);
+
+      assert.equal((shadow(el, '#at-start') as HTMLInputElement).value, '2026-10-12');
+      assert.equal(shadow(el, '.recurrence-summary')!.textContent, 'Every 2 weeks on Mon, starting Oct 12, 2026');
+      assert.equal(await submitted(el), 'DTSTART:20261012\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2');
+    });
+
+    it('a picked date moves the routine to the other fortnight', async () => {
+      mock.timers.enable({ apis: ['Date'], now: new Date(2026, 9, 6, 9) });
+      const el = makeEl();
+      await el.updateComplete;
+      const set = await pickFortnightlyMonday(el);
+      await set('#at-start', '2026-10-19');
+
+      assert.equal(await submitted(el), 'DTSTART:20261019\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2');
+    });
   });
 });

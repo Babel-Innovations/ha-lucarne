@@ -2,6 +2,7 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { MemberSummary, RenderableTask } from '../shared/types.js';
 import { nextOwner } from '../shared/rotation.js';
+import { nextOccurrence, parseRRule } from '../shared/recurrence.js';
 import { noteSegments, taskNote } from '../shared/task-notes.js';
 import { EMOJI_RE } from './member-avatar.js';
 
@@ -137,6 +138,12 @@ export class LucarneTaskRow extends LitElement {
       color: var(--secondary-text-color, #727272);
       opacity: 0.6;
     }
+    :host([not-today]) .row {
+      opacity: 0.55;
+    }
+    :host([not-today]) .check {
+      visibility: hidden;
+    }
     .due {
       font-size: 0.75rem;
       color: var(--secondary-text-color, #727272);
@@ -226,6 +233,11 @@ export class LucarneTaskRow extends LitElement {
   @property({ type: Boolean, attribute: 'show-notes' }) showNotes = false;
   /** Owner shown as a small avatar leading the row; null renders none. */
   @property({ attribute: false }) owner: MemberSummary | null = null;
+  /**
+   * A scheduled routine that is not due today (#133): nothing to tick off, so
+   * a tap opens the editor (`task-edit`) and the row shows its next date.
+   */
+  @property({ type: Boolean, reflect: true, attribute: 'not-today' }) notToday = false;
 
   @state() private _noteExpanded = false;
   /** True only while the expand/collapse height animation is running. */
@@ -398,7 +410,7 @@ export class LucarneTaskRow extends LitElement {
       return;
     }
     this.dispatchEvent(
-      new CustomEvent('task-toggle', {
+      new CustomEvent(this.notToday ? 'task-edit' : 'task-toggle', {
         detail: { task: this.task },
         bubbles: true,
         composed: true,
@@ -428,13 +440,15 @@ export class LucarneTaskRow extends LitElement {
       }
     }
 
+    const nextDate = this.notToday ? nextOccurrence(parseRRule(this.task.metadata.recurrence)) : undefined;
+
     return html`
       <div
         class="row"
         style="--member-color:${this.memberColor}"
-        role="checkbox"
-        aria-checked=${done}
-        aria-label=${this._rowLabel(due, nextName)}
+        role=${this.notToday ? 'button' : 'checkbox'}
+        aria-checked=${this.notToday ? nothing : done}
+        aria-label=${this.notToday ? `Edit ${this.task.summary}, not due today` : this._rowLabel(due, nextName)}
         aria-describedby=${note ? 'task-note' : nothing}
         tabindex="0"
         @click=${this._onClick}
@@ -466,6 +480,7 @@ export class LucarneTaskRow extends LitElement {
         </div>
         ${isRotating ? html`<span class="rotation-badge" aria-hidden="true">↻</span>` : ''}
         ${due ? html`<span class="due">${this._formatDue(due)}</span>` : ''}
+        ${nextDate ? html`<span class="due">${this._formatNext(nextDate)}</span>` : ''}
       </div>
     `;
   }
@@ -479,6 +494,11 @@ export class LucarneTaskRow extends LitElement {
    * emoji icon is deliberately left out as decorative (it is aria-hidden, so it
    * no longer announces "broom" ahead of the task's actual name).
    */
+  private _formatNext(iso: string): string {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
   private _rowLabel(due: string | null, nextName: string | null): string {
     let label = this.task.summary;
     if (due) label += `, due ${this._formatDue(due)}`;

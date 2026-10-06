@@ -1,7 +1,9 @@
 """Tests for the recurrence engine."""
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 
@@ -52,6 +54,8 @@ def test_parse_weekly_returns_rule() -> None:
         "FREQ=MONTHLY;BYDAY=-1MO;INTERVAL=2",
         "FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=15",
         "FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=31;INTERVAL=2",
+        "DTSTART:20261012\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2",
+        "DTSTART:20240229\nRRULE:FREQ=DAILY",
     ],
 )
 def test_is_valid_rrule_allows_supported_patterns(rrule_str: str) -> None:
@@ -81,6 +85,14 @@ def test_is_valid_rrule_allows_supported_patterns(rrule_str: str) -> None:
         "FREQ=YEARLY;BYMONTH=13;BYMONTHDAY=15",  # month 13
         "FREQ=MONTHLY;BYDAY=0MO",  # Nth=0 is RFC 5545 illegal
         "FREQ=MONTHLY;BYDAY=6MO",  # Nth=6 is beyond ±5 range
+        # DTSTART prefix: only a real date, only date-only, only before a supported rule
+        "DTSTART:20261399\nRRULE:FREQ=DAILY",
+        "DTSTART:20250229\nRRULE:FREQ=DAILY",
+        "DTSTART:20261012T080000\nRRULE:FREQ=DAILY",
+        "DTSTART:20261012\nRRULE:FREQ=HOURLY",
+        "DTSTART:20261012\nFREQ=DAILY",
+        "DTSTART:20261012",
+        "FREQ=DAILY\nDTSTART:20261012",
     ],
 )
 def test_is_valid_rrule_rejects_unsupported_patterns(rrule_str: str) -> None:
@@ -258,7 +270,38 @@ def test_is_due_today_leap_year() -> None:
         ("FREQ=MONTHLY;BYDAY=-1MO", "Monthly on the Last Monday"),
         ("FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=15", "Yearly on March 15"),
         ("FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=31;INTERVAL=2", "Every 2 years on December 31"),
+        (
+            "DTSTART:20261012\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2",
+            "Every 2 weeks on Monday, starting Oct 12, 2026",
+        ),
     ],
 )
 def test_friendly_summary_known_patterns(rrule_str: str, expected: str) -> None:
     assert friendly_summary(rrule_str) == expected
+
+
+# ---------------------------------------------------------------------------
+# Shared fixture: the cards' isRoutineDueToday asserts the same cases (#133)
+# ---------------------------------------------------------------------------
+
+_CASES = json.loads(
+    (Path(__file__).parents[1] / "fixtures" / "recurrence-cases.json").read_text()
+)["cases"]
+
+
+def test_is_due_today_matches_shared_fixture() -> None:
+    wrong = [
+        c
+        for c in _CASES
+        if is_due_today(str(c["rrule"]), date.fromisoformat(str(c["date"])), UTC) is not c["due"]
+    ]
+    assert wrong == []
+
+
+def test_dtstart_moves_the_fortnight() -> None:
+    """Two fortnightly Monday rules a week apart alternate (#133)."""
+    a = "DTSTART:20261005\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2"
+    b = "DTSTART:20261012\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2"
+    mondays = [date(2026, 10, 5), date(2026, 10, 12), date(2026, 10, 19), date(2026, 10, 26)]
+    assert [is_due_today(a, d, UTC) for d in mondays] == [True, False, True, False]
+    assert [is_due_today(b, d, UTC) for d in mondays] == [False, True, False, True]

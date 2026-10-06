@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRRule, buildRRule, friendlySummary } from '../../src/shared/recurrence.js';
+import { readFileSync } from 'node:fs';
+import { parseRRule, buildRRule, friendlySummary, isRoutineDueToday, nextOccurrence } from '../../src/shared/recurrence.js';
 import type { ParsedRecurrence } from '../../src/shared/recurrence.js';
 
 /**
@@ -278,5 +279,90 @@ describe('friendlySummary', () => {
 
   it('unknown pattern → Custom recurrence message', () => {
     assert.equal(friendlySummary('FREQ=DAILY;COUNT=5'), 'Custom recurrence (not editable here)');
+  });
+});
+
+describe('start date (DTSTART)', () => {
+  const fortnight = 'DTSTART:20261012\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2';
+
+  it('parses the start into an ISO date', () => {
+    assert.deepEqual(parseRRule(fortnight), { mode: 'weekly', days: ['MO'], interval: 2, start: '2026-10-12' });
+  });
+
+  it('round-trips', () => {
+    assert.equal(roundTrip(fortnight), fortnight);
+  });
+
+  it('buildRRule prefixes the start', () => {
+    assert.equal(buildRRule({ mode: 'daily', interval: 3, start: '2026-01-05' }), 'DTSTART:20260105\nRRULE:FREQ=DAILY;INTERVAL=3');
+  });
+
+  for (const raw of [
+    'DTSTART:20261399\nRRULE:FREQ=DAILY',
+    'DTSTART:20250229\nRRULE:FREQ=DAILY',
+    'DTSTART:20261012\nRRULE:FREQ=DAILY;COUNT=5',
+    'DTSTART:20261012\nFREQ=DAILY',
+  ]) {
+    it(`unsupported start line → unknown: ${JSON.stringify(raw)}`, () => {
+      assert.deepEqual(parseRRule(raw), { mode: 'unknown', raw });
+    });
+  }
+
+  it('summary names the start', () => {
+    assert.equal(friendlySummary(fortnight), 'Every 2 weeks on Mon, starting Oct 12, 2026');
+  });
+});
+
+describe('isRoutineDueToday matches recurrence.py', () => {
+  const { cases } = JSON.parse(
+    readFileSync(new URL('../fixtures/recurrence-cases.json', import.meta.url), 'utf8'),
+  ) as { cases: Array<{ rrule: string; date: string; due: boolean }> };
+
+  it('agrees with every case in the shared fixture', () => {
+    const wrong = cases.filter(({ rrule, date, due }) => {
+      const [y, m, d] = date.split('-').map(Number);
+      return isRoutineDueToday(parseRRule(rrule), new Date(y, m - 1, d, 12)) !== due;
+    });
+    assert.deepEqual(wrong, []);
+  });
+});
+
+describe('nextOccurrence', () => {
+  const tue = new Date(2026, 9, 6, 9);
+
+  it('finds the nearest matching day for an un-anchored weekly rule', () => {
+    assert.equal(nextOccurrence({ mode: 'weekly', days: ['MO'] }, tue), '2026-10-12');
+  });
+
+  it('respects the epoch fortnight when no start is set', () => {
+    assert.equal(nextOccurrence({ mode: 'weekly', days: ['MO'], interval: 2 }, tue), '2026-10-19');
+  });
+
+  it('respects an explicit start', () => {
+    assert.equal(nextOccurrence({ mode: 'weekly', days: ['MO'], interval: 2, start: '2026-10-12' }, tue), '2026-10-12');
+  });
+
+  it('jumps straight to a far-future start', () => {
+    assert.equal(nextOccurrence({ mode: 'weekly', days: ['MO'], interval: 2, start: '2099-10-05' }, tue), '2099-10-05');
+  });
+
+  it('includes today', () => {
+    assert.equal(nextOccurrence({ mode: 'daily' }, tue), '2026-10-06');
+  });
+
+  it('reaches a leap-day yearly rule', () => {
+    assert.equal(nextOccurrence({ mode: 'yearly', month: 2, dayOfMonth: 29 }, tue), '2028-02-29');
+  });
+
+  it('crosses a skipped century leap year', () => {
+    assert.equal(nextOccurrence({ mode: 'yearly', month: 2, dayOfMonth: 29 }, new Date(2097, 0, 1)), '2104-02-29');
+  });
+
+  it('gives up rather than stall on an absurd interval', () => {
+    assert.equal(nextOccurrence({ mode: 'yearly', month: 2, dayOfMonth: 29, interval: 100000 }, tue), undefined);
+  });
+
+  it('none → undefined', () => {
+    assert.equal(nextOccurrence({ mode: 'none' }, tue), undefined);
   });
 });
