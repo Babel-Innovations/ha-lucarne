@@ -867,8 +867,8 @@ describe('not-today rows (#133)', () => {
     const row = shadow(el, '.row') as HTMLElement;
     assert.equal(row.getAttribute('role'), 'button');
     assert.equal(row.hasAttribute('aria-checked'), false);
-    assert.equal(row.getAttribute('aria-label'), 'Edit Brush teeth, not due today');
     const expected = new Date(2099, 9, 5).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    assert.equal(row.getAttribute('aria-label'), `Edit Brush teeth, not due today, next ${expected}`);
     assert.equal(shadow(el, '.due')!.textContent, expected);
   });
 });

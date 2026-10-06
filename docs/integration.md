@@ -200,7 +200,7 @@ Routines use a strict subset of iCalendar RRULE syntax. Only these six modes are
 
 Any RRULE outside this set is rejected at schema validation time (before the handler runs).
 
-Any of them may carry a start date as an RFC 5545 `DTSTART` line on its own line, followed by
+Any of them may carry a start date as an RFC 5545-style `DTSTART:<YYYYMMDD>` line, followed by
 `RRULE:<rule>`. The start anchors the `INTERVAL` phase, so it decides which
 fortnight (or alternate month) the routine lands on, and nothing fires before it. Without one,
 the phase counts from 1970-01-01. Weeks start on Monday. Two bins collected on alternate Mondays
@@ -341,7 +341,8 @@ show them.
 
 - **Subscribes** to each member's `todo.<slug>` entity and to `counter.<slug>_streak` via
   the HA WebSocket — no polling.
-- **Filters tasks** per column: routines are always shown (if `show_routines: true`); chores
+- **Filters tasks** per column: routines are shown on the days their RRULE fires, or every day
+  with no RRULE (if `show_routines: true`), the rest collapse under "not due today"; chores
   are shown only if their `due` date is today or earlier, or has no due date.
 - **Groups tasks by time of day**: routines *and* chores are bucketed into Morning →
   Afternoon → Night → Anytime sections by their `time_of_day`. A chore tagged `morning`

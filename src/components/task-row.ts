@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { MemberSummary, RenderableTask } from '../shared/types.js';
 import { nextOwner } from '../shared/rotation.js';
-import { nextOccurrence, parseRRule } from '../shared/recurrence.js';
+import { isoDate, nextOccurrence, parseRRule } from '../shared/recurrence.js';
 import { noteSegments, taskNote } from '../shared/task-notes.js';
 import { EMOJI_RE } from './member-avatar.js';
 
@@ -440,7 +440,7 @@ export class LucarneTaskRow extends LitElement {
       }
     }
 
-    const nextDate = this.notToday ? nextOccurrence(parseRRule(this.task.metadata.recurrence)) : undefined;
+    const nextDate = this.notToday ? this._nextDate() : undefined;
 
     return html`
       <div
@@ -448,7 +448,9 @@ export class LucarneTaskRow extends LitElement {
         style="--member-color:${this.memberColor}"
         role=${this.notToday ? 'button' : 'checkbox'}
         aria-checked=${this.notToday ? nothing : done}
-        aria-label=${this.notToday ? `Edit ${this.task.summary}, not due today` : this._rowLabel(due, nextName)}
+        aria-label=${this.notToday
+          ? `Edit ${this.task.summary}, not due today${nextDate ? `, next ${this._formatNext(nextDate)}` : ''}`
+          : this._rowLabel(due, nextName)}
         aria-describedby=${note ? 'task-note' : nothing}
         tabindex="0"
         @click=${this._onClick}
@@ -494,6 +496,19 @@ export class LucarneTaskRow extends LitElement {
    * emoji icon is deliberately left out as decorative (it is aria-hidden, so it
    * no longer announces "broom" ahead of the task's actual name).
    */
+  private _nextDateKey = '';
+  private _nextDateValue: string | undefined;
+
+  /** nextOccurrence walks day by day, so keep it out of every re-render. */
+  private _nextDate(): string | undefined {
+    const key = `${this.task.metadata.recurrence}|${isoDate(new Date())}`;
+    if (key !== this._nextDateKey) {
+      this._nextDateKey = key;
+      this._nextDateValue = nextOccurrence(parseRRule(this.task.metadata.recurrence));
+    }
+    return this._nextDateValue;
+  }
+
   private _formatNext(iso: string): string {
     const [y, m, d] = iso.split('-').map(Number);
     return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
