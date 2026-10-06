@@ -53,11 +53,18 @@ strict = true
 module = ["homeassistant.*", "pytest_homeassistant_custom_component.*", "dateutil.*", "yaml"]
 ignore_missing_imports = true
 
-# HA re-exports StaticPathConfig from .server via __init__ without __all__,
-# which mypy strict rejects. Scope the relaxation to that one module.
+# HA re-exports StaticPathConfig (http.server) and, from 2026.10, TodoItem
+# (todo.entity) via __init__ without __all__, which mypy strict rejects.
+# Importing TodoItem from todo.entity would break HA < 2026.10.
 [[tool.mypy.overrides]]
-module = ["homeassistant.components.http"]
+module = ["homeassistant.components.http", "homeassistant.components.todo"]
 no_implicit_reexport = false
+
+# HA 2026.10 hints schemas as probatio.Schema; probatio's voluptuous shim works
+# at runtime but is not a subclass. Keep voluptuous for HA < 2026.10 (see #148).
+[[tool.mypy.overrides]]
+module = ["voluptuous", "voluptuous.*"]
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
