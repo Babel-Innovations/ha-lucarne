@@ -94,6 +94,7 @@ async def test_set_member_avatar_emoji_updates_member(
         {"member": "anna", "avatar": "🧒"},
         blocking=True,
     )
+    await hass.async_block_till_done()
 
     members = store.get_members()
     anna = next(m for m in members if m.slug == "anna")
