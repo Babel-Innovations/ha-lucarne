@@ -16,6 +16,11 @@ updates:
     ignore:
       - dependency-name: "cropperjs"
         update-types: ["version-update:semver-major"]
+      # typescript-eslint 8.71.x peer-requires typescript <6.1.0, so a TS 7 (or
+      # 6.1) bump fails `npm ci` with ERESOLVE (see PR #141). Lift this once
+      # @typescript-eslint/eslint-plugin accepts the newer range.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   # Python integration — pyproject.toml (runtime + [dev])
   - package-ecosystem: pip
