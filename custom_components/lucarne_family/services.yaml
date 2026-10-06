@@ -30,10 +30,12 @@ add_task:
     recurrence:
       name: Recurrence
       description: >-
-        RRULE string (e.g. FREQ=WEEKLY;BYDAY=MO,WE,FR).
+        RRULE string (e.g. FREQ=WEEKLY;BYDAY=MO,WE,FR), optionally preceded by
+        a DTSTART:YYYYMMDD line to pick which fortnight an interval rule lands on.
         Leave empty for a one-off task.
       selector:
         text:
+          multiline: true
     icon:
       name: Icon
       description: Single emoji icon.
@@ -102,9 +104,10 @@ update_task_metadata:
         text:
     recurrence:
       name: Recurrence
-      description: New RRULE string.
+      description: New RRULE string, optionally preceded by a DTSTART:YYYYMMDD line.
       selector:
         text:
+          multiline: true
     type:
       name: Type
       description: New task type.

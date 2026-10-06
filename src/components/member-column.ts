@@ -167,6 +167,20 @@ export class LucarneMemberColumn extends LitElement {
       width: 14px;
       height: 14px;
     }
+    .not-today-toggle {
+      align-self: flex-start;
+      background: none;
+      border: none;
+      padding: 8px 4px 2px;
+      font: inherit;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--secondary-text-color, #727272);
+      opacity: 0.8;
+      cursor: pointer;
+    }
     .streak-area {
       padding-top: 12px;
       border-top: 1px solid rgba(0, 0, 0, 0.07);
@@ -177,6 +191,8 @@ export class LucarneMemberColumn extends LitElement {
 
   @property({ attribute: false }) member!: MemberSummary;
   @property({ attribute: false }) tasks: RenderableTask[] = [];
+  /** Scheduled routines not due today, behind a collapsed toggle so they can be edited or deleted (#133). */
+  @property({ attribute: false }) notTodayTasks: RenderableTask[] = [];
   @property({ attribute: false }) members: MemberSummary[] = [];
   @property({ type: Number }) streak = 0;
   @property({ type: Boolean, attribute: 'show-routines' }) showRoutines = true;
@@ -190,6 +206,7 @@ export class LucarneMemberColumn extends LitElement {
   @property({ attribute: 'scroll-to-bucket' }) scrollToBucket = '';
 
   @state() private _celebrating = false;
+  @state() private _notTodayOpen = false;
   private _celebrationTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastAllRoutinesDone: boolean | null = null;
   private _scrollRaf: ReturnType<typeof requestAnimationFrame> | null = null;
@@ -378,6 +395,7 @@ export class LucarneMemberColumn extends LitElement {
               `)}
             </div>
           `)}
+          ${this._renderNotToday()}
         </div>
 
         ${this.showStreak
@@ -386,6 +404,32 @@ export class LucarneMemberColumn extends LitElement {
                 <lucarne-streak-display .streak=${this.streak}></lucarne-streak-display>
               </div>
             `
+          : ''}
+      </div>
+    `;
+  }
+
+  private _renderNotToday() {
+    if (!this.showRoutines || this.notTodayTasks.length === 0) return '';
+    const count = this.notTodayTasks.length;
+    return html`
+      <div class="section not-today">
+        <button
+          class="not-today-toggle"
+          aria-expanded=${this._notTodayOpen}
+          @click=${() => (this._notTodayOpen = !this._notTodayOpen)}
+        >
+          ${count} not due today <span aria-hidden="true">${this._notTodayOpen ? '▴' : '▾'}</span>
+        </button>
+        ${this._notTodayOpen
+          ? this.notTodayTasks.map((t) => html`
+              <lucarne-task-row
+                not-today
+                .task=${t}
+                .memberColor=${this.member.color}
+                .members=${this.members}
+              ></lucarne-task-row>
+            `)
           : ''}
       </div>
     `;

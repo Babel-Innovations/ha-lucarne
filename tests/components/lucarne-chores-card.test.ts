@@ -611,6 +611,70 @@ describe('lucarne-chores-card', () => {
     }
   });
 
+  // #133: an off-day routine had no way back into the editor short of waiting
+  // for the day it fires, so it could not be edited or deleted from the card.
+  describe('not due today', () => {
+    type ColEl = HTMLElement & { notTodayTasks: RenderableTask[] };
+    const annaCol = (el: LucarneChoresCard) =>
+      el.shadowRoot!.querySelector('lucarne-member-column') as ColEl;
+
+    it('hands an off-day routine to the column\'s not-today list', async () => {
+      const el = await makeCard(['anna']);
+      try {
+        freezeClock(el, new Date(2026, 5, 11, 9, 0, 0, 0)); // Thursday
+        seedAnnaTask(el, makeRoutine('FREQ=WEEKLY;BYDAY=WE', 'needs_action'));
+        await el.updateComplete;
+        assert.deepEqual(annaCol(el).notTodayTasks.map((t) => t.uid), ['rt-1']);
+      } finally {
+        mock.timers.reset();
+      }
+    });
+
+    it('keeps a due routine and an unscheduled one out of it', async () => {
+      const el = await makeCard(['anna']);
+      try {
+        freezeClock(el, new Date(2026, 5, 10, 9, 0, 0, 0)); // Wednesday
+        seedAnnaTask(el, makeRoutine('FREQ=WEEKLY;BYDAY=WE', 'needs_action'));
+        await el.updateComplete;
+        assert.deepEqual(annaCol(el).notTodayTasks, []);
+        seedAnnaTask(el, makeRoutine('', 'needs_action'));
+        await el.updateComplete;
+        assert.deepEqual(annaCol(el).notTodayTasks, []);
+      } finally {
+        mock.timers.reset();
+      }
+    });
+
+    it('leaves it out when routines are hidden', async () => {
+      const el = await makeCard(['anna']);
+      try {
+        el.setConfig({ type: 'custom:lucarne-chores-card', members: ['anna'], show_routines: false });
+        freezeClock(el, new Date(2026, 5, 11, 9, 0, 0, 0));
+        seedAnnaTask(el, makeRoutine('FREQ=WEEKLY;BYDAY=WE', 'needs_action'));
+        await el.updateComplete;
+        assert.deepEqual(annaCol(el).notTodayTasks, []);
+      } finally {
+        mock.timers.reset();
+      }
+    });
+
+    it('task-edit opens the editor on that routine', async () => {
+      const el = await makeCard(['anna']);
+      try {
+        freezeClock(el, new Date(2026, 5, 11, 9, 0, 0, 0));
+        seedAnnaTask(el, makeRoutine('FREQ=WEEKLY;BYDAY=WE', 'needs_action'));
+        await el.updateComplete;
+        const task = annaCol(el).notTodayTasks[0];
+        annaCol(el).dispatchEvent(new CustomEvent('task-edit', { detail: { task }, bubbles: true, composed: true }));
+        await el.updateComplete;
+        const popover = el.shadowRoot!.querySelector('lucarne-edit-task-popover') as HTMLElement & { task: RenderableTask };
+        assert.equal(popover?.task.uid, 'rt-1');
+      } finally {
+        mock.timers.reset();
+      }
+    });
+  });
+
   it('always shows a routine with no recurrence (unscheduled)', async () => {
     const el = await makeCard(['anna']);
     try {

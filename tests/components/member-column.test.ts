@@ -536,3 +536,36 @@ describe('lucarne-member-column completed ordering', () => {
     assert.deepEqual(row(el, 'night'), ['n-open']);
   });
 });
+
+describe('not due today (#133)', () => {
+  const offDay = makeTask({ uid: 'off-1', summary: 'Bins', metadata: { ...makeTask().metadata, item_uid: 'off-1', recurrence: 'FREQ=WEEKLY;BYDAY=MO;INTERVAL=2' } });
+
+  it('renders nothing when the list is empty', async () => {
+    const el = makeEl([makeTask()]);
+    await el.updateComplete;
+    assert.equal(shadow(el, '.not-today-toggle'), null);
+  });
+
+  it('starts collapsed and expands on tap', async () => {
+    const el = makeEl([]);
+    el.notTodayTasks = [offDay];
+    await el.updateComplete;
+    const toggle = shadow(el, '.not-today-toggle') as HTMLButtonElement;
+    assert.match(toggle.textContent!, /1 not due today/);
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(shadow(el, 'lucarne-task-row[not-today]'), null);
+
+    toggle.click();
+    await el.updateComplete;
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+    const rows = shadowAll(el, 'lucarne-task-row[not-today]') as Array<HTMLElement & { task: RenderableTask }>;
+    assert.deepEqual(rows.map((r) => r.task.uid), ['off-1']);
+  });
+
+  it('is hidden with routines', async () => {
+    const el = makeEl([], { showRoutines: false });
+    el.notTodayTasks = [offDay];
+    await el.updateComplete;
+    assert.equal(shadow(el, '.not-today-toggle'), null);
+  });
+});

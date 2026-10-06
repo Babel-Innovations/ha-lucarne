@@ -200,6 +200,35 @@ Routines use a strict subset of iCalendar RRULE syntax. Only these six modes are
 
 Any RRULE outside this set is rejected at schema validation time (before the handler runs).
 
+Any of them may carry a start date as an RFC 5545 `DTSTART` line on its own line, followed by
+`RRULE:<rule>`. The start anchors the `INTERVAL` phase, so it decides which
+fortnight (or alternate month) the routine lands on, and nothing fires before it. Without one,
+the phase counts from 1970-01-01. Weeks start on Monday. Two bins collected on alternate Mondays
+are two fortnightly routines one week apart, landing on Oct 12, Oct 26, ... and Oct 19,
+Nov 2, ...:
+
+```yaml
+action: lucarne_family.add_task
+data:
+  member: alex
+  summary: Red & Yellow bins
+  type: routine
+  recurrence: |-
+    DTSTART:20261012
+    RRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2
+---
+action: lucarne_family.add_task
+data:
+  member: alex
+  summary: Red & Green bins
+  type: routine
+  recurrence: |-
+    DTSTART:20261019
+    RRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2
+```
+
+The add and edit popovers show a **Starting on** date for any rule with an interval above 1.
+
 ### Preset seeding
 
 When a new member is added with a non-empty preset, the integration seeds their todo list with the preset's routine templates exactly once. A reload of the integration does not re-seed (the idempotency guard checks for existing `source="template"` metadata rows).
@@ -324,6 +353,9 @@ show them.
 - **Tap a task**: calls `todo.update_item` to toggle `needs_action ↔ completed`.
 - **Long-press a task**: opens the edit popover (update summary, type, recurrence, due date,
   assignee for household tasks; or delete with confirmation).
+- **Not due today**: a scheduled routine whose RRULE skips today sits behind a collapsed
+  "N not due today" toggle at the bottom of its column, dimmed and showing its next date.
+  Tapping one opens the edit popover; there is nothing to tick off.
 
 ### Household column
 

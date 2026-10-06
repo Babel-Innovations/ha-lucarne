@@ -3,8 +3,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
 import type { HomeAssistant, MemberSummary, RenderableTask, TaskType, TimeOfDay } from '../shared/types.js';
 import { addTask } from '../shared/integration-services.js';
-import { buildRRule, friendlySummary, WEEKDAY_CODES } from '../shared/recurrence.js';
-import type { RecurrenceMode, WeekdayCode } from '../shared/recurrence.js';
+import { buildRRule, friendlySummary, nextOccurrence, WEEKDAY_CODES } from '../shared/recurrence.js';
+import type { ParsedRecurrence, RecurrenceMode, RecurrenceUnknown, WeekdayCode } from '../shared/recurrence.js';
 import { serviceErrorMessage } from '../shared/service-errors.js';
 
 const QUICK_EMOJIS = ['🪥', '🛏️', '🎒', '💗', '📵', '🧸', '👕', '🧹', '🧺', '🍽️', '🐕', '🌱'];
@@ -334,6 +334,8 @@ export class LucarneAddTaskPopover extends LitElement {
   @state() private _recurrenceNth = 1;
   @state() private _recurrenceNthDay: WeekdayCode = 'MO';
   @state() private _recurrenceMonth = 1;
+  /** User-picked YYYY-MM-DD; '' means "the nearest matching day". */
+  @state() private _recurrenceStart = '';
   @state() private _due = '';
   @state() private _timeOfDay: TimeOfDay = 'anytime';
   @state() private _error = '';
@@ -352,43 +354,42 @@ export class LucarneAddTaskPopover extends LitElement {
     this.dispatchEvent(new CustomEvent('popover-close', { bubbles: true, composed: true }));
   }
 
+  /** The rule as picked, without a start date; null while incomplete. */
+  private _pickedRecurrence(): Exclude<ParsedRecurrence, RecurrenceUnknown> | null {
+    const interval = this._recurrenceInterval > 1 ? { interval: this._recurrenceInterval } : {};
+    switch (this._recurrenceMode) {
+      case 'none':
+        return { mode: 'none' };
+      case 'daily':
+        return { mode: 'daily', ...interval };
+      case 'weekly':
+        return this._recurrenceDays.length === 0 ? null : { mode: 'weekly', days: this._recurrenceDays, ...interval };
+      case 'monthly-date':
+        return { mode: 'monthly-date', dayOfMonth: this._recurrenceMonthDay, ...interval };
+      case 'monthly-nth':
+        return { mode: 'monthly-nth', nth: this._recurrenceNth, day: this._recurrenceNthDay, ...interval };
+      case 'yearly':
+        return { mode: 'yearly', month: this._recurrenceMonth, dayOfMonth: this._recurrenceMonthDay, ...interval };
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Start date for an interval rule — it decides which fortnight (or alternate
+   * month) the routine lands on (#133). Defaults to the nearest matching day.
+   */
+  private _effectiveStart(): string | undefined {
+    const picked = this._pickedRecurrence();
+    if (!picked || picked.mode === 'none' || this._recurrenceInterval <= 1) return undefined;
+    return this._recurrenceStart || nextOccurrence({ ...picked, interval: 1 });
+  }
+
   private _buildRRule(): string {
-    if (this._recurrenceMode === 'none') return '';
-    if (this._recurrenceMode === 'daily') {
-      return buildRRule({ mode: 'daily', ...(this._recurrenceInterval > 1 ? { interval: this._recurrenceInterval } : {}) });
-    }
-    if (this._recurrenceMode === 'weekly') {
-      if (this._recurrenceDays.length === 0) return '';
-      return buildRRule({
-        mode: 'weekly',
-        days: this._recurrenceDays,
-        ...(this._recurrenceInterval > 1 ? { interval: this._recurrenceInterval } : {}),
-      });
-    }
-    if (this._recurrenceMode === 'monthly-date') {
-      return buildRRule({
-        mode: 'monthly-date',
-        dayOfMonth: this._recurrenceMonthDay,
-        ...(this._recurrenceInterval > 1 ? { interval: this._recurrenceInterval } : {}),
-      });
-    }
-    if (this._recurrenceMode === 'monthly-nth') {
-      return buildRRule({
-        mode: 'monthly-nth',
-        nth: this._recurrenceNth,
-        day: this._recurrenceNthDay,
-        ...(this._recurrenceInterval > 1 ? { interval: this._recurrenceInterval } : {}),
-      });
-    }
-    if (this._recurrenceMode === 'yearly') {
-      return buildRRule({
-        mode: 'yearly',
-        month: this._recurrenceMonth,
-        dayOfMonth: this._recurrenceMonthDay,
-        ...(this._recurrenceInterval > 1 ? { interval: this._recurrenceInterval } : {}),
-      });
-    }
-    return '';
+    const picked = this._pickedRecurrence();
+    if (!picked) return '';
+    const start = this._effectiveStart();
+    return buildRRule(start && picked.mode !== 'none' ? { ...picked, start } : picked);
   }
 
   private async _submit() {
@@ -813,6 +814,20 @@ export class LucarneAddTaskPopover extends LitElement {
                               }}
                             />
                           </div>
+                        </div>
+                      `
+                    : ''}
+
+                  ${this._effectiveStart()
+                    ? html`
+                        <div>
+                          <label for="at-start">Starting on</label>
+                          <input
+                            id="at-start"
+                            type="date"
+                            .value=${this._effectiveStart() ?? ''}
+                            @change=${(e: Event) => (this._recurrenceStart = (e.target as HTMLInputElement).value)}
+                          />
                         </div>
                       `
                     : ''}

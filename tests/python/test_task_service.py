@@ -333,6 +333,25 @@ async def test_add_task_invalid_rrule_raises(
         )
 
 
+async def test_add_task_stores_a_start_dated_rule_verbatim(
+    hass: HomeAssistant,
+    tmp_path: Path,
+) -> None:
+    """A DTSTART-prefixed rule passes schema validation and is stored as sent (#133)."""
+    _entry, store, _ = await _setup_with_member(hass, tmp_path)
+    rule = "DTSTART:20261019\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2"
+
+    await hass.services.async_call(
+        DOMAIN,
+        "add_task",
+        {"member": "anna", "summary": "Red & Green bins", "type": "routine", "recurrence": rule},
+        blocking=True,
+    )
+
+    tasks = await store.async_get_tasks_for_member("anna")
+    assert [t["recurrence"] for t in tasks] == [rule]
+
+
 async def test_add_task_household_with_assignee(
     hass: HomeAssistant,
     tmp_path: Path,

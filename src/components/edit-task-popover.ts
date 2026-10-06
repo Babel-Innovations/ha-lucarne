@@ -4,7 +4,7 @@ import { lucarneStyles } from '../shared/design-tokens.js';
 import type { HomeAssistant, MemberSummary, RenderableTask, TaskType, TimeOfDay } from '../shared/types.js';
 import { coerceTimeOfDay } from '../shared/types.js';
 import { updateTaskMetadata, deleteTask } from '../shared/integration-services.js';
-import { parseRRule, buildRRule, friendlySummary, WEEKDAY_CODES } from '../shared/recurrence.js';
+import { parseRRule, buildRRule, friendlySummary, nextOccurrence, WEEKDAY_CODES } from '../shared/recurrence.js';
 import type { RecurrenceMode, WeekdayCode } from '../shared/recurrence.js';
 import { serviceErrorMessage } from '../shared/service-errors.js';
 
@@ -333,6 +333,8 @@ export class LucarneEditTaskPopover extends LitElement {
   @state() private _recurrenceNth = 1;
   @state() private _recurrenceNthDay: WeekdayCode = 'MO';
   @state() private _recurrenceMonth = 1;
+  /** YYYY-MM-DD from DTSTART, or picked here; '' keeps the rule's 1970 anchor. */
+  @state() private _recurrenceStart = '';
   @state() private _due = '';
   @state() private _assignee = '';
   @state() private _timeOfDay: TimeOfDay = 'anytime';
@@ -369,6 +371,7 @@ export class LucarneEditTaskPopover extends LitElement {
     this._recurrenceNth = 1;
     this._recurrenceNthDay = 'MO';
     this._recurrenceMonth = 1;
+    this._recurrenceStart = '';
     this._rawRecurrence = '';
     this._isCustomRecurrence = false;
 
@@ -382,6 +385,7 @@ export class LucarneEditTaskPopover extends LitElement {
     } else {
       this._isCustomRecurrence = false;
       this._recurrenceMode = parsed.mode;
+      if (parsed.mode !== 'none') this._recurrenceStart = parsed.start ?? '';
       if (parsed.mode === 'daily') {
         this._recurrenceInterval = parsed.interval ?? 1;
       } else if (parsed.mode === 'weekly') {
@@ -440,6 +444,26 @@ export class LucarneEditTaskPopover extends LitElement {
   }
 
   private _buildRRule(): string {
+    const base = this._buildBaseRRule();
+    if (this._isCustomRecurrence || !this._recurrenceStart) return base;
+    const parsed = parseRRule(base);
+    if (parsed.mode === 'none' || parsed.mode === 'unknown') return base;
+    return buildRRule({ ...parsed, start: this._recurrenceStart });
+  }
+
+  /**
+   * The date the start field shows. With no stored start it is the rule's next
+   * real occurrence, so a legacy interval rule shows the fortnight it already
+   * fires on and saving without touching the field changes nothing (#133).
+   */
+  private _displayedStart(): string | undefined {
+    if (this._isCustomRecurrence) return undefined;
+    if (this._recurrenceInterval <= 1 && !this._recurrenceStart) return undefined;
+    if (this._recurrenceStart) return this._recurrenceStart;
+    return nextOccurrence(parseRRule(this._buildBaseRRule()));
+  }
+
+  private _buildBaseRRule(): string {
     if (this._isCustomRecurrence) return this._rawRecurrence;
     if (this._recurrenceMode === 'none') return '';
     if (this._recurrenceMode === 'daily') {
@@ -948,6 +972,20 @@ export class LucarneEditTaskPopover extends LitElement {
                                     }}
                                   />
                                 </div>
+                              </div>
+                            `
+                          : ''}
+
+                        ${this._displayedStart()
+                          ? html`
+                              <div>
+                                <label for="et-start">Starting on</label>
+                                <input
+                                  id="et-start"
+                                  type="date"
+                                  .value=${this._displayedStart() ?? ''}
+                                  @change=${(e: Event) => (this._recurrenceStart = (e.target as HTMLInputElement).value)}
+                                />
                               </div>
                             `
                           : ''}

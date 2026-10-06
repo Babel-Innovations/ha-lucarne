@@ -4,13 +4,16 @@ Thin wrapper around dateutil.rrule for RRULE parsing and date math.
 All callers must use these functions — never hand-roll date calculations.
 
 Phasing note for INTERVAL>1 rules (e.g. every 6 months, every other week):
-  All rules are anchored to 1970-01-01 (_EPOCH). This means the phase of any
-  interval rule is fixed globally rather than per-task. Examples:
+  A rule may carry an RFC 5545 start date, ``DTSTART:<YYYYMMDD>\nRRULE:<rule>``,
+  which anchors its phase and suppresses every occurrence before it (#133).
+  Without one, the rule is anchored to 1970-01-01 (_EPOCH), so its phase is
+  fixed globally rather than per-task. Examples:
     - FREQ=MONTHLY;BYMONTHDAY=15;INTERVAL=6  fires on Jan 15 / Jul 15 every year
     - FREQ=WEEKLY;BYDAY=MO;INTERVAL=2        fires on bi-weekly Mondays from epoch
-  Phase 3 callers that need per-task phasing (e.g. "next due 6 months after
-  last completion") must bump the task's `due` date directly and NOT rely on
-  next_due() to compute a user-relative offset.
+    - DTSTART:20261012\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2
+                                             fires on Oct 12, Oct 26, ... 2026
+  src/shared/recurrence.ts re-implements this for the cards;
+  tests/fixtures/recurrence-cases.json holds both engines to the same answers.
 """
 from __future__ import annotations
 
@@ -80,11 +83,29 @@ _ORDINAL = {
 }
 
 
+_DTSTART_RE = re.compile(r"^DTSTART:(\d{8})\nRRULE:(.+)$")
+
+
+def _split_dtstart(rrule_str: str) -> tuple[date | None, str] | None:
+    """Split an optional DTSTART line off; None if the line is malformed."""
+    m = _DTSTART_RE.match(rrule_str)
+    if m is None:
+        return (None, rrule_str) if not rrule_str.startswith("DTSTART") else None
+    try:
+        start = datetime.strptime(m.group(1), "%Y%m%d").date()
+    except ValueError:
+        return None
+    return start, m.group(2)
+
+
 def is_valid_rrule(rrule_str: str) -> bool:
     """Return True if the RRULE string is in the allowed set (or empty)."""
     if not rrule_str:
         return True
-    return any(p.match(rrule_str) for p in _ALLOWED_PATTERNS)
+    split = _split_dtstart(rrule_str)
+    if split is None:
+        return False
+    return any(p.match(split[1]) for p in _ALLOWED_PATTERNS)
 
 
 _EPOCH = datetime(1970, 1, 1, 0, 0, 0)
@@ -93,7 +114,8 @@ _EPOCH = datetime(1970, 1, 1, 0, 0, 0)
 def parse(rrule_str: str) -> rrule | None:
     """Parse an RRULE string; return None for empty string.
 
-    Always anchors dtstart to 1970-01-01 so callers can query any date range.
+    Anchors to the rule's own DTSTART line, else to 1970-01-01, so callers can
+    query any date range.
     """
     if not rrule_str:
         return None
@@ -133,6 +155,17 @@ def friendly_summary(rrule_str: str) -> str:
     """Return a human-readable description of the RRULE."""
     if not rrule_str:
         return "One-off"
+    split = _split_dtstart(rrule_str)
+    if split is None:
+        return _rule_summary(rrule_str)
+    start, rule = split
+    if start is None:
+        return _rule_summary(rule)
+    month = _MONTH_NAMES[start.month][:3]
+    return f"{_rule_summary(rule)}, starting {month} {start.day}, {start.year}"
+
+
+def _rule_summary(rrule_str: str) -> str:
 
     if _DAILY_RE.match(rrule_str):
         interval = _extract_interval(rrule_str)

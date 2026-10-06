@@ -32,7 +32,7 @@ Add a task to a family member's or household todo list.
 | `member` | string | yes | Member slug, or `"household"` for the shared list |
 | `summary` | string | yes | Task title (max 200 characters) |
 | `type` | string | no | `"routine"`, `"chore"`, or `"rotating"` (default: `"chore"`) |
-| `recurrence` | string | no | RRULE string (empty string = one-off). Must be empty for `rotating` tasks. |
+| `recurrence` | string | no | RRULE string (empty string = one-off), optionally prefixed with a `DTSTART:<YYYYMMDD>` line — see [Recurrence rules](integration.md#recurrence-rules). Must be empty for `rotating` tasks. |
 | `icon` | string | no | Single emoji icon |
 | `due` | datetime | no | Optional due date/time |
 | `source` | string | no | Creation source: `"manual"`, `"template"`, or `"apple"` (default: `"manual"`) |

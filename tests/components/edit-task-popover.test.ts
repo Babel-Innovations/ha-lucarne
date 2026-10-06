@@ -1,4 +1,4 @@
-import { describe, it, afterEach } from 'node:test';
+import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LucarneEditTaskPopover } from '../../src/components/edit-task-popover.js';
 import type { MemberSummary, RenderableTask, HomeAssistant } from '../../src/shared/types.js';
@@ -770,5 +770,49 @@ describe('lucarne-edit-task-popover', () => {
       (b) => b.textContent?.trim() === 'Rotating',
     );
     assert.ok(rotatingBtn, 'Rotating option shown for household task');
+  });
+
+  describe('starting date for an interval routine (#133)', () => {
+    afterEach(() => mock.timers.reset());
+
+    const withRule = (recurrence: string) =>
+      makeTask({ metadata: { ...makeTask().metadata, recurrence } });
+
+    async function save(el: LucarneEditTaskPopover) {
+      (shadow(el, '.btn-save') as HTMLButtonElement).click();
+      await new Promise((r) => setTimeout(r, 50));
+      const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+      return (fakeHass.calls.callService as any[]).find((c: any) => c.service === 'update_task_metadata');
+    }
+
+    it('shows a stored start and keeps it on save', async () => {
+      const rule = 'DTSTART:20261019\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2';
+      const el = await makeEl(withRule(rule));
+      assert.equal((shadow(el, '#et-start') as HTMLInputElement).value, '2026-10-19');
+      assert.equal(await save(el), undefined, 'nothing changed, nothing sent');
+    });
+
+    it('shows a legacy rule\'s next real occurrence without rewriting the rule', async () => {
+      mock.timers.enable({ apis: ['Date'], now: new Date(2026, 9, 6, 9) }); // a Tuesday
+      const el = await makeEl(withRule('FREQ=WEEKLY;BYDAY=MO;INTERVAL=2'));
+      // The 1970-anchored fortnight lands on Oct 19, not Oct 12.
+      assert.equal((shadow(el, '#et-start') as HTMLInputElement).value, '2026-10-19');
+      assert.equal(await save(el), undefined, 'an untouched legacy rule is not migrated');
+    });
+
+    it('a picked date is saved as DTSTART', async () => {
+      const el = await makeEl(withRule('FREQ=WEEKLY;BYDAY=MO;INTERVAL=2'));
+      const input = shadow(el, '#et-start') as HTMLInputElement;
+      input.value = '2026-10-12';
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await el.updateComplete;
+      const call = await save(el);
+      assert.equal(call.payload.recurrence, 'DTSTART:20261012\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2');
+    });
+
+    it('no start field for a weekly rule', async () => {
+      const el = await makeEl(withRule('FREQ=WEEKLY;BYDAY=MO'));
+      assert.equal(shadow(el, '#et-start'), null);
+    });
   });
 });
