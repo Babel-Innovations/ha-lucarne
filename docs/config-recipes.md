@@ -99,14 +99,16 @@ each comfortably, so 6 kids fit on one row.
 ```
 
 Add tasks (routines and chores) via the "+ Add task" button in each column, or via
-Settings → Devices & Services → Lucarne Family → Configure. Update the `lucarne_reminders_sync`
-blueprint instance's `list_mappings` if a member has an Apple Reminders list.
+Settings → Devices & Services → Lucarne Family → Configure. If a member keeps an Apple
+Reminders list, map it to `todo.<slug>` in the Companion app (see
+[reminders-bridge.md](reminders-bridge.md)).
 
 ---
 
 ## Recipe 3: Apartment without a Mac — HA todo only
 
-**Skip the Reminders bridge.** Use HA's built-in `local_todo` directly.
+**No bridge needed.** Use HA's built-in `local_todo` directly, or the Companion app's
+Reminders sync if the family already lives in Apple Reminders.
 
 Create todo lists in HA: Settings → Helpers → + (plus) → To-do list. Name them (e.g.
 "Shared Tasks", "Groceries"). Add items via the HA app, the iOS Companion widget, or a voice
@@ -130,11 +132,11 @@ The `lucarne-calendar-card` has no dependency on the bridge at all.
 2. Or say "Hey Siri, add milk to Groceries" if you have a Siri shortcut set up that calls
    `ha_call_service` for `todo.add_item`
 
-### Groceries without a Mac
+### Groceries from Apple Reminders
 
-You can replicate the Reminders → HA flow without a Mac by using a Focus Mode automation in iOS
-that calls the HA Companion app action when you add a Reminders item — but this is complex to
-set up. The no-Mac simplest approach is direct HA todo input.
+The Companion app's Reminders sync (Settings → Labs) maps a Reminders list such as "Groceries"
+to any to-do entity, in either direction, with no Mac involved — see
+[reminders-bridge.md](reminders-bridge.md).
 
 ---
 

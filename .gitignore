@@ -14,3 +14,7 @@ uv.lock
 # Coverage artifacts
 .coverage
 coverage/
+
+# Swift build output from the shelved lucarne-bridge experiment
+bridge/.build/
+bridge/.swiftpm/

@@ -1,3 +1,7 @@
+> **Superseded.** The Home Assistant Companion app (2026.8+) syncs Apple Reminders lists with
+> to-do entities natively — see [`docs/reminders-bridge.md`](../docs/reminders-bridge.md).
+> The Shortcut + launchd setup below is kept for reference only.
+
 # MacOS Bridge — Install Instructions
 
 Sets up the `ha-lucarne-sync` macOS Shortcut + launchd job that pushes Apple Reminders to HA every 5 minutes.

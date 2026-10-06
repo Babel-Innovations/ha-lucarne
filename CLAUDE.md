@@ -582,5 +582,5 @@ Single HACS item — `integration` category only. The cards ride along inside th
 - Integration user guide: `docs/integration.md`
 - Service reference: `docs/services.md`
 - Event reference: `docs/events.md`
-- Reminders bridge setup: `bridge/README.md`
+- Apple Reminders: `docs/reminders-bridge.md` (Companion app sync; the `bridge/` Shortcut setup is superseded)
 - Issue #101 root cause (read before touching the loader or the build target): the file header in `src/loader/boot.ts`, plus PR #115 and the issue thread
