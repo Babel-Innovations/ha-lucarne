@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.6.0 — 2026-10-09
+
+**Features:**
+-  pick the start of an interval rule (fixes #133)
+
+**Fixes:**
+-  announce a not-today row's next date
+
+
 ## v1.5.1 — 2026-09-01
 
 **Fixes:**
