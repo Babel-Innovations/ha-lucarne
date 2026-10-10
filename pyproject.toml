@@ -25,10 +25,10 @@ dev = [
     # with no diff to review, which is exactly how PR #96 went wrong.
     # To bump: pick the new phccc, read the HA version it pins, then copy that
     # HA's local_todo ical pin here.
-    "pytest-homeassistant-custom-component==0.13.367",
-    "ruff>=0.16.9",
-    "mypy>=2.3.1",
-    "ical==14.1.0",
+    "pytest-homeassistant-custom-component==0.13.368",
+    "ruff>=0.16.10",
+    "mypy>=2.4.0",
+    "ical==14.2.0",
 ]
 
 [tool.setuptools.packages.find]
