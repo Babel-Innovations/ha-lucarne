@@ -5,10 +5,10 @@ var e = Object.create, t = Object.defineProperty, n = Object.getOwnPropertyDescr
 		enumerable: !(s = n(i, d)) || s.enumerable
 	});
 	return e;
-}, c = (n, r, a) => (a = n == null ? {} : e(i(n)), s(r || !n || !n.__esModule ? t(a, "default", {
+}, c = (n, r, o) => (o = n == null ? {} : e(i(n)), s(r || !n || !n.__esModule || !a.call(n, "default") ? t(o, "default", {
 	value: n,
 	enumerable: !0
-}) : a, n)), l = "ha-lucarne", u = "lucarne_error_", d = 6e4, f = 5, p = 50, m = null, h = !1, g = !1, _ = /* @__PURE__ */ new Map(), v = [], y = null, ee = null;
+}) : o, n)), l = "ha-lucarne", u = "lucarne_error_", d = 6e4, f = 5, p = 50, m = null, h = !1, g = !1, _ = /* @__PURE__ */ new Map(), v = [], y = null, ee = null;
 function te(e, t) {
 	e && (m = e), t && (h = !0), ne();
 }
@@ -72,7 +72,7 @@ function D(e) {
 	for (let [t, n] of _) e - n >= d && _.delete(t);
 }
 function re() {
-	g || typeof window > "u" || typeof window.addEventListener != "function" || (g = !0, y = (e) => {
+	g || typeof window < "u" && typeof window.addEventListener == "function" && (g = !0, y = (e) => {
 		x(e.error, e.filename) && T(e.error ?? Error(e.message), "window.onerror");
 	}, ee = (e) => {
 		x(e.reason) && T(e.reason, "unhandledrejection");
@@ -219,7 +219,7 @@ var we = class extends HTMLElement {
 	static finalizeStyles(e) {
 		let t = [];
 		if (Array.isArray(e)) {
-			let n = new Set(e.flat(Infinity).reverse());
+			let n = new Set(e.flat(1 / 0).reverse());
 			for (let e of n) t.unshift(ce(e));
 		} else e !== void 0 && t.push(ce(e));
 		return t;
@@ -367,34 +367,34 @@ var we = class extends HTMLElement {
 we.elementStyles = [], we.shadowRootOptions = { mode: "open" }, we[be("elementProperties")] = /* @__PURE__ */ new Map(), we[be("finalized")] = /* @__PURE__ */ new Map(), ye == null || ye({ ReactiveElement: we }), (ge.reactiveElementVersions ?? (ge.reactiveElementVersions = [])).push("2.1.2");
 //#endregion
 //#region node_modules/lit-html/lit-html.js
-var Te = globalThis, Ee = (e) => e, De = Te.trustedTypes, Oe = De ? De.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, ke = "$lit$", Ae = `lit$${Math.random().toFixed(9).slice(2)}$`, je = "?" + Ae, Me = `<${je}>`, Ne = document, Pe = () => Ne.createComment(""), Fe = (e) => e === null || typeof e != "object" && typeof e != "function", N = Array.isArray, Ie = (e) => N(e) || typeof (e == null ? void 0 : e[Symbol.iterator]) == "function", Le = "[ 	\n\f\r]", Re = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, ze = /-->/g, Be = />/g, P = RegExp(`>|${Le}(?:([^\\s"'>=/]+)(${Le}*=${Le}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), Ve = /'/g, He = /"/g, F = /^(?:script|style|textarea|title)$/i, I = (e) => (t, ...n) => ({
+var Te = globalThis, Ee = (e) => e, De = Te.trustedTypes, Oe = De ? De.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, ke = "$lit$", Ae = `lit$${Math.random().toFixed(9).slice(2)}$`, je = "?" + Ae, Me = `<${je}>`, Ne = document, Pe = () => Ne.createComment(""), Fe = (e) => e === null || typeof e != "object" && typeof e != "function", Ie = Array.isArray, Le = (e) => Ie(e) || typeof (e == null ? void 0 : e[Symbol.iterator]) == "function", N = "[ 	\n\f\r]", Re = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, ze = /-->/g, Be = />/g, Ve = RegExp(`>|${N}(?:([^\\s"'>=/]+)(${N}*=${N}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), He = /'/g, P = /"/g, Ue = /^(?:script|style|textarea|title)$/i, We = (e) => (t, ...n) => ({
 	_$litType$: e,
 	strings: t,
 	values: n
-}), L = I(1), R = I(2), Ue = Symbol.for("lit-noChange"), z = Symbol.for("lit-nothing"), We = /* @__PURE__ */ new WeakMap(), B = Ne.createTreeWalker(Ne, 129);
-function Ge(e, t) {
-	if (!N(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
+}), F = We(1), I = We(2), Ge = Symbol.for("lit-noChange"), L = Symbol.for("lit-nothing"), Ke = /* @__PURE__ */ new WeakMap(), R = Ne.createTreeWalker(Ne, 129);
+function qe(e, t) {
+	if (!Ie(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
 	return Oe === void 0 ? t : Oe.createHTML(t);
 }
-var Ke = (e, t) => {
+var z = (e, t) => {
 	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = Re;
 	for (let t = 0; t < n; t++) {
 		let n = e[t], s, c, l = -1, u = 0;
-		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === Re ? c[1] === "!--" ? o = ze : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = P) : (F.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = P) : o = Be : o === P ? c[0] === ">" ? (o = i ?? Re, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? P : c[3] === "\"" ? He : Ve) : o === He || o === Ve ? o = P : o === ze || o === Be ? o = Re : (o = P, i = void 0);
-		let d = o === P && e[t + 1].startsWith("/>") ? " " : "";
+		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === Re ? c[1] === "!--" ? o = ze : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = Ve) : (Ue.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = Ve) : o = Be : o === Ve ? c[0] === ">" ? (o = i ?? Re, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? Ve : c[3] === "\"" ? P : He) : o === P || o === He ? o = Ve : o === ze || o === Be ? o = Re : (o = Ve, i = void 0);
+		let d = o === Ve && e[t + 1].startsWith("/>") ? " " : "";
 		a += o === Re ? n + Me : l >= 0 ? (r.push(s), n.slice(0, l) + ke + n.slice(l) + Ae + d) : n + Ae + (l === -2 ? t : d);
 	}
-	return [Ge(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
-}, qe = class e {
+	return [qe(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
+}, Je = class e {
 	constructor({ strings: t, _$litType$: n }, r) {
 		let i;
 		this.parts = [];
-		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = Ke(t, n);
-		if (this.el = e.createElement(l, r), B.currentNode = this.el.content, n === 2 || n === 3) {
+		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = z(t, n);
+		if (this.el = e.createElement(l, r), R.currentNode = this.el.content, n === 2 || n === 3) {
 			let e = this.el.content.firstChild;
 			e.replaceWith(...e.childNodes);
 		}
-		for (; (i = B.nextNode()) !== null && c.length < s;) {
+		for (; (i = R.nextNode()) !== null && c.length < s;) {
 			if (i.nodeType === 1) {
 				if (i.hasAttributes()) for (let e of i.getAttributeNames()) if (e.endsWith(ke)) {
 					let t = u[o++], n = i.getAttribute(e).split(Ae), r = /([.?@])?(.*)/.exec(t);
@@ -403,33 +403,35 @@ var Ke = (e, t) => {
 						index: a,
 						name: r[2],
 						strings: n,
-						ctor: r[1] === "." ? Qe : r[1] === "?" ? $e : r[1] === "@" ? et : Ze
+						ctor: r[1] === "." ? $e : r[1] === "?" ? et : r[1] === "@" ? tt : Qe
 					}), i.removeAttribute(e);
 				} else e.startsWith(Ae) && (c.push({
 					type: 6,
 					index: a
 				}), i.removeAttribute(e));
-				if (F.test(i.tagName)) {
+				if (Ue.test(i.tagName)) {
 					let e = i.textContent.split(Ae), t = e.length - 1;
 					if (t > 0) {
 						i.textContent = De ? De.emptyScript : "";
-						for (let n = 0; n < t; n++) i.append(e[n], Pe()), B.nextNode(), c.push({
+						for (let n = 0; n < t; n++) i.append(e[n], Pe()), R.nextNode(), c.push({
 							type: 2,
 							index: ++a
 						});
 						i.append(e[t], Pe());
 					}
 				}
-			} else if (i.nodeType === 8) if (i.data === je) c.push({
-				type: 2,
-				index: a
-			});
-			else {
-				let e = -1;
-				for (; (e = i.data.indexOf(Ae, e + 1)) !== -1;) c.push({
-					type: 7,
+			} else if (i.nodeType === 8) {
+				if (i.data === je) c.push({
+					type: 2,
 					index: a
-				}), e += Ae.length - 1;
+				});
+				else {
+					let e = -1;
+					for (; (e = i.data.indexOf(Ae, e + 1)) !== -1;) c.push({
+						type: 7,
+						index: a
+					}), e += Ae.length - 1;
+				}
 			}
 			a++;
 		}
@@ -439,13 +441,13 @@ var Ke = (e, t) => {
 		return n.innerHTML = e, n;
 	}
 };
-function Je(e, t, n = e, r) {
+function Ye(e, t, n = e, r) {
 	var i, a;
-	if (t === Ue) return t;
+	if (t === Ge) return t;
 	let o = r === void 0 ? n._$Cl : (i = n._$Co) == null ? void 0 : i[r], s = Fe(t) ? void 0 : t._$litDirective$;
-	return (o == null ? void 0 : o.constructor) !== s && (o == null || (a = o._$AO) == null || a.call(o, !1), s === void 0 ? o = void 0 : (o = new s(e), o._$AT(e, n, r)), r === void 0 ? n._$Cl = o : (n._$Co ?? (n._$Co = []))[r] = o), o !== void 0 && (t = Je(e, o._$AS(e, t.values), o, r)), t;
+	return (o == null ? void 0 : o.constructor) !== s && (o == null || (a = o._$AO) == null || a.call(o, !1), s === void 0 ? o = void 0 : (o = new s(e), o._$AT(e, n, r)), r === void 0 ? n._$Cl = o : (n._$Co ?? (n._$Co = []))[r] = o), o !== void 0 && (t = Ye(e, o._$AS(e, t.values), o, r)), t;
 }
-var Ye = class {
+var Xe = class {
 	constructor(e, t) {
 		this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
 	}
@@ -457,28 +459,28 @@ var Ye = class {
 	}
 	u(e) {
 		let { el: { content: t }, parts: n } = this._$AD, r = ((e == null ? void 0 : e.creationScope) ?? Ne).importNode(t, !0);
-		B.currentNode = r;
-		let i = B.nextNode(), a = 0, o = 0, s = n[0];
+		R.currentNode = r;
+		let i = R.nextNode(), a = 0, o = 0, s = n[0];
 		for (; s !== void 0;) {
 			if (a === s.index) {
 				let t;
-				s.type === 2 ? t = new Xe(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new tt(i, this, e)), this._$AV.push(t), s = n[++o];
+				s.type === 2 ? t = new Ze(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new nt(i, this, e)), this._$AV.push(t), s = n[++o];
 			}
-			a !== (s == null ? void 0 : s.index) && (i = B.nextNode(), a++);
+			a !== (s == null ? void 0 : s.index) && (i = R.nextNode(), a++);
 		}
-		return B.currentNode = Ne, r;
+		return R.currentNode = Ne, r;
 	}
 	p(e) {
 		let t = 0;
 		for (let n of this._$AV) n !== void 0 && (n.strings === void 0 ? n._$AI(e[t]) : (n._$AI(e, n, t), t += n.strings.length - 2)), t++;
 	}
-}, Xe = class e {
+}, Ze = class e {
 	get _$AU() {
 		var e;
 		return ((e = this._$AM) == null ? void 0 : e._$AU) ?? this._$Cv;
 	}
 	constructor(e, t, n, r) {
-		this.type = 2, this._$AH = z, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = (r == null ? void 0 : r.isConnected) ?? !0;
+		this.type = 2, this._$AH = L, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = (r == null ? void 0 : r.isConnected) ?? !0;
 	}
 	get parentNode() {
 		let e = this._$AA.parentNode, t = this._$AM;
@@ -491,7 +493,7 @@ var Ye = class {
 		return this._$AB;
 	}
 	_$AI(e, t = this) {
-		e = Je(this, e, t), Fe(e) ? e === z || e == null || e === "" ? (this._$AH !== z && this._$AR(), this._$AH = z) : e !== this._$AH && e !== Ue && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? Ie(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
+		e = Ye(this, e, t), Fe(e) ? e === L || e == null || e === "" ? (this._$AH !== L && this._$AR(), this._$AH = L) : e !== this._$AH && e !== Ge && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? Le(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
 	}
 	O(e) {
 		return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -500,23 +502,23 @@ var Ye = class {
 		this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
 	}
 	_(e) {
-		this._$AH !== z && Fe(this._$AH) ? this._$AA.nextSibling.data = e : this.T(Ne.createTextNode(e)), this._$AH = e;
+		this._$AH !== L && Fe(this._$AH) ? this._$AA.nextSibling.data = e : this.T(Ne.createTextNode(e)), this._$AH = e;
 	}
 	$(e) {
 		var t;
-		let { values: n, _$litType$: r } = e, i = typeof r == "number" ? this._$AC(e) : (r.el === void 0 && (r.el = qe.createElement(Ge(r.h, r.h[0]), this.options)), r);
+		let { values: n, _$litType$: r } = e, i = typeof r == "number" ? this._$AC(e) : (r.el === void 0 && (r.el = Je.createElement(qe(r.h, r.h[0]), this.options)), r);
 		if (((t = this._$AH) == null ? void 0 : t._$AD) === i) this._$AH.p(n);
 		else {
-			let e = new Ye(i, this), t = e.u(this.options);
+			let e = new Xe(i, this), t = e.u(this.options);
 			e.p(n), this.T(t), this._$AH = e;
 		}
 	}
 	_$AC(e) {
-		let t = We.get(e.strings);
-		return t === void 0 && We.set(e.strings, t = new qe(e)), t;
+		let t = Ke.get(e.strings);
+		return t === void 0 && Ke.set(e.strings, t = new Je(e)), t;
 	}
 	k(t) {
-		N(this._$AH) || (this._$AH = [], this._$AR());
+		Ie(this._$AH) || (this._$AH = [], this._$AR());
 		let n = this._$AH, r, i = 0;
 		for (let a of t) i === n.length ? n.push(r = new e(this.O(Pe()), this.O(Pe()), this, this.options)) : r = n[i], r._$AI(a), i++;
 		i < n.length && (this._$AR(r && r._$AB.nextSibling, i), n.length = i);
@@ -532,7 +534,7 @@ var Ye = class {
 		var t;
 		this._$AM === void 0 && (this._$Cv = e, (t = this._$AP) == null || t.call(this, e));
 	}
-}, Ze = class {
+}, Qe = class {
 	get tagName() {
 		return this.element.tagName;
 	}
@@ -540,48 +542,48 @@ var Ye = class {
 		return this._$AM._$AU;
 	}
 	constructor(e, t, n, r, i) {
-		this.type = 1, this._$AH = z, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = z;
+		this.type = 1, this._$AH = L, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = L;
 	}
 	_$AI(e, t = this, n, r) {
 		let i = this.strings, a = !1;
-		if (i === void 0) e = Je(this, e, t, 0), a = !Fe(e) || e !== this._$AH && e !== Ue, a && (this._$AH = e);
+		if (i === void 0) e = Ye(this, e, t, 0), a = !Fe(e) || e !== this._$AH && e !== Ge, a && (this._$AH = e);
 		else {
 			let r = e, o, s;
-			for (e = i[0], o = 0; o < i.length - 1; o++) s = Je(this, r[n + o], t, o), s === Ue && (s = this._$AH[o]), a || (a = !Fe(s) || s !== this._$AH[o]), s === z ? e = z : e !== z && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
+			for (e = i[0], o = 0; o < i.length - 1; o++) s = Ye(this, r[n + o], t, o), s === Ge && (s = this._$AH[o]), a || (a = !Fe(s) || s !== this._$AH[o]), s === L ? e = L : e !== L && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
 		}
 		a && !r && this.j(e);
 	}
 	j(e) {
-		e === z ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
+		e === L ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
 	}
-}, Qe = class extends Ze {
+}, $e = class extends Qe {
 	constructor() {
 		super(...arguments), this.type = 3;
 	}
 	j(e) {
-		this.element[this.name] = e === z ? void 0 : e;
+		this.element[this.name] = e === L ? void 0 : e;
 	}
-}, $e = class extends Ze {
+}, et = class extends Qe {
 	constructor() {
 		super(...arguments), this.type = 4;
 	}
 	j(e) {
-		this.element.toggleAttribute(this.name, !!e && e !== z);
+		this.element.toggleAttribute(this.name, !!e && e !== L);
 	}
-}, et = class extends Ze {
+}, tt = class extends Qe {
 	constructor(e, t, n, r, i) {
 		super(e, t, n, r, i), this.type = 5;
 	}
 	_$AI(e, t = this) {
-		if ((e = Je(this, e, t, 0) ?? z) === Ue) return;
-		let n = this._$AH, r = e === z && n !== z || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== z && (n === z || r);
+		if ((e = Ye(this, e, t, 0) ?? L) === Ge) return;
+		let n = this._$AH, r = e === L && n !== L || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== L && (n === L || r);
 		r && this.element.removeEventListener(this.name, this, n), i && this.element.addEventListener(this.name, this, e), this._$AH = e;
 	}
 	handleEvent(e) {
 		var t;
 		typeof this._$AH == "function" ? this._$AH.call(((t = this.options) == null ? void 0 : t.host) ?? this.element, e) : this._$AH.handleEvent(e);
 	}
-}, tt = class {
+}, nt = class {
 	constructor(e, t, n) {
 		this.element = e, this.type = 6, this._$AN = void 0, this._$AM = t, this.options = n;
 	}
@@ -589,15 +591,15 @@ var Ye = class {
 		return this._$AM._$AU;
 	}
 	_$AI(e) {
-		Je(this, e);
+		Ye(this, e);
 	}
-}, nt = Te.litHtmlPolyfillSupport;
-nt == null || nt(qe, Xe), (Te.litHtmlVersions ?? (Te.litHtmlVersions = [])).push("3.3.3");
+}, B = Te.litHtmlPolyfillSupport;
+B == null || B(Je, Ze), (Te.litHtmlVersions ?? (Te.litHtmlVersions = [])).push("3.3.3");
 var rt = (e, t, n) => {
 	let r = (n == null ? void 0 : n.renderBefore) ?? t, i = r._$litPart$;
 	if (i === void 0) {
 		let e = (n == null ? void 0 : n.renderBefore) ?? null;
-		r._$litPart$ = i = new Xe(t.insertBefore(Pe(), e), e, void 0, n ?? {});
+		r._$litPart$ = i = new Ze(t.insertBefore(Pe(), e), e, void 0, n ?? {});
 	}
 	return i._$AI(e), i;
 }, it, at = globalThis, V = class extends we {
@@ -622,7 +624,7 @@ var rt = (e, t, n) => {
 		super.disconnectedCallback(), (e = this._$Do) == null || e.setConnected(!1);
 	}
 	render() {
-		return Ue;
+		return Ge;
 	}
 };
 V._$litElement$ = !0, V.finalized = !0, (it = at.litElementHydrateSupport) == null || it.call(at, { LitElement: V });
@@ -773,7 +775,7 @@ var G = M`
   }
 `;
 //#endregion
-//#region \0@oxc-project+runtime@0.133.0/helpers/esm/decorate.js
+//#region \0@oxc-project+runtime@0.152.0/helpers/esm/decorate.js
 function K(e, t, n, r) {
 	var i = arguments.length, a = i < 3 ? t : r === null ? r = Object.getOwnPropertyDescriptor(t, n) : r, o;
 	if (typeof Reflect == "object" && typeof Reflect.decorate == "function") a = Reflect.decorate(e, t, n, r);
@@ -807,7 +809,7 @@ var dt = class extends Error {
 		}
 	}
 	static _notice(e) {
-		return L`
+		return F`
       <ha-card>
         <div style="padding:16px;color:var(--secondary-text-color);font-size:14px">
           ${e}
@@ -823,7 +825,7 @@ function pt(e, t, n) {
 	let r, i = !1;
 	return e.connection.subscribeMessage((e) => {
 		var t;
-		!((t = e.variables) == null || (t = t.trigger) == null) && t.to_state && n(e.variables.trigger.to_state);
+		(t = e.variables) != null && (t = t.trigger) != null && t.to_state && n(e.variables.trigger.to_state);
 	}, {
 		type: "subscribe_trigger",
 		trigger: {
@@ -867,7 +869,7 @@ var vt = 2;
 function yt(e, t) {
 	var n;
 	let r = (n = e.states[t]) == null || (n = n.attributes) == null ? void 0 : n.supported_features;
-	return typeof r == "number" ? (r & vt) !== 0 : !1;
+	return typeof r == "number" && (r & vt) !== 0;
 }
 function bt(e, t, n) {
 	let r = async () => {
@@ -1089,13 +1091,13 @@ function Vt(e, t) {
 	e.completed.delete(t);
 }
 function Ht(e) {
-	for (let t of It.values()) if (!(e !== void 0 && t.entityId !== e)) {
+	for (let t of It.values()) if (e === void 0 || t.entityId === e) {
 		for (let e of t.completed.values()) e.sunk = !0;
 		t.away = !0;
 	}
 }
 function Ut(e) {
-	for (let t of It.values()) e !== void 0 && t.entityId !== e || (t.away = !1);
+	for (let t of It.values()) (e === void 0 || t.entityId === e) && (t.away = !1);
 }
 //#endregion
 //#region src/shared/grid-preview-override.ts
@@ -1146,7 +1148,7 @@ var qt = {
 	avatar: null,
 	todo_entity_id: "todo.lucarne_household",
 	streak_counter_id: ""
-}, Jt = 2e4, Yt = 300 * 1e3;
+}, Jt = 2e4, Yt = 3e5;
 function Xt(e, t, n) {
 	return e.map((e) => {
 		let r = n.get(e.uid) ?? {
@@ -1258,7 +1260,7 @@ function Zt(e, t) {
 		}, m === null ? Jt : Yt);
 	}
 	let ee = () => {
-		n || typeof document < "u" && document.visibilityState === "hidden" || g();
+		n || (typeof document > "u" || document.visibilityState !== "hidden") && g();
 	};
 	typeof document < "u" && document.addEventListener("visibilitychange", ee), typeof window < "u" && window.addEventListener("pageshow", ee);
 	let te = [];
@@ -1548,7 +1550,7 @@ function hn(e, t = /* @__PURE__ */ new Date()) {
 		let o = a - ((a + 3) % 7 + 7) % 7;
 		return Math.floor((i - o) / 7) % n === 0;
 	}
-	if (e.mode === "monthly-date") return t.getDate() === e.dayOfMonth ? c % n === 0 : !1;
+	if (e.mode === "monthly-date") return t.getDate() === e.dayOfMonth && c % n === 0;
 	if (e.mode === "monthly-nth") {
 		let r = mn[e.day];
 		return pn(t, e.nth, r) ? c % n === 0 : !1;
@@ -1608,11 +1610,11 @@ function bn(e, t, n) {
 function xn(e, t, n) {
 	let r = e.getTime() - n.getTime();
 	if (e <= n && n < t) return J.timePillNow;
-	if (r > 0 && r < 3600 * 1e3) {
+	if (r > 0 && r < 36e5) {
 		let e = Math.round(r / 6e4);
 		return J.timePillInMinutes(e);
 	}
-	if (r > 0 && r < 7200 * 1e3) {
+	if (r > 0 && r < 72e5) {
 		let e = Math.round(r / 36e5);
 		return J.timePillInHours(e);
 	}
@@ -1634,18 +1636,18 @@ var Cn = (vn = class extends V {
 	}
 	render() {
 		let e = /* @__PURE__ */ new Date(), t = bn(this.events, e, this.windowDays);
-		return t.length === 0 ? L`<div class="empty-state">${J.nothingOnCalendar}</div>` : L`
+		return t.length === 0 ? F`<div class="empty-state">${J.nothingOnCalendar}</div>` : F`
       ${t.map((t) => {
 			let n = yn(t.start), r = yn(t.end), i = n <= e && e < r, a = !Sn(t) && r <= e, o = Sn(t) ? "all day" : xn(n, r, e), s = this._colorForEvent(t);
-			return L`
+			return F`
           <div class="event-row ${a ? "past" : ""}">
             <div class="time-pill ${i ? "now" : ""}">
-              ${i ? L`<span class="pulse-dot"></span>` : ""} ${o}
+              ${i ? F`<span class="pulse-dot"></span>` : ""} ${o}
             </div>
             <div class="color-bar" style="background:${s}"></div>
             <div class="event-content">
               <div class="event-summary">${t.summary}</div>
-              ${t.location ? L`<div class="event-secondary">${t.location}</div>` : ""}
+              ${t.location ? F`<div class="event-secondary">${t.location}</div>` : ""}
             </div>
           </div>
         `;
@@ -1763,17 +1765,17 @@ var Cn = (vn = class extends V {
 K([U({ type: Array })], Cn.prototype, "events", void 0), K([U({ type: Object })], Cn.prototype, "calendarColors", void 0), K([U({ type: Number })], Cn.prototype, "windowDays", void 0), Cn = K([H("lucarne-agenda-strip")], Cn);
 //#endregion
 //#region src/shared/icons.ts
-var wn = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+var wn = I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <circle cx="12" cy="12" r="4"/>
   <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-</svg>`, Tn = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, Tn = I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
-</svg>`, En = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, En = I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/>
   <line x1="8" y1="19" x2="8" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
   <line x1="12" y1="19" x2="12" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
   <line x1="16" y1="19" x2="16" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-</svg>`, Dn = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+</svg>`, Dn = I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
   <path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/>
   <line x1="8" y1="21" x2="8" y2="19"/>
   <line x1="8" y1="19" x2="10" y2="17"/>
@@ -1784,24 +1786,24 @@ var wn = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="cur
   <line x1="12" y1="22" x2="12" y2="20"/>
   <line x1="12" y1="20" x2="14" y2="18"/>
   <line x1="12" y1="20" x2="10" y2="18"/>
-</svg>`, On = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, On = I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M12 2v2M4.22 4.22l1.42 1.42M2 12h2M4.22 19.78l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
   <circle cx="10" cy="10" r="3" fill="currentColor"/>
   <path d="M20 15h-1.26A6 6 0 1 0 8 20h12a4 4 0 0 0 0-8z" fill="currentColor" opacity="0.7"/>
 </svg>`;
-R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <circle cx="12" cy="7" r="4"/>
   <path d="M20 21a8 8 0 1 0-16 0"/>
-</svg>`, R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+</svg>`, I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <polyline points="9 18 15 12 9 6"/>
 </svg>`;
-var kn = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+var kn = I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
   <polyline points="20 6 9 17 4 12"/>
-</svg>`, An = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, An = I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M3,12H7A5,5 0 0,1 12,7A5,5 0 0,1 17,12H21A1,1 0 0,1 22,13A1,1 0 0,1 21,14H3A1,1 0 0,1 2,13A1,1 0 0,1 3,12M15,12A3,3 0 0,0 12,9A3,3 0 0,0 9,12H15M12,2L14.39,5.42C13.65,5.15 12.84,5 12,5C11.16,5 10.35,5.15 9.61,5.42L12,2M3.34,7L7.5,6.65C6.9,7.16 6.36,7.78 5.94,8.5C5.5,9.24 5.25,10 5.11,10.79L3.34,7M20.65,7L18.88,10.79C18.74,10 18.47,9.23 18.05,8.5C17.63,7.78 17.1,7.15 16.5,6.64L20.65,7M12.71,16.3L15.82,19.41C16.21,19.8 16.21,20.43 15.82,20.82C15.43,21.21 14.8,21.21 14.41,20.82L12,18.41L9.59,20.82C9.2,21.21 8.57,21.21 8.18,20.82C7.79,20.43 7.79,19.8 8.18,19.41L11.29,16.3C11.5,16.1 11.74,16 12,16C12.26,16 12.5,16.1 12.71,16.3Z"/>
-</svg>`, jn = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, jn = I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,2L14.39,5.42C13.65,5.15 12.84,5 12,5C11.16,5 10.35,5.15 9.61,5.42L12,2M3.34,7L7.5,6.65C6.9,7.16 6.36,7.78 5.94,8.5C5.5,9.24 5.25,10 5.11,10.79L3.34,7M3.36,17L5.12,13.23C5.26,14 5.53,14.78 5.95,15.5C6.37,16.24 6.91,16.86 7.5,17.37L3.36,17M20.65,7L18.88,10.79C18.74,10 18.47,9.23 18.05,8.5C17.63,7.78 17.1,7.15 16.5,6.64L20.65,7M20.64,17L16.5,17.36C17.09,16.85 17.62,16.22 18.04,15.5C18.46,14.77 18.73,14 18.87,13.21L20.64,17M12,22L9.59,18.56C10.33,18.83 11.14,19 12,19C12.82,19 13.63,18.83 14.37,18.56L12,22Z"/>
-</svg>`, Mn = R`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+</svg>`, Mn = I`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M17.75,4.09L15.22,6.03L16.13,9.09L13.5,7.28L10.87,9.09L11.78,6.03L9.25,4.09L12.44,4L13.5,1L14.56,4L17.75,4.09M21.25,11L19.61,12.25L20.2,14.23L18.5,13.06L16.8,14.23L17.39,12.25L15.75,11L17.81,10.95L18.5,9L19.19,10.95L21.25,11M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.08,19.07C15.17,23 8.84,23 4.94,19.07C1.03,15.17 1.03,8.83 4.94,4.93C5.34,4.53 5.76,4.17 6.21,3.85C6.96,3.32 8.14,4.21 8.06,5.04C7.79,7.9 8.75,10.87 10.95,13.06C13.14,15.26 16.1,16.22 18.97,15.95M17.33,17.97C14.5,17.81 11.7,16.64 9.53,14.5C7.36,12.31 6.2,9.5 6.04,6.68C3.23,9.82 3.34,14.64 6.35,17.66C9.37,20.67 14.19,20.78 17.33,17.97Z"/>
 </svg>`, Nn = {
 	sunny: wn,
@@ -1854,25 +1856,25 @@ function Ln(e) {
 }
 //#endregion
 //#region src/components/weather-block.ts
-var Rn, zn = (Rn = class extends V {
+var Rn = class extends V {
 	constructor(...e) {
 		super(...e), this.forecast = [];
 	}
 	render() {
-		if (!this.weatherEntity) return L`<div class="empty-state">${J.addWeatherEntity}</div>`;
+		if (!this.weatherEntity) return F`<div class="empty-state">${J.addWeatherEntity}</div>`;
 		let e = this.weatherEntity.attributes, t = e.temperature, n = e.temperature_unit ?? "°C", r = this.weatherEntity.state, i = this.forecast[0], a = this.forecast[1], o = Ln(this.forecast);
-		return L`
+		return F`
       <div class="current">
         <span class="condition-icon" style="color: ${In(r)}">${Pn(r)}</span>
         <div class="temp-group">
           <div class="current-temp">${t === void 0 ? J.errorUnavailable : `${Math.round(t)}${n}`}</div>
-          ${i ? L`<div class="high-low">
+          ${i ? F`<div class="high-low">
                 ↑${Math.round(i.temperature)}${n}
                 ${i.templow === void 0 ? "" : ` ↓${Math.round(i.templow)}${n}`}
               </div>` : ""}
         </div>
       </div>
-      ${a ? L`
+      ${a ? F`
             <div class="tomorrow-row">
               <span class="tomorrow-icon" style="color: ${In(a.condition)}">${Pn(a.condition)}</span>
               <span>Tomorrow ↑${Math.round(a.temperature)}${n}${a.templow === void 0 ? "" : ` ↓${Math.round(a.templow)}${n}`}</span>
@@ -1884,7 +1886,7 @@ var Rn, zn = (Rn = class extends V {
       </div>
     `;
 	}
-}, Rn.styles = [G, M`
+}, zn = (Rn.styles = [G, M`
       :host {
         display: block;
         padding: var(--lucarne-spacing-md) var(--lucarne-spacing-lg);
@@ -2035,18 +2037,18 @@ var nr = tr(), rr = (Zn = class extends V {
 	}
 	render() {
 		let e = this.avatar;
-		if (e && e.startsWith("/local/")) return L`
+		if (e && e.startsWith("/local/")) return F`
         <div class="avatar" style="background:${this.color}" aria-label="${this.name}'s avatar">
           <img src="${e}" alt="${this.name}" />
         </div>
       `;
-		if (e && nr.test(e)) return L`
+		if (e && nr.test(e)) return F`
         <div class="avatar" style="background:${this.color}" aria-label="${this.name}'s avatar">
           <span class="emoji">${e}</span>
         </div>
       `;
 		let t = this.name.trim().charAt(0) || "?";
-		return L`
+		return F`
       <div class="avatar" style="background:${this.color}" aria-label="${this.name}'s avatar">
         <span class="initial">${t}</span>
       </div>
@@ -2091,7 +2093,7 @@ var ir, ar = 500, or = 180;
 function sr(e) {
 	var t;
 	let n = e.target;
-	return !!(!(n == null || (t = n.closest) == null) && t.call(n, "a"));
+	return !!(n != null && (t = n.closest) != null && t.call(n, "a"));
 }
 var cr = (ir = class extends V {
 	constructor(...e) {
@@ -2164,7 +2166,7 @@ var cr = (ir = class extends V {
 		}
 	}
 	render() {
-		if (!this.task) return L``;
+		if (!this.task) return F``;
 		let e = this.task.status === "completed", t = this.task.metadata.icon, n = this.task.due, r = this.task.metadata.type === "rotating", i = this.showNotes ? Un(this.task.description) : "", a = null;
 		if (r) {
 			let e = this.task.metadata.rotation_owners ?? [], t = this.task.metadata.current_owner ?? "";
@@ -2177,14 +2179,14 @@ var cr = (ir = class extends V {
 			}
 		}
 		let o = this.notToday ? this._nextDate() : void 0;
-		return L`
+		return F`
       <div
         class="row"
         style="--member-color:${this.memberColor}"
         role=${this.notToday ? "button" : "checkbox"}
-        aria-checked=${this.notToday ? z : e}
+        aria-checked=${this.notToday ? L : e}
         aria-label=${this.notToday ? `Edit ${this.task.summary}, not due today${o ? `, next ${this._formatNext(o)}` : ""}` : this._rowLabel(n, a)}
-        aria-describedby=${i ? "task-note" : z}
+        aria-describedby=${i ? "task-note" : L}
         tabindex="0"
         @click=${this._onClick}
         @keydown=${(e) => {
@@ -2200,15 +2202,15 @@ var cr = (ir = class extends V {
             <path d="M3 8l3.5 3.5L13 5" stroke="rgba(0,0,0,0.7)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-        ${t ? L`<span class="icon" aria-hidden="true">${t}</span>` : ""}
+        ${t ? F`<span class="icon" aria-hidden="true">${t}</span>` : ""}
         <div class="middle">
           <span class="label ${e ? "done" : ""}">${this.task.summary}</span>
-          ${a ? L`<span class="rotation-next">next: ${a}</span>` : ""}
+          ${a ? F`<span class="rotation-next">next: ${a}</span>` : ""}
           ${i ? this._renderNote(i, e) : ""}
         </div>
-        ${r ? L`<span class="rotation-badge" aria-hidden="true">↻</span>` : ""}
-        ${n ? L`<span class="due">${this._formatDue(n)}</span>` : ""}
-        ${o ? L`<span class="due">${this._formatNext(o)}</span>` : ""}
+        ${r ? F`<span class="rotation-badge" aria-hidden="true">↻</span>` : ""}
+        ${n ? F`<span class="due">${this._formatDue(n)}</span>` : ""}
+        ${o ? F`<span class="due">${this._formatNext(o)}</span>` : ""}
       </div>
     `;
 	}
@@ -2230,7 +2232,7 @@ var cr = (ir = class extends V {
 	}
 	_renderOwnerAvatar(e) {
 		let t = e.avatar, n;
-		return n = t && t.startsWith("/local/") ? L`<img src="${t}" alt="" draggable="false" />` : t && nr.test(t) ? L`<span>${t}</span>` : L`<span class="initial">${e.name.trim().charAt(0) || "?"}</span>`, L`
+		return n = t && t.startsWith("/local/") ? F`<img src="${t}" alt="" draggable="false" />` : t && nr.test(t) ? F`<span>${t}</span>` : F`<span class="initial">${e.name.trim().charAt(0) || "?"}</span>`, F`
       <div
         class="owner-avatar"
         style="background:${e.color}"
@@ -2242,7 +2244,7 @@ var cr = (ir = class extends V {
     `;
 	}
 	_renderNote(e, t) {
-		return L`
+		return F`
       <div
         id="task-note"
         class="note ${t ? "done" : ""} ${this._noteExpanded ? "expanded" : ""} ${this._noteAnimating ? "animating" : ""}"
@@ -2254,7 +2256,7 @@ var cr = (ir = class extends V {
 			e.stopPropagation(), !sr(e) && (this._notePress = !0, (t = (n = e.currentTarget).setPointerCapture) == null || t.call(n, e.pointerId));
 		}}
       >
-        ${Xn(e).map((e) => e.href ? L`<a
+        ${Xn(e).map((e) => e.href ? F`<a
                 href=${e.href}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -2571,17 +2573,17 @@ var mr = (lr = class extends V {
 	}
 	render() {
 		let e = this.integrationMode ? this.renderableTasks : this.items.map(pr), { rows: t, totalActive: n } = this._resolveVisible(e);
-		return t.length === 0 ? L`
+		return t.length === 0 ? F`
         <div class="empty-state">
           <span class="empty-icon">${kn}</span>
           ${n === 0 ? J.allDone : J.allDoneForNow}
         </div>
-      ` : L`
+      ` : F`
       <div class="header">
         ${J.tasksTitle}
         <span class="count-badge">${n}</span>
       </div>
-      ${n === 0 ? L`
+      ${n === 0 ? F`
             <div class="empty-state done-banner">
               <span class="empty-icon">${kn}</span>
               ${J.allDone}
@@ -2592,7 +2594,7 @@ var mr = (lr = class extends V {
 	}
 	_renderTaskLine(e) {
 		let t = this._ownerFor(e);
-		return L`
+		return F`
       <div class="task-line">
         <lucarne-task-row
           compact
@@ -2686,13 +2688,13 @@ var mr = (lr = class extends V {
 K([U({ type: Array })], mr.prototype, "items", void 0), K([U({ type: String })], mr.prototype, "todoEntityId", void 0), K([U({ type: Boolean })], mr.prototype, "integrationMode", void 0), K([U({ attribute: !1 })], mr.prototype, "renderableTasks", void 0), K([U({ attribute: !1 })], mr.prototype, "members", void 0), K([U({ type: Number })], mr.prototype, "limit", void 0), K([U({ type: Boolean })], mr.prototype, "refillOnComplete", void 0), mr = K([H("lucarne-tasks-summary")], mr);
 //#endregion
 //#region src/components/presence-pills.ts
-var hr, gr = (hr = class extends V {
+var hr = class extends V {
 	constructor(...e) {
 		super(...e), this.entries = [];
 	}
 	render() {
-		return L`
-      ${this.entries.map((e) => L`
+		return F`
+      ${this.entries.map((e) => F`
           <span class="pill ${e.isHome ? "home" : "away"}">
             <span class="dot"></span>
             ${e.name}
@@ -2700,7 +2702,7 @@ var hr, gr = (hr = class extends V {
         `)}
     `;
 	}
-}, hr.styles = [G, M`
+}, gr = (hr.styles = [G, M`
       :host {
         display: flex;
         flex-wrap: wrap;
@@ -2745,7 +2747,7 @@ var hr, gr = (hr = class extends V {
 K([U({ type: Array })], gr.prototype, "entries", void 0), gr = K([H("lucarne-presence-pills")], gr);
 //#endregion
 //#region src/components/family-ready-pill.ts
-var _r, vr = (_r = class extends V {
+var _r = class extends V {
 	constructor(...e) {
 		super(...e), this.members = [], this.tasksByMember = /* @__PURE__ */ new Map();
 	}
@@ -2768,21 +2770,21 @@ var _r, vr = (_r = class extends V {
 	}
 	render() {
 		let { readyCount: e, totalWithRoutines: t } = this._computeReadiness();
-		if (t === 0) return L`
+		if (t === 0) return F`
         <div class="pill none" @click=${this._handleClick}>
           <span class="icon">✓</span>
           ${J.noRoutinesToday}
         </div>
       `;
 		let n = e === t;
-		return L`
+		return F`
       <div class="pill ${n ? "all-done" : ""}" @click=${this._handleClick}>
         <span class="icon">${n ? "🎉" : "⏳"}</span>
         ${J.familyReady(e, t)}
       </div>
     `;
 	}
-}, _r.styles = [G, M`
+}, vr = (_r.styles = [G, M`
       :host {
         display: inline-block;
       }
@@ -2898,10 +2900,10 @@ var Sr = (yr = class extends ft {
 		return (e = this._config) != null && e.household_tasks_from_integration ? "todo.lucarne_household" : ((t = this._config) == null ? void 0 : t.tasks) ?? "";
 	}
 	_setupSubscriptions() {
-		!this._config || !this.hass || (this._fetchCalendarEvents(), this._config.weather && this._fetchForecast(), this._calendarIntervalId = setInterval(() => {
+		this._config && this.hass && (this._fetchCalendarEvents(), this._config.weather && this._fetchForecast(), this._calendarIntervalId = setInterval(() => {
 			var e;
 			this._fetchCalendarEvents(), (e = this._config) != null && e.weather && this._fetchForecast();
-		}, 300 * 1e3), this._config.tasks && !this._config.household_tasks_from_integration && (this._todoUnsub = bt(this.hass, this._config.tasks, (e) => {
+		}, 3e5), this._config.tasks && !this._config.household_tasks_from_integration && (this._todoUnsub = bt(this.hass, this._config.tasks, (e) => {
 			this._todoItems = e, this._reconcileOptimistic();
 		})), (this._config.household_tasks_from_integration || this._config.show_family_ready_pill || this._config.tasks) && (this._unsubFamily = Zt(this.hass, (e) => {
 			this._familyState = e, this._reconcileOptimistic();
@@ -2928,7 +2930,7 @@ var Sr = (yr = class extends ft {
 		if (!this._config || !this.hass) return;
 		let e = this._config.calendars.map((e) => e.entity), t = /* @__PURE__ */ new Date();
 		t.setHours(0, 0, 0, 0);
-		let n = new Date(Date.now() + 10080 * 60 * 1e3), { events: r } = await gt(this.hass, e, t, n), i = /* @__PURE__ */ new Map();
+		let n = new Date(Date.now() + 6048e5), { events: r } = await gt(this.hass, e, t, n), i = /* @__PURE__ */ new Map();
 		for (let [e, t] of r.entries()) i.set(e, t.map((t) => ({
 			...t,
 			uid: `${e}::${t.uid ?? t.summary}`
@@ -2937,7 +2939,7 @@ var Sr = (yr = class extends ft {
 	}
 	async _fetchForecast() {
 		var e;
-		if (!(this._fetchingForecast || !((e = this._config) != null && e.weather) || !this.hass)) {
+		if (!this._fetchingForecast && (e = this._config) != null && e.weather && this.hass) {
 			this._fetchingForecast = !0;
 			try {
 				var t;
@@ -3053,7 +3055,7 @@ var Sr = (yr = class extends ft {
 	}
 	_renderCalendarSection() {
 		var e;
-		return L`
+		return F`
       <div class="section section-calendar" data-section="calendar">
         <lucarne-agenda-strip
           .events=${this._mergedEvents}
@@ -3065,7 +3067,7 @@ var Sr = (yr = class extends ft {
 	}
 	_renderWeatherSection() {
 		var e, t;
-		return L`
+		return F`
       <div class="section section-weather" data-section="weather">
         <lucarne-weather-block
           .weatherEntity=${(e = this._config) != null && e.weather ? (t = this.hass) == null ? void 0 : t.states[this._config.weather] : void 0}
@@ -3086,11 +3088,11 @@ var Sr = (yr = class extends ft {
 			if (e.metadata.type === "rotating") return !1;
 			if (e.metadata.type === "routine") {
 				let t = en(e.metadata.recurrence);
-				return t.mode === "none" || t.mode === "unknown" ? !0 : hn(t, r);
+				return t.mode === "none" || t.mode === "unknown" || hn(t, r);
 			}
 			return !0;
 		}).map(this._applyOptimistic), a = this._tasksEntityId;
-		return L`
+		return F`
       <div
         class="section section-tasks"
         data-section="tasks"
@@ -3109,7 +3111,7 @@ var Sr = (yr = class extends ft {
     `;
 	}
 	renderContent() {
-		if (!this._config) return L``;
+		if (!this._config) return F``;
 		let e = (this._config.presence ?? []).map((e) => {
 			var t;
 			return {
@@ -3117,13 +3119,13 @@ var Sr = (yr = class extends ft {
 				isHome: ((t = this.hass) == null || (t = t.states[e.entity]) == null ? void 0 : t.state) === "on"
 			};
 		}), t = this._familyState !== null && this._familyState.integrationError === null, n = (this._config.show_family_ready_pill ?? !1) && t, r = (this._config.household_tasks_from_integration ?? !1) && t, i = !(this._config.household_tasks_from_integration ?? !1) && !!this._config.tasks, a = xr(this._config.section_order);
-		return L`
+		return F`
       <ha-card>
         <div class="card-header">
           <h2 class="card-title">${this._config.title ?? J.today}</h2>
           <div class="header-right">
-            ${e.length > 0 ? L`<lucarne-presence-pills .entries=${e}></lucarne-presence-pills>` : ""}
-            ${n ? L`<lucarne-family-ready-pill
+            ${e.length > 0 ? F`<lucarne-presence-pills .entries=${e}></lucarne-presence-pills>` : ""}
+            ${n ? F`<lucarne-family-ready-pill
                   .members=${this._familyMembers}
                   .tasksByMember=${this._familyTasksByMember}
                 ></lucarne-family-ready-pill>` : ""}
@@ -3427,7 +3429,7 @@ function Ar(e, t, n, r = {}) {
 }
 //#endregion
 //#region src/components/reorder-list.ts
-var jr, Mr = (jr = class extends V {
+var jr = class extends V {
 	constructor(...e) {
 		super(...e), this.items = [], this.label = "Reorderable list", this._dragIndex = null, this._dragOverIndex = null;
 	}
@@ -3449,7 +3451,7 @@ var jr, Mr = (jr = class extends V {
 		this._dragIndex = e, t.dataTransfer && (t.dataTransfer.effectAllowed = "move", t.dataTransfer.setData("text/plain", String(e)));
 	}
 	_onDragOver(e, t) {
-		this._dragIndex === null || this._dragIndex === e || (t.preventDefault(), t.dataTransfer && (t.dataTransfer.dropEffect = "move"), this._dragOverIndex !== e && (this._dragOverIndex = e));
+		this._dragIndex !== null && this._dragIndex !== e && (t.preventDefault(), t.dataTransfer && (t.dataTransfer.dropEffect = "move"), this._dragOverIndex !== e && (this._dragOverIndex = e));
 	}
 	_onDrop(e, t) {
 		t.preventDefault();
@@ -3460,9 +3462,9 @@ var jr, Mr = (jr = class extends V {
 		this._dragIndex = null, this._dragOverIndex = null;
 	}
 	render() {
-		return L`
+		return F`
       <div class="reorder-list" role="list" aria-label=${this.label}>
-        ${this.items.map((e, t) => L`
+        ${this.items.map((e, t) => F`
           <div
             class="reorder-row ${this._dragIndex === t ? "dragging" : ""} ${this._dragOverIndex === t ? "drag-over" : ""}"
             role="listitem"
@@ -3494,7 +3496,7 @@ var jr, Mr = (jr = class extends V {
       </div>
     `;
 	}
-}, jr.styles = M`
+}, Mr = (jr.styles = M`
     .reorder-list {
       display: flex;
       flex-direction: column;
@@ -3615,7 +3617,7 @@ var Nr, Pr = {
 	}
 	_isIntegrationAvailable() {
 		var e;
-		return !!(!((e = this.hass) == null || (e = e.states) == null) && e[qt.todo_entity_id]);
+		return !!((e = this.hass) != null && (e = e.states) != null && e[qt.todo_entity_id]);
 	}
 	_agendaShowTomorrowChanged(e) {
 		let t = e.target.checked;
@@ -3729,7 +3731,7 @@ var Nr, Pr = {
 	_renderSectionOrder() {
 		var e;
 		let t = xr((e = this._config) == null ? void 0 : e.section_order);
-		return L`
+		return F`
       <div class="section-label">Section order</div>
       <lucarne-reorder-list
         label="Card sections (drag to reorder)"
@@ -3739,15 +3741,15 @@ var Nr, Pr = {
 		}))}
         @reorder=${(e) => this._commitSectionOrder(e.detail.order)}
       >
-        ${t.map((e) => L`<span slot=${e} class="section-label-cell">${Pr[e]}</span>`)}
+        ${t.map((e) => F`<span slot=${e} class="section-label-cell">${Pr[e]}</span>`)}
       </lucarne-reorder-list>
     `;
 	}
 	render() {
-		if (!this._config) return L``;
-		if (!this._haReady) return L`<div class="loading">Loading editor…</div>`;
+		if (!this._config) return F``;
+		if (!this._haReady) return F`<div class="loading">Loading editor…</div>`;
 		let e = this._config.calendars ?? [], t = this._config.presence ?? [];
-		return L`
+		return F`
       <label class="field">
         <span class="field-label">Card title</span>
         <input
@@ -3814,7 +3816,7 @@ var Nr, Pr = {
           @change=${this._integrationTasksChanged}
           ?disabled=${!this._isIntegrationAvailable()}
         />
-        ${this._isIntegrationAvailable() ? "" : L`<small> — install Lucarne Family integration first</small>`}
+        ${this._isIntegrationAvailable() ? "" : F`<small> — install Lucarne Family integration first</small>`}
       </label>
       <label class="field field-inline" style="${this._isIntegrationAvailable() ? "" : "opacity:0.5;pointer-events:none"}">
         <span class="field-label">Show family ready pill</span>
@@ -3824,11 +3826,11 @@ var Nr, Pr = {
           @change=${this._familyPillChanged}
           ?disabled=${!this._isIntegrationAvailable()}
         />
-        ${this._isIntegrationAvailable() ? "" : L`<small> — install Lucarne Family integration first</small>`}
+        ${this._isIntegrationAvailable() ? "" : F`<small> — install Lucarne Family integration first</small>`}
       </label>
 
       <div class="section-label">Calendars</div>
-      ${e.map((e, t) => L`
+      ${e.map((e, t) => F`
           <div class="cal-row">
             <ha-entity-picker
               label="Calendar entity"
@@ -3851,7 +3853,7 @@ var Nr, Pr = {
       <button type="button" class="add" @click=${this._addCalendar}>+ Add calendar</button>
 
       <div class="section-label">Presence</div>
-      ${t.map((e, t) => L`
+      ${t.map((e, t) => F`
           <div class="presence-row">
             <div class="row-stack">
               <ha-entity-picker
@@ -3915,7 +3917,7 @@ function Br(e) {
 	return `syn:${e.start}|${e.end}|${e.summary ?? ""}`;
 }
 function Vr(e) {
-	if (e !== void 0 && !(typeof e != "number" || !Number.isFinite(e))) return Math.max(0, Math.floor(e));
+	if (e !== void 0 && typeof e == "number" && Number.isFinite(e)) return Math.max(0, Math.floor(e));
 }
 function Hr(e, t) {
 	let n = new Date(e);
@@ -3927,7 +3929,7 @@ function Ur(e) {
 }
 var Wr = class {
 	constructor(e, t) {
-		this._isConnected = !1, this._hasHass = !1, this._dayOffset = 0, this._fetchSeq = 0, this._cachedEvents = /* @__PURE__ */ new Map(), this._cachedDayKeys = /* @__PURE__ */ new Set(), this._host = e, this._opts = t, this._fetcher = t.fetcher ?? gt, this._pollIntervalMs = t.pollIntervalMs ?? 5 * 6e4, this._tickIntervalMs = t.tickIntervalMs ?? 6e4, this._panBound = t.panBoundDays ?? 90, this._visibleCount = t.visibleCount, this._bufferDaysExplicit = Vr(t.bufferDays);
+		this._isConnected = !1, this._hasHass = !1, this._dayOffset = 0, this._fetchSeq = 0, this._cachedEvents = /* @__PURE__ */ new Map(), this._cachedDayKeys = /* @__PURE__ */ new Set(), this._host = e, this._opts = t, this._fetcher = t.fetcher ?? gt, this._pollIntervalMs = t.pollIntervalMs ?? 3e5, this._tickIntervalMs = t.tickIntervalMs ?? 6e4, this._panBound = t.panBoundDays ?? 90, this._visibleCount = t.visibleCount, this._bufferDaysExplicit = Vr(t.bufferDays);
 		let n = (t.now ?? (() => /* @__PURE__ */ new Date()))();
 		this._anchorToday = Ur(n), e.addController(this);
 	}
@@ -4073,7 +4075,7 @@ function Gr(e) {
 }
 //#endregion
 //#region src/components/visibility-pills.ts
-var Kr, qr = (Kr = class extends V {
+var Kr = class extends V {
 	constructor(...e) {
 		super(...e), this.calendars = [], this.visibleIds = /* @__PURE__ */ new Set();
 	}
@@ -4086,8 +4088,8 @@ var Kr, qr = (Kr = class extends V {
 		}));
 	}
 	render() {
-		return L`
-      ${this.calendars.map((e) => L`
+		return F`
+      ${this.calendars.map((e) => F`
           <button
             class="pill ${this.visibleIds.has(e.entity) ? "visible" : "hidden"}"
             style="background: ${this.visibleIds.has(e.entity) ? e.color + "33" : "transparent"}"
@@ -4101,7 +4103,7 @@ var Kr, qr = (Kr = class extends V {
         `)}
     `;
 	}
-}, Kr.styles = [G, M`
+}, qr = (Kr.styles = [G, M`
       :host {
         display: flex;
         flex-wrap: wrap;
@@ -4170,7 +4172,7 @@ var Jr = {
 	update(e, t) {
 		return this.render(...t);
 	}
-}, Zr = "important", Qr = " !important", $r = Yr(class extends Xr {
+}, Zr = "important", Qr = " !" + Zr, $r = Yr(class extends Xr {
 	constructor(e) {
 		var t;
 		if (super(e), e.type !== Jr.ATTRIBUTE || e.name !== "style" || ((t = e.strings) == null ? void 0 : t.length) > 2) throw Error("The `styleMap` directive must be used in the `style` attribute and must be the only part in the attribute.");
@@ -4193,7 +4195,7 @@ var Jr = {
 				e.includes("-") || t ? n.setProperty(e, t ? r.slice(0, -11) : r, t ? Zr : "") : n[e] = r;
 			}
 		}
-		return Ue;
+		return Ge;
 	}
 }), ei;
 function ti(e) {
@@ -4219,7 +4221,7 @@ var ni = (ei = class extends V {
 	}
 	render() {
 		let e = new Date(this.event.start), t = new Date(this.event.end), n = `${ti(e)}–${ti(t)}`, r = this.event.pending ? "0.5" : "1";
-		return L`
+		return F`
       <div @click=${this._handleClick} style="height:100%;width:100%;overflow:hidden;opacity:${r}">
         <div class="event-summary">${this.event.summary}</div>
         <div class="event-time">${n}</div>
@@ -4268,7 +4270,7 @@ var ni = (ei = class extends V {
 K([U({ type: Object })], ni.prototype, "event", void 0), K([U({ type: String })], ni.prototype, "color", void 0), K([U({ type: Number })], ni.prototype, "lane", void 0), K([U({ type: Number })], ni.prototype, "laneCount", void 0), K([U({ type: Number })], ni.prototype, "topPercent", void 0), K([U({ type: Number })], ni.prototype, "heightPercent", void 0), ni = K([H("lucarne-calendar-event-block")], ni);
 //#endregion
 //#region src/components/out-of-band-stub.ts
-var ri, ii = (ri = class extends V {
+var ri = class extends V {
 	constructor(...e) {
 		super(...e), this.events = [], this.label = "earlier", this.eventColors = /* @__PURE__ */ new Map(), this._open = !1;
 	}
@@ -4296,22 +4298,22 @@ var ri, ii = (ri = class extends V {
 		}));
 	}
 	render() {
-		if (this.events.length === 0) return L``;
+		if (this.events.length === 0) return F``;
 		let e = this._chipEl, t = 0, n = 0;
 		if (e) {
 			let r = e.getBoundingClientRect();
 			t = r.bottom + 4, n = r.left;
 		}
-		return L`
+		return F`
       <button class="stub-chip" @click=${this._openPopover}>
         +${this.events.length} ${this.label}
       </button>
 
-      ${this._open ? L`
+      ${this._open ? F`
             <div class="backdrop" @click=${this._close}></div>
             <div class="mini-popover" style="top:${t}px;left:${n}px;">
               <div class="mini-title">${this.label}</div>
-              ${this.events.map((e) => L`
+              ${this.events.map((e) => F`
                   <div class="mini-event" @click=${(t) => this._tapEvent(t, e)}>
                     <span class="mini-event-summary">${e.summary}</span>
                     <span class="mini-event-time">${this._formatTime(e.start)}</span>
@@ -4321,7 +4323,7 @@ var ri, ii = (ri = class extends V {
           ` : ""}
     `;
 	}
-}, ri.styles = [G, M`
+}, ii = (ri.styles = [G, M`
       :host {
         display: block;
       }
@@ -4412,9 +4414,9 @@ var ci = (ai = class extends V {
 	}
 	render() {
 		let [e] = this.bandStart.split(":").map(Number), [t] = this.bandEnd.split(":").map(Number), n = Math.max(1, t - e) * this.hourHeightPx;
-		return L`
+		return F`
       <div class="sk-host" style="height:${n}px">
-        ${[0, 1].map((e) => L`
+        ${[0, 1].map((e) => F`
             <div
               class="fake-event"
               style="top: ${si(e) / 100 * n}px; height: ${oi(e)}px;"
@@ -4518,9 +4520,9 @@ var di = (li = class extends V {
 		return t;
 	}
 	_renderDayColumn(e, t) {
-		if (!this.layout) return L``;
+		if (!this.layout) return F``;
 		let n = q(e), r = this.layout.perDay.get(n);
-		if (!r) return L``;
+		if (!r) return F``;
 		let i = xt(this.bandStart, this.bandEnd), a = (i.length - 1) * this.hourHeightPx, o = ui(e, t), [s] = this.bandStart.split(":").map(Number), [c] = this.bandEnd.split(":").map(Number), l = (c - s) * 36e5, u = null;
 		if (o) {
 			let n = new Date(e);
@@ -4533,9 +4535,9 @@ var di = (li = class extends V {
 			...r.earlier,
 			...r.later
 		]);
-		return L`
+		return F`
       <div class="day-col-wrapper">
-        ${r.earlier.length > 0 ? L`
+        ${r.earlier.length > 0 ? F`
               <div class="stub-area-top">
                 <lucarne-out-of-band-stub
                   .events=${r.earlier}
@@ -4550,18 +4552,18 @@ var di = (li = class extends V {
           style="height:${a}px${this.showCreateButton ? "; cursor: crosshair" : ""}"
           @click=${(t) => this._onBandClick(t, e)}
         >
-          ${i.slice(0, -1).map((e, t) => L`
+          ${i.slice(0, -1).map((e, t) => F`
               <div
                 class="hour-line"
                 style="top: ${(t + 1) / (i.length - 1) * 100}%"
               ></div>
             `)}
 
-          ${u === null ? "" : L`<div class="now-line" style="top:${u}%"></div>`}
+          ${u === null ? "" : F`<div class="now-line" style="top:${u}%"></div>`}
 
           ${r.inBand.map((e) => {
 			let t = 100 / e.laneCount, n = e.lane / e.laneCount * 100, r = this._eventColor(e.event);
-			return L`
+			return F`
               <lucarne-calendar-event-block
                 style="
                   position: absolute;
@@ -4584,7 +4586,7 @@ var di = (li = class extends V {
 		})}
         </div>
 
-        ${r.later.length > 0 ? L`
+        ${r.later.length > 0 ? F`
               <div class="stub-area-bottom">
                 <lucarne-out-of-band-stub
                   .events=${r.later}
@@ -4597,9 +4599,9 @@ var di = (li = class extends V {
     `;
 	}
 	render() {
-		if (!this.layout) return L`<div>Loading…</div>`;
+		if (!this.layout) return F`<div>Loading…</div>`;
 		let e = /* @__PURE__ */ new Date(), t = xt(this.bandStart, this.bandEnd), n = (t.length - 1) * this.hourHeightPx, r = new Intl.DateTimeFormat("en-US", { weekday: "short" }), i = { "--lucarne-day-render-count": String(this.layout.days.length) };
-		return this.dayWidthPx > 0 && (i["--lucarne-day-width-px"] = `${this.dayWidthPx}px`, i["--lucarne-day-baseline-px"] = `${-this.bufferDays * this.dayWidthPx}px`), L`
+		return this.dayWidthPx > 0 && (i["--lucarne-day-width-px"] = `${this.dayWidthPx}px`, i["--lucarne-day-baseline-px"] = `${-this.bufferDays * this.dayWidthPx}px`), F`
       <div class="grid-wrapper" style=${$r(i)}>
         <!-- Sticky head: day names + all-day rows stay pinned while the time band scrolls -->
         <div class="grid-head">
@@ -4608,7 +4610,7 @@ var di = (li = class extends V {
 
           <!-- Day header track -->
           <div class="day-cols-track" style="grid-row:1">
-            ${this.layout.days.map((t, n) => L`
+            ${this.layout.days.map((t, n) => F`
                 <div
                   class="day-header ${ui(t, e) ? "today" : ""}"
                   style="grid-column: ${n + 1}"
@@ -4628,12 +4630,12 @@ var di = (li = class extends V {
             <div class="day-cols-track">
               ${this.layout.days.map((e, t) => {
 			let n = q(e), r = this.cachedDayKeys.has(n), i = this.layout.perDay.get(n);
-			return L`
+			return F`
                   <div class="allday-cell" style="grid-column: ${t + 1}">
                     ${r ? ((i == null ? void 0 : i.allDay) ?? []).map((e) => {
 				var t;
 				let n = i == null || (t = i.allDayClipped) == null ? void 0 : t.get(Mt(e));
-				return L`
+				return F`
                             <div
                               class="allday-event"
                               style="background: ${this._eventColor(e)}cc"
@@ -4648,10 +4650,10 @@ var di = (li = class extends V {
 					}));
 				}}
                             >
-                              ${n != null && n.left ? L`<span class="clip-chevron">‹</span>` : ""}${e.summary}${n != null && n.right ? L`<span class="clip-chevron">›</span>` : ""}
+                              ${n != null && n.left ? F`<span class="clip-chevron">‹</span>` : ""}${e.summary}${n != null && n.right ? F`<span class="clip-chevron">›</span>` : ""}
                             </div>
                           `;
-			}) : L`<div class="allday-skeleton"><div class="shimmer-sweep"></div></div>`}
+			}) : F`<div class="allday-skeleton"><div class="shimmer-sweep"></div></div>`}
                   </div>
                 `;
 		})}
@@ -4661,7 +4663,7 @@ var di = (li = class extends V {
 
         <div class="grid-body">
           <div class="time-col" style="height:${n}px">
-            ${t.map((e, n) => L`
+            ${t.map((e, n) => F`
                 <div
                   class="hour-label ${n === 0 ? "first" : ""}"
                   style="top: ${n / (t.length - 1) * 100}%"
@@ -4675,9 +4677,9 @@ var di = (li = class extends V {
           <div class="day-cols-track">
             ${this.layout.days.map((t, n) => {
 			let r = q(t), i = this.cachedDayKeys.has(r);
-			return L`
+			return F`
                 <div style="grid-column:${n + 1}; position:relative; overflow:visible; display:flex; flex-direction:column;">
-                  ${i ? this._renderDayColumn(t, e) : L`<lucarne-skeleton-day-column
+                  ${i ? this._renderDayColumn(t, e) : F`<lucarne-skeleton-day-column
                         .bandStart=${this.bandStart}
                         .bandEnd=${this.bandEnd}
                         .hourHeightPx=${this.hourHeightPx}
@@ -5010,7 +5012,7 @@ function mi(e, t) {
 }
 //#endregion
 //#region src/components/calendar-day-pan.ts
-var hi, gi = (hi = class extends V {
+var hi = class extends V {
 	constructor(...e) {
 		super(...e), this.dayWidthPx = 0, this.bufferDays = 0, this.canPanBack = !0, this.canPanForward = !0, this._startX = 0, this._startY = 0, this._startTime = 0, this._isDragging = !1, this._cachedTargets = [];
 	}
@@ -5072,7 +5074,7 @@ var hi, gi = (hi = class extends V {
 		}));
 	}
 	_onPointerDown(e) {
-		e.pointerType === "mouse" && e.button !== 0 || this._pointerId === void 0 && (this._cancelPendingSnap(), this._pointerId = e.pointerId, this._startX = e.clientX, this._startY = e.clientY, this._startTime = performance.now(), this._isDragging = !1, this._cachePanTargets());
+		(e.pointerType !== "mouse" || e.button === 0) && this._pointerId === void 0 && (this._cancelPendingSnap(), this._pointerId = e.pointerId, this._startX = e.clientX, this._startY = e.clientY, this._startTime = performance.now(), this._isDragging = !1, this._cachePanTargets());
 	}
 	_onPointerMove(e) {
 		if (e.pointerId !== this._pointerId) return;
@@ -5107,7 +5109,7 @@ var hi, gi = (hi = class extends V {
 		}
 	}
 	render() {
-		return L`
+		return F`
       <div
         class="pan-wrapper"
         @pointerdown=${this._onPointerDown}
@@ -5119,7 +5121,7 @@ var hi, gi = (hi = class extends V {
       </div>
     `;
 	}
-}, hi.styles = M`
+}, gi = (hi.styles = M`
     :host {
       display: block;
       position: relative;
@@ -5216,19 +5218,19 @@ var xi = (yi = class extends V {
 		})), this._deleting = !1, this._confirmingDelete = !1;
 	}
 	render() {
-		if (!this.event) return L``;
+		if (!this.event) return F``;
 		let e = this.event, t = e.start.length === 10 && !e.start.includes("T") ? "All day" : `${bi(e.start)} – ${new Date(e.end).toLocaleTimeString("en-US", {
 			hour: "numeric",
 			minute: "2-digit",
 			hour12: !0
 		})}`, n = this._hasSyntheticUid(e.uid), r = !!this.entityId && !!e.uid && this.hass != null && yt(this.hass, this.entityId) && !this._isRecurring(e) && !n, i = this._confirmingDelete ? this._confirmDelete : this._startDelete, a = this._confirmingDelete ? "Confirm delete" : "Delete event";
-		return L`
+		return F`
       <div class="backdrop" @click=${this._close}></div>
       <div class="popover" role="dialog" aria-modal="true">
         <div class="popover-header">
           <span class="color-dot" style="background:${this.color}"></span>
           <span class="event-title">${e.summary}</span>
-          ${r ? L`
+          ${r ? F`
                 <button
                   class="icon-btn ${this._confirmingDelete ? "armed" : ""}"
                   @click=${i}
@@ -5236,11 +5238,11 @@ var xi = (yi = class extends V {
                   aria-label=${a}
                   title=${a}
                 >🗑️</button>
-              ` : L`<span></span>`}
+              ` : F`<span></span>`}
           <button class="icon-btn" @click=${this._close} aria-label="Close">✕</button>
         </div>
 
-        ${this._confirmingDelete ? L`
+        ${this._confirmingDelete ? F`
               <div class="confirm-pill" role="alert">
                 <span>Tap 🗑️ again to delete this event.</span>
                 <button
@@ -5256,7 +5258,7 @@ var xi = (yi = class extends V {
           <span class="detail-text">${t}</span>
         </div>
 
-        ${this.calendarLabel ? L`
+        ${this.calendarLabel ? F`
               <div class="detail-row">
                 <em class="detail-icon">📅</em>
                 <span class="calendar-label detail-text">
@@ -5268,21 +5270,21 @@ var xi = (yi = class extends V {
               </div>
             ` : ""}
 
-        ${e.location ? L`
+        ${e.location ? F`
               <div class="detail-row">
                 <em class="detail-icon">📍</em>
                 <span class="detail-text">${e.location}</span>
               </div>
             ` : ""}
 
-        ${e.description ? L`
+        ${e.description ? F`
               <div class="detail-row">
                 <em class="detail-icon">📝</em>
                 <span class="detail-text">${e.description}</span>
               </div>
             ` : ""}
 
-        ${this._deleteError ? L`<div class="error-msg">${this._deleteError}</div>` : ""}
+        ${this._deleteError ? F`<div class="error-msg">${this._deleteError}</div>` : ""}
       </div>
     `;
 	}
@@ -5499,7 +5501,7 @@ var Y = (Si = class extends V {
 		}));
 	}
 	render() {
-		return this.calendars.length ? L`
+		return this.calendars.length ? F`
       <div class="backdrop" @click=${this._close}></div>
       <div class="popover" role="dialog" aria-modal="true" aria-label="Create event">
         <div class="popover-header">
@@ -5526,7 +5528,7 @@ var Y = (Si = class extends V {
             .value=${this._calendarEntityId}
             @change=${(e) => this._calendarEntityId = e.target.value}
           >
-            ${this.calendars.map((e) => L`<option value=${e.entity}>${e.label}</option>`)}
+            ${this.calendars.map((e) => F`<option value=${e.entity}>${e.label}</option>`)}
           </select>
         </div>
 
@@ -5550,7 +5552,7 @@ var Y = (Si = class extends V {
           <label for="ce-allday" style="margin:0; font-weight:400; color:var(--lucarne-on-surface)">All day</label>
         </div>
 
-        ${this._allDay ? "" : L`
+        ${this._allDay ? "" : F`
               <div class="time-row">
                 <div class="field">
                   <label for="ce-start">Start</label>
@@ -5594,7 +5596,7 @@ var Y = (Si = class extends V {
           ></textarea>
         </div>
 
-        ${this._error ? L`<div class="error-msg">${this._error}</div>` : ""}
+        ${this._error ? F`<div class="error-msg">${this._error}</div>` : ""}
 
         <div class="actions">
           <button class="btn btn-cancel" @click=${this._close}>Cancel</button>
@@ -5603,7 +5605,7 @@ var Y = (Si = class extends V {
           </button>
         </div>
       </div>
-    ` : L``;
+    ` : F``;
 	}
 }, Si.styles = [G, M`
       :host {
@@ -5900,7 +5902,7 @@ var X = (Ei = class extends ft {
 		this._initialScrollRaf !== void 0 && (cancelAnimationFrame(this._initialScrollRaf), this._initialScrollRaf = void 0), this._didInitialScroll = !1, this._initialScrollScheduled = !1, this._initialScrollAttempts = 0;
 	}
 	updated(e) {
-		super.updated(e), this._ensureGridMeasured(), !this._didInitialScroll && !this._initialScrollScheduled && this._layout && this._dayWidthPx > 0 && (this._initialScrollScheduled = !0, this._scheduleInitialScroll()), !(!e.has("hass") || !this._config) && (this._rolling.setHass(this.hass), this._updateCreatableCalendars());
+		super.updated(e), this._ensureGridMeasured(), !this._didInitialScroll && !this._initialScrollScheduled && this._layout && this._dayWidthPx > 0 && (this._initialScrollScheduled = !0, this._scheduleInitialScroll()), e.has("hass") && this._config && (this._rolling.setHass(this.hass), this._updateCreatableCalendars());
 	}
 	_scheduleInitialScroll() {
 		this._initialScrollRaf = requestAnimationFrame(() => {
@@ -5981,7 +5983,7 @@ var X = (Ei = class extends ft {
 		n.push(...this._pendingEvents.filter((e) => {
 			var t;
 			let n = (t = e.uid) == null ? void 0 : t.split("::")[0];
-			return n ? this._visibleIds.has(n) : !0;
+			return !n || this._visibleIds.has(n);
 		}));
 		let r = this._deletedUids.size > 0 ? n.filter((e) => !e.uid || !this._deletedUids.has(e.uid)) : n, i = ((e = this._config.visible_hours) == null ? void 0 : e.start) ?? "07:00", a = ((t = this._config.visible_hours) == null ? void 0 : t.end) ?? "21:00", o = this._rolling.renderDays;
 		this._layout = Ft(r, o, i, a);
@@ -5989,7 +5991,7 @@ var X = (Ei = class extends ft {
 	_supportsCreate(e) {
 		var t;
 		let n = (t = this.hass) == null || (t = t.states[e]) == null || (t = t.attributes) == null ? void 0 : t.supported_features;
-		return n !== void 0 && (n & 1) != 0;
+		return n !== void 0 && !!(n & 1);
 	}
 	_updateCreatableCalendars() {
 		if (!this._config || !this.hass) return;
@@ -6014,7 +6016,7 @@ var X = (Ei = class extends ft {
 		} else this._openEventEntityId = "", this._openEventCalLabel = "";
 	}
 	_onEventDeleted(e) {
-		this._deletedUids = new Set([...this._deletedUids, e.detail.uid]), this._openEvent = null, this._openEventEntityId = "", this._recompute();
+		this._deletedUids = /* @__PURE__ */ new Set([...this._deletedUids, e.detail.uid]), this._openEvent = null, this._openEventEntityId = "", this._recompute();
 	}
 	_onFetchComplete(e, t) {
 		if (this._pendingEvents = [], this._deletedUids.size > 0) {
@@ -6068,9 +6070,9 @@ var X = (Ei = class extends ft {
 	}
 	renderContent() {
 		var e, t;
-		if (!this._config) return L``;
+		if (!this._config) return F``;
 		let n = ((e = this._config.visible_hours) == null ? void 0 : e.start) ?? "07:00", r = ((t = this._config.visible_hours) == null ? void 0 : t.end) ?? "21:00", i = Rr(this._config.calendars, this.hass), a = Rr(this._creatableCalendars, this.hass);
-		return L`
+		return F`
       <ha-card>
         <div class="card-header">
           <h2 class="card-title">${this._config.title ?? "Calendar"}</h2>
@@ -6081,7 +6083,7 @@ var X = (Ei = class extends ft {
               ?disabled=${!this._rolling.canPanBack}
               aria-label="Previous ${this._lastVisibleCount} days"
             >←</button>
-            ${this._rolling.isAtToday ? "" : L`<button class="nav-btn" @click=${() => this._onTodayClick()} aria-label="Today">Today</button>`}
+            ${this._rolling.isAtToday ? "" : F`<button class="nav-btn" @click=${() => this._onTodayClick()} aria-label="Today">Today</button>`}
             <span class="week-label">${this._rangeLabel()}</span>
             <button
               class="nav-btn"
@@ -6125,7 +6127,7 @@ var X = (Ei = class extends ft {
           </lucarne-calendar-day-pan>
         </div>
 
-        ${this._openEvent ? L`
+        ${this._openEvent ? F`
               <lucarne-calendar-event-popover
                 .event=${this._openEvent}
                 .color=${this._openEventColor}
@@ -6137,7 +6139,7 @@ var X = (Ei = class extends ft {
               ></lucarne-calendar-event-popover>
             ` : ""}
 
-        ${this._createDay === null ? "" : L`
+        ${this._createDay === null ? "" : F`
               <lucarne-create-event-popover
                 .hass=${this.hass}
                 .day=${this._createDay}
@@ -6233,7 +6235,7 @@ var X = (Ei = class extends ft {
 K([U({ attribute: !1 })], X.prototype, "hass", void 0), K([ut(".grid-area")], X.prototype, "_gridAreaEl", void 0), K([W()], X.prototype, "_config", void 0), K([W()], X.prototype, "_layout", void 0), K([W()], X.prototype, "_visibleIds", void 0), K([W()], X.prototype, "_openEvent", void 0), K([W()], X.prototype, "_openEventColor", void 0), K([W()], X.prototype, "_openEventCalLabel", void 0), K([W()], X.prototype, "_openEventEntityId", void 0), K([W()], X.prototype, "_createDay", void 0), K([W()], X.prototype, "_createStartHour", void 0), K([W()], X.prototype, "_creatableCalendars", void 0), K([W()], X.prototype, "_dayWidthPx", void 0), K([W()], X.prototype, "_deletedUids", void 0), X = K([H("lucarne-calendar-card")], X);
 //#endregion
 //#region src/editors/lucarne-calendar-card-editor.ts
-var Ai, ji = (Ai = class extends V {
+var Ai = class extends V {
 	constructor(...e) {
 		super(...e), this._haReady = !1, this._invalid = {};
 	}
@@ -6341,10 +6343,10 @@ var Ai, ji = (Ai = class extends V {
 	}
 	render() {
 		var e, t;
-		if (!this._config) return L``;
-		if (!this._haReady) return L`<div class="loading">Loading editor…</div>`;
+		if (!this._config) return F``;
+		if (!this._haReady) return F`<div class="loading">Loading editor…</div>`;
 		let n = this._config.calendars ?? [], r = ((e = this._config.visible_hours) == null ? void 0 : e.start) ?? "07:00", i = ((t = this._config.visible_hours) == null ? void 0 : t.end) ?? "21:00", a = this._config.show_create_button ?? !0, o = this._config.min_days, s = this._config.max_days, c = this._config.min_col_width, l = this._config.max_col_width;
-		return L`
+		return F`
       <label class="field">
         <span class="field-label">Card title</span>
         <input
@@ -6399,7 +6401,7 @@ var Ai, ji = (Ai = class extends V {
             placeholder="3"
             @change=${(e) => this._windowFieldChanged("min_days", e)}
           />
-          ${this._invalid.days ? L`<div class="editor-error">Min days must be ≤ max days</div>` : ""}
+          ${this._invalid.days ? F`<div class="editor-error">Min days must be ≤ max days</div>` : ""}
         </label>
         <label class="field">
           <span class="field-label">Max days (1–14)</span>
@@ -6413,7 +6415,7 @@ var Ai, ji = (Ai = class extends V {
             placeholder="7"
             @change=${(e) => this._windowFieldChanged("max_days", e)}
           />
-          ${this._invalid.days ? L`<div class="editor-error">Max days must be ≥ min days</div>` : ""}
+          ${this._invalid.days ? F`<div class="editor-error">Max days must be ≥ min days</div>` : ""}
         </label>
       </div>
       <div class="row">
@@ -6429,7 +6431,7 @@ var Ai, ji = (Ai = class extends V {
             placeholder="140"
             @change=${(e) => this._windowFieldChanged("min_col_width", e)}
           />
-          ${this._invalid.cols ? L`<div class="editor-error">Min width must be ≤ max width</div>` : ""}
+          ${this._invalid.cols ? F`<div class="editor-error">Min width must be ≤ max width</div>` : ""}
         </label>
         <label class="field">
           <span class="field-label">Max column width px (100–600)</span>
@@ -6443,12 +6445,12 @@ var Ai, ji = (Ai = class extends V {
             placeholder="220"
             @change=${(e) => this._windowFieldChanged("max_col_width", e)}
           />
-          ${this._invalid.cols ? L`<div class="editor-error">Max width must be ≥ min width</div>` : ""}
+          ${this._invalid.cols ? F`<div class="editor-error">Max width must be ≥ min width</div>` : ""}
         </label>
       </div>
 
       <div class="section-label">Calendars</div>
-      ${n.map((e, t) => L`
+      ${n.map((e, t) => F`
           <div class="cal-row">
             <ha-entity-picker
               label="Calendar entity"
@@ -6471,7 +6473,7 @@ var Ai, ji = (Ai = class extends V {
       <button type="button" class="add" @click=${this._addCalendar}>+ Add calendar</button>
     `;
 	}
-}, Ai.styles = [G, Cr], Ai);
+}, ji = (Ai.styles = [G, Cr], Ai);
 K([U({ attribute: !1 })], ji.prototype, "hass", void 0), K([W()], ji.prototype, "_config", void 0), K([W()], ji.prototype, "_haReady", void 0), K([W()], ji.prototype, "_invalid", void 0), ji = K([H("lucarne-calendar-card-editor")], ji);
 //#endregion
 //#region src/shared/types.ts
@@ -6486,7 +6488,7 @@ function Ni(e) {
 }
 //#endregion
 //#region src/components/streak-display.ts
-var Pi, Fi = (Pi = class extends V {
+var Pi = class extends V {
 	constructor(...e) {
 		super(...e), this.streak = 0;
 	}
@@ -6495,7 +6497,7 @@ var Pi, Fi = (Pi = class extends V {
 	}
 	render() {
 		let e = isNaN(this.streak) ? 0 : this.streak, t = e > 0 ? "day streak" : "start a streak today";
-		return L`
+		return F`
       <div class="streak-row">
         <span class="flame ${this._milestoneClass(e)}">🔥</span>
         <span class="count">${e}</span>
@@ -6503,7 +6505,7 @@ var Pi, Fi = (Pi = class extends V {
       <div class="label">${t}</div>
     `;
 	}
-}, Pi.styles = M`
+}, Fi = (Pi.styles = M`
     :host {
       display: block;
       text-align: center;
@@ -6540,7 +6542,7 @@ var Pi, Fi = (Pi = class extends V {
 K([U({ type: Number })], Fi.prototype, "streak", void 0), Fi = K([H("lucarne-streak-display")], Fi);
 //#endregion
 //#region src/components/celebration-overlay.ts
-var Ii, Li = (Ii = class extends V {
+var Ii = class extends V {
 	constructor(...e) {
 		super(...e), this.kidSlug = "", this.active = !1, this._dots = [];
 	}
@@ -6564,16 +6566,16 @@ var Ii, Li = (Ii = class extends V {
 		}));
 	}
 	render() {
-		return this.active ? L`
-      ${this._dots.map((e) => L`
+		return this.active ? F`
+      ${this._dots.map((e) => F`
           <div
             class="dot"
             style="left:${e.left};background:${e.color};animation-delay:${e.delay};width:${e.size};height:${e.size}"
           ></div>
         `)}
-    ` : L``;
+    ` : F``;
 	}
-}, Ii.styles = M`
+}, Li = (Ii.styles = M`
     :host {
       position: absolute;
       inset: 0;
@@ -6633,7 +6635,7 @@ function Gi(e) {
 	let n = [];
 	for (let e of zi) {
 		let r = t.get(e);
-		!r || r.length === 0 || n.push({
+		r && r.length !== 0 && n.push({
 			bucket: e,
 			tasks: Wi(r)
 		});
@@ -6700,9 +6702,9 @@ var Z = (Ri = class extends V {
 		return null;
 	}
 	render() {
-		if (!this.member) return L``;
+		if (!this.member) return F``;
 		let e = Gi(this.tasks.filter((e) => e.metadata.type === "routine" ? this.showRoutines : e.metadata.type === "chore" || e.metadata.type === "rotating" ? this.showTasks : !1));
-		return L`
+		return F`
       <div class="column" style="--member-color:${this.member.color}">
         <lucarne-celebration-overlay
           kid-slug=${this.member.slug}
@@ -6721,17 +6723,17 @@ var Z = (Ri = class extends V {
             color=${this.member.color}
             .avatar=${this.member.avatar}
           ></lucarne-member-avatar>
-          ${this.hideName ? "" : L`<div class="member-name">${this.member.name}</div>`}
+          ${this.hideName ? "" : F`<div class="member-name">${this.member.name}</div>`}
         </div>
 
         <div class="lists">
-          ${e.map(({ bucket: e, tasks: t }) => L`
+          ${e.map(({ bucket: e, tasks: t }) => F`
             <div class="section" data-bucket=${e}>
               <div class="section-header">
-                ${Vi[e] ? L`<span class="section-icon">${Vi[e]}</span>` : ""}
+                ${Vi[e] ? F`<span class="section-icon">${Vi[e]}</span>` : ""}
                 ${Bi[e]}
               </div>
-              ${t.map((e) => L`
+              ${t.map((e) => F`
                 <lucarne-task-row
                   .task=${e}
                   .memberColor=${this.member.color}
@@ -6743,7 +6745,7 @@ var Z = (Ri = class extends V {
           ${this._renderNotToday()}
         </div>
 
-        ${this.showStreak ? L`
+        ${this.showStreak ? F`
               <div class="streak-area">
                 <lucarne-streak-display .streak=${this.streak}></lucarne-streak-display>
               </div>
@@ -6754,7 +6756,7 @@ var Z = (Ri = class extends V {
 	_renderNotToday() {
 		if (!this.showRoutines || this.notTodayTasks.length === 0) return "";
 		let e = this.notTodayTasks.length;
-		return L`
+		return F`
       <div class="section not-today">
         <button
           class="not-today-toggle"
@@ -6763,7 +6765,7 @@ var Z = (Ri = class extends V {
         >
           ${e} not due today <span aria-hidden="true">${this._notTodayOpen ? "▴" : "▾"}</span>
         </button>
-        ${this._notTodayOpen ? this.notTodayTasks.map((e) => L`
+        ${this._notTodayOpen ? this.notTodayTasks.map((e) => F`
               <lucarne-task-row
                 not-today
                 .task=${e}
@@ -7102,7 +7104,7 @@ var Zi, Qi = [
 		t.has(e) ? t.delete(e) : t.add(e), this._alsoAddSlugs = t;
 	}
 	_toggleRotatingOwner(e) {
-		this._rotatingOwners.includes(e) ? this._rotatingOwners = this._rotatingOwners.filter((t) => t !== e) : this._rotatingOwners = [...this._rotatingOwners, e];
+		this._rotatingOwners = this._rotatingOwners.includes(e) ? this._rotatingOwners.filter((t) => t !== e) : [...this._rotatingOwners, e];
 	}
 	_moveOwner(e, t) {
 		let n = this._rotatingOwners.indexOf(e);
@@ -7111,7 +7113,7 @@ var Zi, Qi = [
 		i < 0 || i >= r.length || ([r[n], r[i]] = [r[i], r[n]], this._rotatingOwners = r);
 	}
 	_toggleDay(e) {
-		this._recurrenceDays.includes(e) ? this._recurrenceDays = this._recurrenceDays.filter((t) => t !== e) : this._recurrenceDays = [...this._recurrenceDays, e];
+		this._recurrenceDays = this._recurrenceDays.includes(e) ? this._recurrenceDays.filter((t) => t !== e) : [...this._recurrenceDays, e];
 	}
 	render() {
 		let e = this._buildRRule(), t = e ? sn(e) : "One-off (no repeat)", n = {
@@ -7123,7 +7125,7 @@ var Zi, Qi = [
 			SA: "Sat",
 			SU: "Sun"
 		};
-		return L`
+		return F`
       <div class="backdrop" @click=${this._close}></div>
       <div class="popover" role="dialog" aria-modal="true" aria-label="Add task">
         <div class="popover-header">
@@ -7138,7 +7140,7 @@ var Zi, Qi = [
             .value=${this._selectedMemberSlug}
             @change=${(e) => this._selectedMemberSlug = e.target.value}
           >
-            ${this.members.map((e) => L`<option value=${e.slug}>${e.name}</option>`)}
+            ${this.members.map((e) => F`<option value=${e.slug}>${e.name}</option>`)}
           </select>
         </div>
 
@@ -7188,7 +7190,7 @@ var Zi, Qi = [
         <div class="field">
           <label>Icon</label>
           <div class="emoji-picker">
-            ${Qi.map((e) => L`
+            ${Qi.map((e) => F`
               <button
                 class="emoji-btn ${this._icon === e ? "selected" : ""}"
                 @click=${() => this._icon = this._icon === e ? "" : e}
@@ -7206,7 +7208,7 @@ var Zi, Qi = [
           />
         </div>
 
-        ${this._type === "routine" ? L`
+        ${this._type === "routine" ? F`
         <div class="field">
           <label for="at-recurrence">Recurrence</label>
           <select
@@ -7222,9 +7224,9 @@ var Zi, Qi = [
             <option value="yearly">Yearly</option>
           </select>
 
-          ${this._recurrenceMode === "none" ? "" : L`
+          ${this._recurrenceMode === "none" ? "" : F`
                 <div class="recurrence-extra">
-                  ${this._recurrenceMode !== "monthly-nth" && this._recurrenceMode !== "yearly" ? L`
+                  ${this._recurrenceMode !== "monthly-nth" && this._recurrenceMode !== "yearly" ? F`
                         <div>
                           <label>Interval</label>
                           <input
@@ -7240,11 +7242,11 @@ var Zi, Qi = [
                         </div>
                       ` : ""}
 
-                  ${this._recurrenceMode === "weekly" ? L`
+                  ${this._recurrenceMode === "weekly" ? F`
                         <div>
                           <label>Days</label>
                           <div class="days-row">
-                            ${Qt.map((e) => L`
+                            ${Qt.map((e) => F`
                               <button
                                 class="day-btn ${this._recurrenceDays.includes(e) ? "selected" : ""}"
                                 @click=${() => this._toggleDay(e)}
@@ -7254,7 +7256,7 @@ var Zi, Qi = [
                         </div>
                       ` : ""}
 
-                  ${this._recurrenceMode === "monthly-date" ? L`
+                  ${this._recurrenceMode === "monthly-date" ? F`
                         <div>
                           <label for="at-monthday">Day of month</label>
                           <input
@@ -7271,7 +7273,7 @@ var Zi, Qi = [
                         </div>
                       ` : ""}
 
-                  ${this._recurrenceMode === "monthly-nth" ? L`
+                  ${this._recurrenceMode === "monthly-nth" ? F`
                         <div style="display:flex;gap:8px">
                           <div style="flex:1">
                             <label for="at-nth">Nth</label>
@@ -7294,7 +7296,7 @@ var Zi, Qi = [
                               .value=${this._recurrenceNthDay}
                               @change=${(e) => this._recurrenceNthDay = e.target.value}
                             >
-                              ${Qt.map((e) => L`<option value=${e}>${n[e]}</option>`)}
+                              ${Qt.map((e) => F`<option value=${e}>${n[e]}</option>`)}
                             </select>
                           </div>
                           <div style="flex:1">
@@ -7314,7 +7316,7 @@ var Zi, Qi = [
                         </div>
                       ` : ""}
 
-                  ${this._recurrenceMode === "yearly" ? L`
+                  ${this._recurrenceMode === "yearly" ? F`
                         <div style="display:flex;gap:8px">
                           <div style="flex:1">
                             <label for="at-year-month">Month</label>
@@ -7361,7 +7363,7 @@ var Zi, Qi = [
                         </div>
                       ` : ""}
 
-                  ${this._effectiveStart() ? L`
+                  ${this._effectiveStart() ? F`
                         <div>
                           <label for="at-start">Starting on</label>
                           <input
@@ -7379,11 +7381,11 @@ var Zi, Qi = [
 
         ${(() => {
 			let e = this.members.filter((e) => e.slug !== this._selectedMemberSlug && e.slug !== "household");
-			return e.length === 0 ? "" : L`
+			return e.length === 0 ? "" : F`
             <div class="field also-add-section">
               <label>Also add to:</label>
               <div class="also-add-list">
-                ${e.map((e) => L`
+                ${e.map((e) => F`
                   <label class="also-add-item">
                     <input
                       type="checkbox"
@@ -7399,13 +7401,13 @@ var Zi, Qi = [
 		})()}
         ` : ""}
 
-        ${this._type === "rotating" ? L`
+        ${this._type === "rotating" ? F`
         <div class="field">
           <label>Owners (turn order)</label>
           <div class="owners-list">
             ${this.members.filter((e) => e.slug !== "household").map((e) => {
 			let t = this._rotatingOwners.includes(e.slug), n = this._rotatingOwners.indexOf(e.slug);
-			return L`
+			return F`
                 <div class="owner-item">
                   <input
                     type="checkbox"
@@ -7413,9 +7415,9 @@ var Zi, Qi = [
                     @change=${() => this._toggleRotatingOwner(e.slug)}
                     aria-label="${e.name}"
                   />
-                  ${t ? L`<span class="owner-order">${n + 1}.</span>` : L`<span class="owner-order"></span>`}
+                  ${t ? F`<span class="owner-order">${n + 1}.</span>` : F`<span class="owner-order"></span>`}
                   <span class="owner-name">${e.name}</span>
-                  ${t ? L`
+                  ${t ? F`
                     <div class="reorder-btns">
                       <button
                         class="reorder-btn"
@@ -7435,11 +7437,11 @@ var Zi, Qi = [
               `;
 		})}
           </div>
-          ${this._rotatingOwners.length < 2 ? L`<div class="owners-hint">Select at least 2 owners to enable rotation</div>` : ""}
+          ${this._rotatingOwners.length < 2 ? F`<div class="owners-hint">Select at least 2 owners to enable rotation</div>` : ""}
         </div>
         ` : ""}
 
-        ${this._type === "chore" ? L`
+        ${this._type === "chore" ? F`
               <div class="field">
                 <label for="at-due">Due (optional)</label>
                 <input
@@ -7451,7 +7453,7 @@ var Zi, Qi = [
               </div>
             ` : ""}
 
-        ${this._error ? L`<div class="error-msg">${this._error}</div>` : ""}
+        ${this._error ? F`<div class="error-msg">${this._error}</div>` : ""}
 
         <div class="actions">
           <button class="btn btn-cancel" @click=${this._close}>Cancel</button>
@@ -7773,7 +7775,7 @@ var Zi, Qi = [
 K([U({ attribute: !1 })], Q.prototype, "hass", void 0), K([U({ attribute: !1 })], Q.prototype, "member", void 0), K([U({ attribute: !1 })], Q.prototype, "members", void 0), K([W()], Q.prototype, "_selectedMemberSlug", void 0), K([W()], Q.prototype, "_summary", void 0), K([W()], Q.prototype, "_type", void 0), K([W()], Q.prototype, "_icon", void 0), K([W()], Q.prototype, "_recurrenceMode", void 0), K([W()], Q.prototype, "_recurrenceDays", void 0), K([W()], Q.prototype, "_recurrenceInterval", void 0), K([W()], Q.prototype, "_recurrenceMonthDay", void 0), K([W()], Q.prototype, "_recurrenceNth", void 0), K([W()], Q.prototype, "_recurrenceNthDay", void 0), K([W()], Q.prototype, "_recurrenceMonth", void 0), K([W()], Q.prototype, "_recurrenceStart", void 0), K([W()], Q.prototype, "_due", void 0), K([W()], Q.prototype, "_timeOfDay", void 0), K([W()], Q.prototype, "_error", void 0), K([W()], Q.prototype, "_saving", void 0), K([W()], Q.prototype, "_alsoAddSlugs", void 0), K([W()], Q.prototype, "_rotatingOwners", void 0), Q = K([H("lucarne-add-task-popover")], Q);
 //#endregion
 //#region src/components/edit-task-popover.ts
-var $i, $ = ($i = class extends V {
+var $i = class extends V {
 	constructor(...e) {
 		super(...e), this.members = [], this._summary = "", this._type = "chore", this._icon = "", this._recurrenceMode = "none", this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._recurrenceStart = "", this._due = "", this._assignee = "", this._timeOfDay = "anytime", this._isCustomRecurrence = !1, this._rawRecurrence = "", this._error = "", this._saving = !1, this._confirmingDelete = !1, this._rotatingOwners = [], this._backdropPressActive = !1;
 	}
@@ -7936,11 +7938,11 @@ var $i, $ = ($i = class extends V {
 		i < 0 || i >= r.length || ([r[n], r[i]] = [r[i], r[n]], this._rotatingOwners = r);
 	}
 	_toggleDay(e) {
-		this._recurrenceDays.includes(e) ? this._recurrenceDays = this._recurrenceDays.filter((t) => t !== e) : this._recurrenceDays = [...this._recurrenceDays, e];
+		this._recurrenceDays = this._recurrenceDays.includes(e) ? this._recurrenceDays.filter((t) => t !== e) : [...this._recurrenceDays, e];
 	}
 	render() {
 		var e, t;
-		if (!this.task) return L``;
+		if (!this.task) return F``;
 		let n = this.task.metadata.member_slug === "household", r = n ? "Household" : ((e = this.members.find((e) => e.slug === this.task.metadata.member_slug)) == null ? void 0 : e.name) ?? this.task.metadata.member_slug, i = this._buildRRule(), a = this._isCustomRecurrence ? "Custom recurrence (not editable here)" : sn(i), o = {
 			MO: "Mon",
 			TU: "Tue",
@@ -7950,7 +7952,7 @@ var $i, $ = ($i = class extends V {
 			SA: "Sat",
 			SU: "Sun"
 		};
-		return L`
+		return F`
       <div
         class="backdrop"
         @pointerdown=${this._onBackdropPointerDown}
@@ -7969,7 +7971,7 @@ var $i, $ = ($i = class extends V {
           <div class="readonly-tooltip">Member cannot be changed here</div>
         </div>
 
-        ${n && this._type !== "rotating" ? L`
+        ${n && this._type !== "rotating" ? F`
               <div class="field">
                 <label for="et-assignee">Assignee (optional)</label>
                 <select
@@ -7978,7 +7980,7 @@ var $i, $ = ($i = class extends V {
                   @change=${(e) => this._assignee = e.target.value}
                 >
                   <option value="">— None —</option>
-                  ${this.members.filter((e) => e.slug !== "household").map((e) => L`<option value=${e.slug}>${e.name}</option>`)}
+                  ${this.members.filter((e) => e.slug !== "household").map((e) => F`<option value=${e.slug}>${e.name}</option>`)}
                 </select>
               </div>
             ` : ""}
@@ -7999,7 +8001,7 @@ var $i, $ = ($i = class extends V {
           <div class="type-row">
             <button class="type-btn ${this._type === "routine" ? "active" : ""}" @click=${() => this._type = "routine"}>Routine</button>
             <button class="type-btn ${this._type === "chore" ? "active" : ""}" @click=${() => this._type = "chore"}>Chore</button>
-            ${((t = this.task) == null || (t = t.metadata) == null ? void 0 : t.member_slug) === "household" ? L`<button class="type-btn ${this._type === "rotating" ? "active" : ""}" @click=${() => this._type = "rotating"}>Rotating</button>` : ""}
+            ${((t = this.task) == null || (t = t.metadata) == null ? void 0 : t.member_slug) === "household" ? F`<button class="type-btn ${this._type === "rotating" ? "active" : ""}" @click=${() => this._type = "rotating"}>Rotating</button>` : ""}
           </div>
         </div>
 
@@ -8029,13 +8031,13 @@ var $i, $ = ($i = class extends V {
           />
         </div>
 
-        ${this._type === "rotating" ? L`
+        ${this._type === "rotating" ? F`
         <div class="field">
           <label>Owners (turn order)</label>
           <div class="owners-list">
             ${this.members.filter((e) => e.slug !== "household").map((e) => {
 			let t = this._rotatingOwners.includes(e.slug), n = this._rotatingOwners.indexOf(e.slug);
-			return L`
+			return F`
                 <div class="owner-item">
                   <input
                     type="checkbox"
@@ -8044,9 +8046,9 @@ var $i, $ = ($i = class extends V {
                     @change=${() => this._toggleRotatingOwner(e.slug)}
                     aria-label="${e.name}"
                   />
-                  ${t ? L`<span class="owner-order">${n + 1}.</span>` : L`<span class="owner-order"></span>`}
+                  ${t ? F`<span class="owner-order">${n + 1}.</span>` : F`<span class="owner-order"></span>`}
                   <span class="owner-name">${e.name}</span>
-                  ${t ? L`
+                  ${t ? F`
                     <div class="reorder-btns">
                       <button
                         class="reorder-btn"
@@ -8066,12 +8068,12 @@ var $i, $ = ($i = class extends V {
               `;
 		})}
           </div>
-          ${this._rotatingOwners.length < 2 ? L`<div class="owners-hint">Select at least 2 owners — delete the task to remove all owners</div>` : ""}
+          ${this._rotatingOwners.length < 2 ? F`<div class="owners-hint">Select at least 2 owners — delete the task to remove all owners</div>` : ""}
         </div>
-        ` : L`
+        ` : F`
         <div class="field">
           <label for="et-recurrence">Recurrence</label>
-          ${this._isCustomRecurrence ? L`<div class="custom-recurrence-note">${a}</div>` : L`
+          ${this._isCustomRecurrence ? F`<div class="custom-recurrence-note">${a}</div>` : F`
                 <select
                   id="et-recurrence"
                   .value=${this._recurrenceMode}
@@ -8085,9 +8087,9 @@ var $i, $ = ($i = class extends V {
                   <option value="yearly">Yearly</option>
                 </select>
 
-                ${this._recurrenceMode === "none" ? "" : L`
+                ${this._recurrenceMode === "none" ? "" : F`
                       <div class="recurrence-extra">
-                        ${this._recurrenceMode !== "monthly-nth" && this._recurrenceMode !== "yearly" ? L`
+                        ${this._recurrenceMode !== "monthly-nth" && this._recurrenceMode !== "yearly" ? F`
                               <div>
                                 <label>Interval</label>
                                 <input
@@ -8103,11 +8105,11 @@ var $i, $ = ($i = class extends V {
                               </div>
                             ` : ""}
 
-                        ${this._recurrenceMode === "weekly" ? L`
+                        ${this._recurrenceMode === "weekly" ? F`
                               <div>
                                 <label>Days</label>
                                 <div class="days-row">
-                                  ${Qt.map((e) => L`
+                                  ${Qt.map((e) => F`
                                     <button
                                       class="day-btn ${this._recurrenceDays.includes(e) ? "selected" : ""}"
                                       @click=${() => this._toggleDay(e)}
@@ -8117,7 +8119,7 @@ var $i, $ = ($i = class extends V {
                               </div>
                             ` : ""}
 
-                        ${this._recurrenceMode === "monthly-date" ? L`
+                        ${this._recurrenceMode === "monthly-date" ? F`
                               <div>
                                 <label>Day of month</label>
                                 <input
@@ -8133,7 +8135,7 @@ var $i, $ = ($i = class extends V {
                               </div>
                             ` : ""}
 
-                        ${this._recurrenceMode === "monthly-nth" ? L`
+                        ${this._recurrenceMode === "monthly-nth" ? F`
                               <div style="display:flex;gap:8px">
                                 <div style="flex:1">
                                   <label>Nth</label>
@@ -8154,7 +8156,7 @@ var $i, $ = ($i = class extends V {
                                     .value=${this._recurrenceNthDay}
                                     @change=${(e) => this._recurrenceNthDay = e.target.value}
                                   >
-                                    ${Qt.map((e) => L`<option value=${e}>${o[e]}</option>`)}
+                                    ${Qt.map((e) => F`<option value=${e}>${o[e]}</option>`)}
                                   </select>
                                 </div>
                                 <div style="flex:1">
@@ -8173,7 +8175,7 @@ var $i, $ = ($i = class extends V {
                               </div>
                             ` : ""}
 
-                        ${this._recurrenceMode === "yearly" ? L`
+                        ${this._recurrenceMode === "yearly" ? F`
                               <div style="display:flex;gap:8px">
                                 <div style="flex:1">
                                   <label>Month</label>
@@ -8217,7 +8219,7 @@ var $i, $ = ($i = class extends V {
                               </div>
                             ` : ""}
 
-                        ${this._displayedStart() ? L`
+                        ${this._displayedStart() ? F`
                               <div>
                                 <label for="et-start">Starting on</label>
                                 <input
@@ -8235,7 +8237,7 @@ var $i, $ = ($i = class extends V {
         </div>
         `}
 
-        ${this._type === "rotating" ? "" : L`
+        ${this._type === "rotating" ? "" : F`
         <div class="field">
           <label for="et-due">Due (optional)</label>
           <input
@@ -8247,7 +8249,7 @@ var $i, $ = ($i = class extends V {
         </div>
         `}
 
-        ${this._error ? L`<div class="error-msg">${this._error}</div>` : ""}
+        ${this._error ? F`<div class="error-msg">${this._error}</div>` : ""}
 
         <div class="actions">
           <button class="btn btn-cancel" @click=${this._close}>Cancel</button>
@@ -8261,7 +8263,7 @@ var $i, $ = ($i = class extends V {
         </div>
 
         <div class="delete-zone">
-          ${this._confirmingDelete ? L`
+          ${this._confirmingDelete ? F`
                 <div class="confirm-delete">
                   <span>Delete this task?</span>
                   <button
@@ -8274,7 +8276,7 @@ var $i, $ = ($i = class extends V {
                     @click=${() => this._confirmingDelete = !1}
                   >Cancel</button>
                 </div>
-              ` : L`
+              ` : F`
                 <button class="btn btn-delete" @click=${() => this._confirmingDelete = !0}>
                   Delete Task
                 </button>
@@ -8283,7 +8285,7 @@ var $i, $ = ($i = class extends V {
       </div>
     `;
 	}
-}, $i.styles = [G, M`
+}, $ = ($i.styles = [G, M`
       :host {
         display: block;
         position: fixed;
@@ -8751,9 +8753,9 @@ var ia = (ea = class extends ft {
 			if (e.metadata.type === "routine") {
 				if (!n) return !1;
 				let t = en(e.metadata.recurrence);
-				return t.mode === "none" || t.mode === "unknown" ? !0 : hn(t, i);
+				return t.mode === "none" || t.mode === "unknown" || hn(t, i);
 			}
-			return e.metadata.type === "chore" && r ? e.due === null ? !0 : (e.due.includes("T") ? new Date(e.due) : /* @__PURE__ */ new Date(e.due + "T00:00:00")) <= a : !1;
+			return e.metadata.type === "chore" && r ? e.due === null || (e.due.includes("T") ? new Date(e.due) : /* @__PURE__ */ new Date(e.due + "T00:00:00")) <= a : !1;
 		}, f = (e) => {
 			if (!n || e.metadata.type !== "routine" || c(e)) return !1;
 			let t = en(e.metadata.recurrence);
@@ -8813,8 +8815,8 @@ var ia = (ea = class extends ft {
 		this._editTask = t;
 	}
 	renderContent() {
-		if (!this._config) return L``;
-		if ("kids" in this._config) return L`
+		if (!this._config) return F``;
+		if ("kids" in this._config) return F`
         <ha-card>
           <div class="error-block">
             <strong>Card upgraded</strong>
@@ -8823,8 +8825,8 @@ var ia = (ea = class extends ft {
         </ha-card>
       `;
 		let e = this._config.title ?? "Chores", t = this._config.show_routines ?? !0, n = this._config.show_tasks ?? !0, r = this._config.show_streak ?? !0, i = this._config.hide_names ?? !1, a = this._config.auto_scroll ?? !0 ? Et(/* @__PURE__ */ new Date(), this._config.afternoon_start ?? "12:00", this._config.night_start ?? "19:00") : "";
-		if (this._familyState === null) return L`<ha-card><div class="loading">Loading…</div></ha-card>`;
-		if (this._familyState.integrationError !== null) return L`
+		if (this._familyState === null) return F`<ha-card><div class="loading">Loading…</div></ha-card>`;
+		if (this._familyState.integrationError !== null) return F`
         <ha-card>
           <div class="error-block">
             <strong>Lucarne Family integration not set up</strong>
@@ -8833,7 +8835,7 @@ var ia = (ea = class extends ft {
         </ha-card>
       `;
 		let o = this._resolveMembers(), s = [...this._familyState.members, qt];
-		return L`
+		return F`
       <ha-card>
         <div class="card-header">
           <h2 class="card-title">${e}</h2>
@@ -8845,7 +8847,7 @@ var ia = (ea = class extends ft {
           @task-long-press=${this._handleLongPress}
           @task-edit=${this._handleLongPress}
         >
-          ${o.map(({ member: e, tasks: o, notToday: c, streak: l }) => L`
+          ${o.map(({ member: e, tasks: o, notToday: c, streak: l }) => F`
             <div class="member-cell">
               <lucarne-member-column
                 .member=${e}
@@ -8864,7 +8866,7 @@ var ia = (ea = class extends ft {
         </div>
       </ha-card>
 
-      ${this._addTaskMember === null ? "" : L`
+      ${this._addTaskMember === null ? "" : F`
             <lucarne-add-task-popover
               .hass=${this.hass}
               .member=${this._addTaskMember}
@@ -8876,7 +8878,7 @@ var ia = (ea = class extends ft {
             ></lucarne-add-task-popover>
           `}
 
-      ${this._editTask === null ? "" : L`
+      ${this._editTask === null ? "" : F`
             <lucarne-edit-task-popover
               .hass=${this.hass}
               .task=${this._editTask}
@@ -8984,6 +8986,40 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		typeof e == "object" && t !== void 0 ? t.exports = r() : typeof define == "function" && define.amd ? define(r) : (n = typeof globalThis < "u" ? globalThis : n || self, n.Cropper = r());
 	})(e, (function() {
 		function e(e, t) {
+			(t == null || t > e.length) && (t = e.length);
+			for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
+			return r;
+		}
+		function t(t) {
+			if (Array.isArray(t)) return e(t);
+		}
+		function n(e, t) {
+			if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
+		}
+		function r(e, t) {
+			for (var n = 0; n < t.length; n++) {
+				var r = t[n];
+				r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, f(r.key), r);
+			}
+		}
+		function i(e, t, n) {
+			return t && r(e.prototype, t), n && r(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
+		}
+		function a(e, t, n) {
+			return (t = f(t)) in e ? Object.defineProperty(e, t, {
+				value: n,
+				enumerable: !0,
+				configurable: !0,
+				writable: !0
+			}) : e[t] = n, e;
+		}
+		function o(e) {
+			if (typeof Symbol < "u" && e[Symbol.iterator] != null || e["@@iterator"] != null) return Array.from(e);
+		}
+		function s() {
+			throw TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+		}
+		function c(e, t) {
 			var n = Object.keys(e);
 			if (Object.getOwnPropertySymbols) {
 				var r = Object.getOwnPropertySymbols(e);
@@ -8993,18 +9029,21 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			}
 			return n;
 		}
-		function t(t) {
-			for (var n = 1; n < arguments.length; n++) {
-				var r = arguments[n] == null ? {} : arguments[n];
-				n % 2 ? e(Object(r), !0).forEach(function(e) {
-					c(t, e, r[e]);
-				}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(t, Object.getOwnPropertyDescriptors(r)) : e(Object(r)).forEach(function(e) {
-					Object.defineProperty(t, e, Object.getOwnPropertyDescriptor(r, e));
+		function l(e) {
+			for (var t = 1; t < arguments.length; t++) {
+				var n = arguments[t] == null ? {} : arguments[t];
+				t % 2 ? c(Object(n), !0).forEach(function(t) {
+					a(e, t, n[t]);
+				}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(n)) : c(Object(n)).forEach(function(t) {
+					Object.defineProperty(e, t, Object.getOwnPropertyDescriptor(n, t));
 				});
 			}
-			return t;
+			return e;
 		}
-		function n(e, t) {
+		function u(e) {
+			return t(e) || o(e) || m(e) || s();
+		}
+		function d(e, t) {
 			if (typeof e != "object" || !e) return e;
 			var n = e[Symbol.toPrimitive];
 			if (n !== void 0) {
@@ -9014,64 +9053,26 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			}
 			return (t === "string" ? String : Number)(e);
 		}
-		function r(e) {
-			var t = n(e, "string");
+		function f(e) {
+			var t = d(e, "string");
 			return typeof t == "symbol" ? t : t + "";
 		}
-		function i(e) {
+		function p(e) {
 			"@babel/helpers - typeof";
-			return i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+			return p = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 				return typeof e;
 			} : function(e) {
 				return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-			}, i(e);
+			}, p(e);
 		}
-		function a(e, t) {
-			if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
-		}
-		function o(e, t) {
-			for (var n = 0; n < t.length; n++) {
-				var i = t[n];
-				i.enumerable = i.enumerable || !1, i.configurable = !0, "value" in i && (i.writable = !0), Object.defineProperty(e, r(i.key), i);
+		function m(t, n) {
+			if (t) {
+				if (typeof t == "string") return e(t, n);
+				var r = {}.toString.call(t).slice(8, -1);
+				return r === "Object" && t.constructor && (r = t.constructor.name), r === "Map" || r === "Set" ? Array.from(t) : r === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(r) ? e(t, n) : void 0;
 			}
 		}
-		function s(e, t, n) {
-			return t && o(e.prototype, t), n && o(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
-		}
-		function c(e, t, n) {
-			return t = r(t), t in e ? Object.defineProperty(e, t, {
-				value: n,
-				enumerable: !0,
-				configurable: !0,
-				writable: !0
-			}) : e[t] = n, e;
-		}
-		function l(e) {
-			return u(e) || d(e) || f(e) || m();
-		}
-		function u(e) {
-			if (Array.isArray(e)) return p(e);
-		}
-		function d(e) {
-			if (typeof Symbol < "u" && e[Symbol.iterator] != null || e["@@iterator"] != null) return Array.from(e);
-		}
-		function f(e, t) {
-			if (e) {
-				if (typeof e == "string") return p(e, t);
-				var n = Object.prototype.toString.call(e).slice(8, -1);
-				if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
-				if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return p(e, t);
-			}
-		}
-		function p(e, t) {
-			(t == null || t > e.length) && (t = e.length);
-			for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
-			return r;
-		}
-		function m() {
-			throw TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
-		}
-		var h = typeof window < "u" && window.document !== void 0, g = h ? window : {}, _ = h && g.document.documentElement ? "ontouchstart" in g.document.documentElement : !1, v = h ? "PointerEvent" in g : !1, y = "cropper", ee = "all", te = "crop", ne = "move", b = "zoom", x = "e", S = "w", C = "s", w = "n", T = "ne", E = "nw", D = "se", re = "sw", O = `${y}-crop`, k = `${y}-disabled`, A = `${y}-hidden`, j = `${y}-hide`, ie = `${y}-invisible`, ae = `${y}-modal`, oe = `${y}-move`, M = `${y}Action`, se = `${y}Preview`, ce = "crop", le = "move", ue = "none", de = "crop", fe = "cropend", pe = "cropmove", me = "cropstart", he = "dblclick", ge = _ ? "touchstart" : "mousedown", _e = _ ? "touchmove" : "mousemove", ve = _ ? "touchend touchcancel" : "mouseup", ye = v ? "pointerdown" : ge, be = v ? "pointermove" : _e, xe = v ? "pointerup pointercancel" : ve, Se = "ready", Ce = "resize", we = "wheel", Te = "zoom", Ee = "image/jpeg", De = /^e|w|s|n|se|sw|ne|nw|all|crop|move|zoom$/, Oe = /^data:/, ke = /^data:image\/jpeg;base64,/, Ae = /^img|canvas$/i, je = 200, Me = 100, Ne = {
+		var h = typeof window < "u" && window.document !== void 0, g = h ? window : {}, _ = h && g.document.documentElement ? "ontouchstart" in g.document.documentElement : !1, v = h ? "PointerEvent" in g : !1, y = "cropper", ee = "all", te = "crop", ne = "move", b = "zoom", x = "e", S = "w", C = "s", w = "n", T = "ne", E = "nw", D = "se", re = "sw", O = `${y}-crop`, k = `${y}-disabled`, A = `${y}-hidden`, j = `${y}-hide`, ie = `${y}-invisible`, ae = `${y}-modal`, oe = `${y}-move`, M = `${y}Action`, se = `${y}Preview`, ce = "crop", le = "move", ue = "none", de = "crop", fe = "cropend", pe = "cropmove", me = "cropstart", he = "dblclick", ge = _ ? "touchstart" : "mousedown", _e = _ ? "touchmove" : "mousemove", ve = _ ? "touchend touchcancel" : "mouseup", ye = v ? "pointerdown" : ge, be = v ? "pointermove" : _e, xe = v ? "pointerup pointercancel" : ve, Se = "ready", Ce = "resize", we = "wheel", Te = "zoom", Ee = "image/jpeg", De = /^(e|w|s|n|se|sw|ne|nw|all|crop|move|zoom)$/, Oe = /^data:/, ke = /^data:image\/jpeg;base64,/, Ae = /\s+/, je = /^(img|canvas)$/i, Me = 200, Ne = 100, Pe = {
 			viewMode: 0,
 			dragMode: ce,
 			initialAspectRatio: NaN,
@@ -9103,33 +9104,33 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			minCanvasHeight: 0,
 			minCropBoxWidth: 0,
 			minCropBoxHeight: 0,
-			minContainerWidth: je,
-			minContainerHeight: Me,
+			minContainerWidth: Me,
+			minContainerHeight: Ne,
 			ready: null,
 			cropstart: null,
 			cropmove: null,
 			cropend: null,
 			crop: null,
 			zoom: null
-		}, Pe = "<div class=\"cropper-container\" touch-action=\"none\"><div class=\"cropper-wrap-box\"><div class=\"cropper-canvas\"></div></div><div class=\"cropper-drag-box\"></div><div class=\"cropper-crop-box\"><span class=\"cropper-view-box\"></span><span class=\"cropper-dashed dashed-h\"></span><span class=\"cropper-dashed dashed-v\"></span><span class=\"cropper-center\"></span><span class=\"cropper-face\"></span><span class=\"cropper-line line-e\" data-cropper-action=\"e\"></span><span class=\"cropper-line line-n\" data-cropper-action=\"n\"></span><span class=\"cropper-line line-w\" data-cropper-action=\"w\"></span><span class=\"cropper-line line-s\" data-cropper-action=\"s\"></span><span class=\"cropper-point point-e\" data-cropper-action=\"e\"></span><span class=\"cropper-point point-n\" data-cropper-action=\"n\"></span><span class=\"cropper-point point-w\" data-cropper-action=\"w\"></span><span class=\"cropper-point point-s\" data-cropper-action=\"s\"></span><span class=\"cropper-point point-ne\" data-cropper-action=\"ne\"></span><span class=\"cropper-point point-nw\" data-cropper-action=\"nw\"></span><span class=\"cropper-point point-sw\" data-cropper-action=\"sw\"></span><span class=\"cropper-point point-se\" data-cropper-action=\"se\"></span></div></div>", Fe = Number.isNaN || g.isNaN;
+		}, Fe = "<div class=\"cropper-container\" touch-action=\"none\"><div class=\"cropper-wrap-box\"><div class=\"cropper-canvas\"></div></div><div class=\"cropper-drag-box\"></div><div class=\"cropper-crop-box\"><span class=\"cropper-view-box\"></span><span class=\"cropper-dashed dashed-h\"></span><span class=\"cropper-dashed dashed-v\"></span><span class=\"cropper-center\"></span><span class=\"cropper-face\"></span><span class=\"cropper-line line-e\" data-cropper-action=\"e\"></span><span class=\"cropper-line line-n\" data-cropper-action=\"n\"></span><span class=\"cropper-line line-w\" data-cropper-action=\"w\"></span><span class=\"cropper-line line-s\" data-cropper-action=\"s\"></span><span class=\"cropper-point point-e\" data-cropper-action=\"e\"></span><span class=\"cropper-point point-n\" data-cropper-action=\"n\"></span><span class=\"cropper-point point-w\" data-cropper-action=\"w\"></span><span class=\"cropper-point point-s\" data-cropper-action=\"s\"></span><span class=\"cropper-point point-ne\" data-cropper-action=\"ne\"></span><span class=\"cropper-point point-nw\" data-cropper-action=\"nw\"></span><span class=\"cropper-point point-sw\" data-cropper-action=\"sw\"></span><span class=\"cropper-point point-se\" data-cropper-action=\"se\"></span></div></div>", Ie = Number.isNaN || g.isNaN, Le = Number.isFinite || g.isFinite;
 		function N(e) {
-			return typeof e == "number" && !Fe(e);
+			return typeof e == "number" && !Ie(e);
 		}
-		var Ie = function(e) {
+		var Re = function(e) {
 			return e > 0 && e < Infinity;
 		};
-		function Le(e) {
+		function ze(e) {
 			return e === void 0;
 		}
-		function Re(e) {
-			return i(e) === "object" && e !== null;
-		}
-		var ze = Object.prototype.hasOwnProperty;
 		function Be(e) {
-			if (!Re(e)) return !1;
+			return p(e) === "object" && e !== null;
+		}
+		var Ve = Object.prototype.hasOwnProperty;
+		function He(e) {
+			if (!Be(e)) return !1;
 			try {
 				var t = e.constructor, n = t.prototype;
-				return t && n && ze.call(n, "isPrototypeOf");
+				return t && n && Ve.call(n, "isPrototypeOf");
 			} catch {
 				return !1;
 			}
@@ -9137,44 +9138,44 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		function P(e) {
 			return typeof e == "function";
 		}
-		var Ve = Array.prototype.slice;
-		function He(e) {
-			return Array.from ? Array.from(e) : Ve.call(e);
+		var Ue = Array.prototype.slice;
+		function We(e) {
+			return Array.from ? Array.from(e) : Ue.call(e);
 		}
 		function F(e, t) {
-			return e && P(t) && (Array.isArray(e) || N(e.length) ? He(e).forEach(function(n, r) {
+			return e && P(t) && (Array.isArray(e) || N(e.length) ? We(e).forEach(function(n, r) {
 				t.call(e, n, r, e);
-			}) : Re(e) && Object.keys(e).forEach(function(n) {
+			}) : Be(e) && Object.keys(e).forEach(function(n) {
 				t.call(e, e[n], n, e);
 			})), e;
 		}
 		var I = Object.assign || function(e) {
 			var t = [...arguments].slice(1);
-			return Re(e) && t.length > 0 && t.forEach(function(t) {
-				Re(t) && Object.keys(t).forEach(function(n) {
+			return Be(e) && t.length > 0 && t.forEach(function(t) {
+				Be(t) && Object.keys(t).forEach(function(n) {
 					e[n] = t[n];
 				});
 			}), e;
-		}, L = /\.\d*(?:0|9){12}\d*$/;
-		function R(e) {
+		}, Ge = /\.\d*(?:0|9){12}\d*$/;
+		function L(e) {
 			var t = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : 1e11;
-			return L.test(e) ? Math.round(e * t) / t : e;
+			return Ge.test(e) ? Math.round(e * t) / t : e;
 		}
-		var Ue = /^width|height|left|top|marginLeft|marginTop$/;
-		function z(e, t) {
+		var Ke = /^width|height|left|top|marginLeft|marginTop$/;
+		function R(e, t) {
 			var n = e.style;
 			F(t, function(e, t) {
-				Ue.test(t) && N(e) && (e = `${e}px`), n[t] = e;
+				Ke.test(t) && N(e) && (e = `${e}px`), n[t] = e;
 			});
 		}
-		function We(e, t) {
-			return e.classList ? e.classList.contains(t) : e.className.indexOf(t) > -1;
+		function qe(e, t) {
+			return e.classList ? e.classList.contains(t) : e.className.split(Ae).indexOf(t) > -1;
 		}
-		function B(e, t) {
+		function z(e, t) {
 			if (t) {
 				if (N(e.length)) {
 					F(e, function(e) {
-						B(e, t);
+						z(e, t);
 					});
 					return;
 				}
@@ -9186,11 +9187,11 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				n ? n.indexOf(t) < 0 && (e.className = `${n} ${t}`) : e.className = t;
 			}
 		}
-		function Ge(e, t) {
+		function Je(e, t) {
 			if (t) {
 				if (N(e.length)) {
 					F(e, function(e) {
-						Ge(e, t);
+						Je(e, t);
 					});
 					return;
 				}
@@ -9198,32 +9199,34 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					e.classList.remove(t);
 					return;
 				}
-				e.className.indexOf(t) >= 0 && (e.className = e.className.replace(t, ""));
+				e.className.indexOf(t) >= 0 && (e.className = e.className.split(Ae).filter(function(e) {
+					return e && e !== t;
+				}).join(" "));
 			}
 		}
-		function Ke(e, t, n) {
+		function Ye(e, t, n) {
 			if (t) {
 				if (N(e.length)) {
 					F(e, function(e) {
-						Ke(e, t, n);
+						Ye(e, t, n);
 					});
 					return;
 				}
-				n ? B(e, t) : Ge(e, t);
+				n ? z(e, t) : Je(e, t);
 			}
 		}
-		var qe = /([a-z\d])([A-Z])/g;
-		function Je(e) {
-			return e.replace(qe, "$1-$2").toLowerCase();
+		var Xe = /([a-z\d])([A-Z])/g;
+		function Ze(e) {
+			return typeof e == "string" ? e.replace(Xe, "$1-$2").toLowerCase() : "";
 		}
-		function Ye(e, t) {
-			return Re(e[t]) ? e[t] : e.dataset ? e.dataset[t] : e.getAttribute(`data-${Je(t)}`);
+		function Qe(e, t) {
+			return Be(e[t]) ? e[t] : e.dataset ? e.dataset[t] : e.getAttribute(`data-${Ze(t)}`);
 		}
-		function Xe(e, t, n) {
-			Re(n) ? e[t] = n : e.dataset ? e.dataset[t] = n : e.setAttribute(`data-${Je(t)}`, n);
+		function $e(e, t, n) {
+			Be(n) ? e[t] = n : e.dataset ? e.dataset[t] = n : e.setAttribute(`data-${Ze(t)}`, n);
 		}
-		function Ze(e, t) {
-			if (Re(e[t])) try {
+		function et(e, t) {
+			if (Be(e[t])) try {
 				delete e[t];
 			} catch {
 				e[t] = void 0;
@@ -9233,9 +9236,9 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			} catch {
 				e.dataset[t] = void 0;
 			}
-			else e.removeAttribute(`data-${Je(t)}`);
+			else e.removeAttribute(`data-${Ze(t)}`);
 		}
-		var Qe = /\s\s*/, $e = function() {
+		var tt = function() {
 			var e = !1;
 			if (h) {
 				var t = !1, n = function() {}, r = Object.defineProperty({}, "once", {
@@ -9250,55 +9253,69 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			}
 			return e;
 		}();
-		function et(e, t, n) {
-			var r = arguments.length > 3 && arguments[3] !== void 0 ? arguments[3] : {}, i = n;
-			t.trim().split(Qe).forEach(function(t) {
-				if (!$e) {
-					var a = e.listeners;
-					a && a[t] && a[t][n] && (i = a[t][n], delete a[t][n], Object.keys(a[t]).length === 0 && delete a[t], Object.keys(a).length === 0 && delete e.listeners);
-				}
-				e.removeEventListener(t, i, r);
-			});
-		}
-		function tt(e, t, n) {
-			var r = arguments.length > 3 && arguments[3] !== void 0 ? arguments[3] : {}, i = n;
-			t.trim().split(Qe).forEach(function(t) {
-				if (r.once && !$e) {
-					var a = e.listeners, o = a === void 0 ? {} : a;
-					i = function() {
-						delete o[t][n], e.removeEventListener(t, i, r);
-						var a = [...arguments];
-						n.apply(e, a);
-					}, o[t] || (o[t] = {}), o[t][n] && e.removeEventListener(t, o[t][n], r), o[t][n] = i, e.listeners = o;
-				}
-				e.addEventListener(t, i, r);
-			});
-		}
 		function nt(e, t, n) {
+			var r = arguments.length > 3 && arguments[3] !== void 0 ? arguments[3] : {};
+			if (e && t && P(e.removeEventListener)) {
+				var i = n;
+				t.trim().split(Ae).forEach(function(t) {
+					if (!tt) {
+						var a = e.__cropperListeners__ || {};
+						a[t] && a[t][n] && (i = a[t][n], delete a[t][n], Object.keys(a[t]).length === 0 && delete a[t], Object.keys(a).length === 0 && delete e.__cropperListeners__);
+					}
+					e.removeEventListener(t, i, r);
+				});
+			}
+		}
+		function B(e, t, n) {
+			var r = arguments.length > 3 && arguments[3] !== void 0 ? arguments[3] : {};
+			if (e && t && P(e.addEventListener) && P(n)) {
+				var i = n;
+				t.trim().split(Ae).forEach(function(t) {
+					if (r.once && !tt) {
+						var a = e.__cropperListeners__ || {};
+						i = function() {
+							a[t] && a[t][n] && delete a[t][n], e.removeEventListener(t, i, r);
+							var o = [...arguments];
+							n.apply(e, o);
+						}, a[t] || (a[t] = {}), a[t][n] && e.removeEventListener(t, a[t][n], r), a[t][n] = i, e.__cropperListeners__ = a;
+					}
+					e.addEventListener(t, i, r);
+				});
+			}
+		}
+		function rt(e, t, n) {
+			if (!e || !t || !P(e.dispatchEvent)) return !1;
 			var r;
-			return P(Event) && P(CustomEvent) ? r = new CustomEvent(t, {
+			if (P(Event) && P(CustomEvent)) r = new CustomEvent(t, {
 				detail: n,
 				bubbles: !0,
 				cancelable: !0
-			}) : (r = document.createEvent("CustomEvent"), r.initCustomEvent(t, !0, !0, n)), e.dispatchEvent(r);
+			});
+			else if (Be(document) && P(document.createEvent)) r = document.createEvent("CustomEvent"), r.initCustomEvent(t, !0, !0, n);
+			else return !1;
+			return e.dispatchEvent(r);
 		}
-		function rt(e) {
-			var t = e.getBoundingClientRect();
+		function it(e) {
+			if (!e || !P(e.getBoundingClientRect)) return {
+				left: 0,
+				top: 0
+			};
+			var t = e.getBoundingClientRect(), n = (document || {}).documentElement, r = n === void 0 ? {} : n, i = g.pageXOffset || 0, a = g.pageYOffset || 0;
 			return {
-				left: t.left + (window.pageXOffset - document.documentElement.clientLeft),
-				top: t.top + (window.pageYOffset - document.documentElement.clientTop)
+				left: t.left + (i - (r.clientLeft || 0)),
+				top: t.top + (a - (r.clientTop || 0))
 			};
 		}
-		var it = g.location, at = /^(\w+:)\/\/([^:/?#]*):?(\d*)/i;
-		function V(e) {
-			var t = e.match(at);
-			return t !== null && (t[1] !== it.protocol || t[2] !== it.hostname || t[3] !== it.port);
-		}
+		var at = g.location, V = /^(\w+:)\/\/([^:/?#]*):?(\d*)/i;
 		function ot(e) {
-			var t = `timestamp=${(/* @__PURE__ */ new Date()).getTime()}`;
-			return e + (e.indexOf("?") === -1 ? "?" : "&") + t;
+			var t = e.match(V);
+			return t !== null && (t[1] !== at.protocol || t[2] !== at.hostname || t[3] !== at.port);
 		}
 		function H(e) {
+			var t = e.indexOf("#"), n = t >= 0 ? e.slice(t) : "", r = t >= 0 ? e.slice(0, t) : e, i = `timestamp=${(/* @__PURE__ */ new Date()).getTime()}`;
+			return `${r}${r.indexOf("?") === -1 ? "?" : "&"}${i}${n}`;
+		}
+		function st(e) {
 			var t = e.rotate, n = e.scaleX, r = e.scaleY, i = e.translateX, a = e.translateY, o = [];
 			N(i) && i !== 0 && o.push(`translateX(${i}px)`), N(a) && a !== 0 && o.push(`translateY(${a}px)`), N(t) && t !== 0 && o.push(`rotate(${t}deg)`), N(n) && n !== 1 && o.push(`scaleX(${n})`), N(r) && r !== 1 && o.push(`scaleY(${r})`);
 			var s = o.length ? o.join(" ") : "none";
@@ -9308,26 +9325,29 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				transform: s
 			};
 		}
-		function st(e) {
-			var n = t({}, e), r = 0;
-			return F(e, function(e, t) {
-				delete n[t], F(n, function(t) {
-					var n = Math.abs(e.startX - t.startX), i = Math.abs(e.startY - t.startY), a = Math.abs(e.endX - t.endX), o = Math.abs(e.endY - t.endY), s = Math.sqrt(n * n + i * i), c = (Math.sqrt(a * a + o * o) - s) / s;
-					Math.abs(c) > Math.abs(r) && (r = c);
+		function ct(e) {
+			var t = l({}, e), n = 0;
+			return F(e, function(e, r) {
+				delete t[r], F(t, function(t) {
+					var r = Math.abs(e.startX - t.startX), i = Math.abs(e.startY - t.startY), a = Math.abs(e.endX - t.endX), o = Math.abs(e.endY - t.endY), s = Math.sqrt(r * r + i * i), c = Math.sqrt(a * a + o * o);
+					if (Le(s) && Le(c) && s !== 0 && c !== s) {
+						var l = (c - s) / s;
+						Le(l) && Math.abs(l) > Math.abs(n) && (n = l);
+					}
 				});
-			}), r;
+			}), n;
 		}
-		function ct(e, n) {
-			var r = e.pageX, i = e.pageY, a = {
-				endX: r,
-				endY: i
+		function U(e, t) {
+			var n = e.pageX, r = e.pageY, i = {
+				endX: n,
+				endY: r
 			};
-			return n ? a : t({
-				startX: r,
-				startY: i
-			}, a);
+			return t ? i : l({
+				startX: n,
+				startY: r
+			}, i);
 		}
-		function U(e) {
+		function W(e) {
 			var t = 0, n = 0, r = 0;
 			return F(e, function(e) {
 				var i = e.startX, a = e.startY;
@@ -9337,8 +9357,8 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				pageY: n
 			};
 		}
-		function W(e) {
-			var t = e.aspectRatio, n = e.height, r = e.width, i = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : "contain", a = Ie(r), o = Ie(n);
+		function lt(e) {
+			var t = e.aspectRatio, n = e.height, r = e.width, i = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : "contain", a = Re(r), o = Re(n);
 			if (a && o) {
 				var s = n * t;
 				i === "contain" && s > r || i === "cover" && s < r ? n = r / t : r = n * t;
@@ -9348,7 +9368,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				height: n
 			};
 		}
-		function lt(e) {
+		function ut(e) {
 			var t = e.width, n = e.height, r = e.degree;
 			if (r = Math.abs(r) % 180, r === 90) return {
 				width: n,
@@ -9363,20 +9383,20 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				height: c
 			};
 		}
-		function ut(e, t, n, r) {
-			var i = t.aspectRatio, a = t.naturalWidth, o = t.naturalHeight, s = t.rotate, c = s === void 0 ? 0 : s, u = t.scaleX, d = u === void 0 ? 1 : u, f = t.scaleY, p = f === void 0 ? 1 : f, m = n.aspectRatio, h = n.naturalWidth, g = n.naturalHeight, _ = r.fillColor, v = _ === void 0 ? "transparent" : _, y = r.imageSmoothingEnabled, ee = y === void 0 ? !0 : y, te = r.imageSmoothingQuality, ne = te === void 0 ? "low" : te, b = r.maxWidth, x = b === void 0 ? Infinity : b, S = r.maxHeight, C = S === void 0 ? Infinity : S, w = r.minWidth, T = w === void 0 ? 0 : w, E = r.minHeight, D = E === void 0 ? 0 : E, re = document.createElement("canvas"), O = re.getContext("2d"), k = W({
+		function G(e, t, n, r) {
+			var i = t.aspectRatio, a = t.naturalWidth, o = t.naturalHeight, s = t.rotate, c = s === void 0 ? 0 : s, l = t.scaleX, d = l === void 0 ? 1 : l, f = t.scaleY, p = f === void 0 ? 1 : f, m = n.aspectRatio, h = n.naturalWidth, g = n.naturalHeight, _ = r.fillColor, v = _ === void 0 ? "transparent" : _, y = r.imageSmoothingEnabled, ee = y === void 0 || y, te = r.imageSmoothingQuality, ne = te === void 0 ? "low" : te, b = r.maxWidth, x = b === void 0 ? Infinity : b, S = r.maxHeight, C = S === void 0 ? Infinity : S, w = r.minWidth, T = w === void 0 ? 0 : w, E = r.minHeight, D = E === void 0 ? 0 : E, re = document.createElement("canvas"), O = re.getContext("2d"), k = lt({
 				aspectRatio: m,
 				width: x,
 				height: C
-			}), A = W({
+			}), A = lt({
 				aspectRatio: m,
 				width: T,
 				height: D
-			}, "cover"), j = Math.min(k.width, Math.max(A.width, h)), ie = Math.min(k.height, Math.max(A.height, g)), ae = W({
+			}, "cover"), j = Math.min(k.width, Math.max(A.width, h)), ie = Math.min(k.height, Math.max(A.height, g)), ae = lt({
 				aspectRatio: i,
 				width: x,
 				height: C
-			}), oe = W({
+			}), oe = lt({
 				aspectRatio: i,
 				width: T,
 				height: D
@@ -9386,29 +9406,29 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				M,
 				se
 			];
-			return re.width = R(j), re.height = R(ie), O.fillStyle = v, O.fillRect(0, 0, j, ie), O.save(), O.translate(j / 2, ie / 2), O.rotate(c * Math.PI / 180), O.scale(d, p), O.imageSmoothingEnabled = ee, O.imageSmoothingQuality = ne, O.drawImage.apply(O, [e].concat(l(ce.map(function(e) {
-				return Math.floor(R(e));
+			return re.width = L(j), re.height = L(ie), O.fillStyle = v, O.fillRect(0, 0, j, ie), O.save(), O.translate(j / 2, ie / 2), O.rotate(c * Math.PI / 180), O.scale(d, p), O.imageSmoothingEnabled = ee, O.imageSmoothingQuality = ne, O.drawImage.apply(O, [e].concat(u(ce.map(function(e) {
+				return Math.floor(L(e));
 			})))), O.restore(), re;
 		}
-		var G = String.fromCharCode;
-		function K(e, t, n) {
+		var K = String.fromCharCode;
+		function dt(e, t, n) {
 			var r = "";
 			n += t;
-			for (var i = t; i < n; i += 1) r += G(e.getUint8(i));
+			for (var i = t; i < n; i += 1) r += K(e.getUint8(i));
 			return r;
 		}
-		var dt = /^data:.*,/;
-		function ft(e) {
-			var t = e.replace(dt, ""), n = atob(t), r = new ArrayBuffer(n.length), i = new Uint8Array(r);
+		var ft = /^data:.*,/;
+		function pt(e) {
+			var t = e.replace(ft, ""), n = atob(t), r = new ArrayBuffer(n.length), i = new Uint8Array(r);
 			return F(i, function(e, t) {
 				i[t] = n.charCodeAt(t);
 			}), r;
 		}
-		function pt(e, t) {
-			for (var n = [], r = 8192, i = new Uint8Array(e); i.length > 0;) n.push(G.apply(null, He(i.subarray(0, r)))), i = i.subarray(r);
+		function mt(e, t) {
+			for (var n = [], r = 8192, i = new Uint8Array(e); i.length > 0;) n.push(K.apply(null, We(i.subarray(0, r)))), i = i.subarray(r);
 			return `data:${t};base64,${btoa(n.join(""))}`;
 		}
-		function mt(e) {
+		function ht(e) {
 			var t = new DataView(e), n;
 			try {
 				var r, i, a;
@@ -9421,7 +9441,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				}
 				if (i) {
 					var c = i + 4, l = i + 10;
-					if (K(t, c, 4) === "Exif") {
+					if (dt(t, c, 4) === "Exif") {
 						var u = t.getUint16(l);
 						if (r = u === 18761, (r || u === 19789) && t.getUint16(l + 2, r) === 42) {
 							var d = t.getUint32(l + 4, r);
@@ -9430,8 +9450,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					}
 				}
 				if (a) {
-					var f = t.getUint16(a, r), p, m;
-					for (m = 0; m < f; m += 1) if (p = a + m * 12 + 2, t.getUint16(p, r) === 274) {
+					for (var f = t.getUint16(a, r), p, m = 0; m < f; m += 1) if (p = a + m * 12 + 2, t.getUint16(p, r) === 274) {
 						p += 8, n = t.getUint16(p, r), t.setUint16(p, 1, r);
 						break;
 					}
@@ -9441,7 +9460,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			}
 			return n;
 		}
-		function ht(e) {
+		function gt(e) {
 			var t = 0, n = 1, r = 1;
 			switch (e) {
 				case 2:
@@ -9462,9 +9481,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				case 7:
 					t = 90, n = -1;
 					break;
-				case 8:
-					t = -90;
-					break;
+				case 8: t = -90;
 			}
 			return {
 				rotate: t,
@@ -9472,21 +9489,21 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				scaleY: r
 			};
 		}
-		var gt = {
+		var _t = {
 			render: function() {
 				this.initContainer(), this.initCanvas(), this.initCropBox(), this.renderCanvas(), this.cropped && this.renderCropBox();
 			},
 			initContainer: function() {
 				var e = this.element, t = this.options, n = this.container, r = this.cropper, i = Number(t.minContainerWidth), a = Number(t.minContainerHeight);
-				B(r, A), Ge(e, A);
+				z(r, A), Je(e, A);
 				var o = {
-					width: Math.max(n.offsetWidth, i >= 0 ? i : je),
-					height: Math.max(n.offsetHeight, a >= 0 ? a : Me)
+					width: Math.max(n.offsetWidth, i >= 0 ? i : Me),
+					height: Math.max(n.offsetHeight, a >= 0 ? a : Ne)
 				};
-				this.containerData = o, z(r, {
+				this.containerData = o, R(r, {
 					width: o.width,
 					height: o.height
-				}), B(e, A), Ge(r, A);
+				}), z(e, A), Je(r, A);
 			},
 			initCanvas: function() {
 				var e = this.containerData, t = this.imageData, n = this.options.viewMode, r = Math.abs(t.rotate) % 180 == 90, i = r ? t.naturalHeight : t.naturalWidth, a = r ? t.naturalWidth : t.naturalHeight, o = i / a, s = e.width, c = e.height;
@@ -9505,32 +9522,34 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				if (e) {
 					var l = Number(n.minCanvasWidth) || 0, u = Number(n.minCanvasHeight) || 0;
 					o > 1 ? (l = Math.max(l, r.width), u = Math.max(u, r.height), o === 3 && (u * s > l ? l = u * s : u = l / s)) : o > 0 && (l ? l = Math.max(l, c ? a.width : 0) : u ? u = Math.max(u, c ? a.height : 0) : c && (l = a.width, u = a.height, u * s > l ? l = u * s : u = l / s));
-					var d = W({
+					var d = lt({
 						aspectRatio: s,
 						width: l,
 						height: u
 					});
 					l = d.width, u = d.height, i.minWidth = l, i.minHeight = u, i.maxWidth = Infinity, i.maxHeight = Infinity;
 				}
-				if (t) if (o > +!c) {
-					var f = r.width - i.width, p = r.height - i.height;
-					i.minLeft = Math.min(0, f), i.minTop = Math.min(0, p), i.maxLeft = Math.max(0, f), i.maxTop = Math.max(0, p), c && this.limited && (i.minLeft = Math.min(a.left, a.left + (a.width - i.width)), i.minTop = Math.min(a.top, a.top + (a.height - i.height)), i.maxLeft = a.left, i.maxTop = a.top, o === 2 && (i.width >= r.width && (i.minLeft = Math.min(0, f), i.maxLeft = Math.max(0, f)), i.height >= r.height && (i.minTop = Math.min(0, p), i.maxTop = Math.max(0, p))));
-				} else i.minLeft = -i.width, i.minTop = -i.height, i.maxLeft = r.width, i.maxTop = r.height;
+				if (t) {
+					if (o > +!c) {
+						var f = r.width - i.width, p = r.height - i.height;
+						i.minLeft = Math.min(0, f), i.minTop = Math.min(0, p), i.maxLeft = Math.max(0, f), i.maxTop = Math.max(0, p), c && this.limited && (i.minLeft = Math.min(a.left, a.left + (a.width - i.width)), i.minTop = Math.min(a.top, a.top + (a.height - i.height)), i.maxLeft = a.left, i.maxTop = a.top, o === 2 && (i.width >= r.width && (i.minLeft = Math.min(0, f), i.maxLeft = Math.max(0, f)), i.height >= r.height && (i.minTop = Math.min(0, p), i.maxTop = Math.max(0, p))));
+					} else i.minLeft = -i.width, i.minTop = -i.height, i.maxLeft = r.width, i.maxTop = r.height;
+				}
 			},
 			renderCanvas: function(e, t) {
 				var n = this.canvasData, r = this.imageData;
 				if (t) {
-					var i = lt({
+					var i = ut({
 						width: r.naturalWidth * Math.abs(r.scaleX || 1),
 						height: r.naturalHeight * Math.abs(r.scaleY || 1),
 						degree: r.rotate || 0
 					}), a = i.width, o = i.height, s = n.width * (a / n.naturalWidth), c = n.height * (o / n.naturalHeight);
 					n.left -= (s - n.width) / 2, n.top -= (c - n.height) / 2, n.width = s, n.height = c, n.aspectRatio = a / o, n.naturalWidth = a, n.naturalHeight = o, this.limitCanvas(!0, !1);
 				}
-				(n.width > n.maxWidth || n.width < n.minWidth) && (n.left = n.oldLeft), (n.height > n.maxHeight || n.height < n.minHeight) && (n.top = n.oldTop), n.width = Math.min(Math.max(n.width, n.minWidth), n.maxWidth), n.height = Math.min(Math.max(n.height, n.minHeight), n.maxHeight), this.limitCanvas(!1, !0), n.left = Math.min(Math.max(n.left, n.minLeft), n.maxLeft), n.top = Math.min(Math.max(n.top, n.minTop), n.maxTop), n.oldLeft = n.left, n.oldTop = n.top, z(this.canvas, I({
+				(n.width > n.maxWidth || n.width < n.minWidth) && (n.left = n.oldLeft), (n.height > n.maxHeight || n.height < n.minHeight) && (n.top = n.oldTop), n.width = Math.min(Math.max(n.width, n.minWidth), n.maxWidth), n.height = Math.min(Math.max(n.height, n.minHeight), n.maxHeight), this.limitCanvas(!1, !0), n.left = Math.min(Math.max(n.left, n.minLeft), n.maxLeft), n.top = Math.min(Math.max(n.top, n.minTop), n.maxTop), n.oldLeft = n.left, n.oldTop = n.top, R(this.canvas, I({
 					width: n.width,
 					height: n.height
-				}, H({
+				}, st({
 					translateX: n.left,
 					translateY: n.top
 				}))), this.renderImage(e), this.cropped && this.limited && this.limitCropBox(!0, !0);
@@ -9542,10 +9561,10 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					height: i,
 					left: (t.width - r) / 2,
 					top: (t.height - i) / 2
-				}), z(this.image, I({
+				}), R(this.image, I({
 					width: n.width,
 					height: n.height
-				}, H(I({
+				}, st(I({
 					translateX: n.left,
 					translateY: n.top
 				}, n)))), e && this.output();
@@ -9567,79 +9586,79 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			renderCropBox: function() {
 				var e = this.options, t = this.containerData, n = this.cropBoxData;
-				(n.width > n.maxWidth || n.width < n.minWidth) && (n.left = n.oldLeft), (n.height > n.maxHeight || n.height < n.minHeight) && (n.top = n.oldTop), n.width = Math.min(Math.max(n.width, n.minWidth), n.maxWidth), n.height = Math.min(Math.max(n.height, n.minHeight), n.maxHeight), this.limitCropBox(!1, !0), n.left = Math.min(Math.max(n.left, n.minLeft), n.maxLeft), n.top = Math.min(Math.max(n.top, n.minTop), n.maxTop), n.oldLeft = n.left, n.oldTop = n.top, e.movable && e.cropBoxMovable && Xe(this.face, M, n.width >= t.width && n.height >= t.height ? ne : ee), z(this.cropBox, I({
+				(n.width > n.maxWidth || n.width < n.minWidth) && (n.left = n.oldLeft), (n.height > n.maxHeight || n.height < n.minHeight) && (n.top = n.oldTop), n.width = Math.min(Math.max(n.width, n.minWidth), n.maxWidth), n.height = Math.min(Math.max(n.height, n.minHeight), n.maxHeight), this.limitCropBox(!1, !0), n.left = Math.min(Math.max(n.left, n.minLeft), n.maxLeft), n.top = Math.min(Math.max(n.top, n.minTop), n.maxTop), n.oldLeft = n.left, n.oldTop = n.top, e.movable && e.cropBoxMovable && $e(this.face, M, n.width >= t.width && n.height >= t.height ? ne : ee), R(this.cropBox, I({
 					width: n.width,
 					height: n.height
-				}, H({
+				}, st({
 					translateX: n.left,
 					translateY: n.top
 				}))), this.cropped && this.limited && this.limitCanvas(!0, !0), this.disabled || this.output();
 			},
 			output: function() {
-				this.preview(), nt(this.element, de, this.getData());
+				this.preview(), rt(this.element, de, this.getData());
 			}
-		}, _t = {
+		}, vt = {
 			initPreview: function() {
 				var e = this.element, t = this.crossOrigin, n = this.options.preview, r = t ? this.crossOriginUrl : this.url, i = e.alt || "The image to preview", a = document.createElement("img");
 				if (t && (a.crossOrigin = t), a.src = r, a.alt = i, this.viewBox.appendChild(a), this.viewBoxImage = a, n) {
 					var o = n;
 					typeof n == "string" ? o = e.ownerDocument.querySelectorAll(n) : n.querySelector && (o = [n]), this.previews = o, F(o, function(e) {
 						var n = document.createElement("img");
-						Xe(e, se, {
+						$e(e, se, {
 							width: e.offsetWidth,
 							height: e.offsetHeight,
 							html: e.innerHTML
-						}), t && (n.crossOrigin = t), n.src = r, n.alt = i, n.style.cssText = "display:block;width:100%;height:auto;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;image-orientation:0deg!important;\"", e.innerHTML = "", e.appendChild(n);
+						}), t && (n.crossOrigin = t), n.src = r, n.alt = i, n.style.cssText = "display:block;width:100%;height:auto;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;image-orientation:0deg!important;", e.innerHTML = "", e.appendChild(n);
 					});
 				}
 			},
 			resetPreview: function() {
 				F(this.previews, function(e) {
-					var t = Ye(e, se);
-					z(e, {
+					var t = Qe(e, se);
+					R(e, {
 						width: t.width,
 						height: t.height
-					}), e.innerHTML = t.html, Ze(e, se);
+					}), e.innerHTML = t.html, et(e, se);
 				});
 			},
 			preview: function() {
 				var e = this.imageData, t = this.canvasData, n = this.cropBoxData, r = n.width, i = n.height, a = e.width, o = e.height, s = n.left - t.left - e.left, c = n.top - t.top - e.top;
-				!this.cropped || this.disabled || (z(this.viewBoxImage, I({
+				this.cropped && !this.disabled && (R(this.viewBoxImage, I({
 					width: a,
 					height: o
-				}, H(I({
+				}, st(I({
 					translateX: -s,
 					translateY: -c
 				}, e)))), F(this.previews, function(t) {
-					var n = Ye(t, se), l = n.width, u = n.height, d = l, f = u, p = 1;
-					r && (p = l / r, f = i * p), i && f > u && (p = u / i, d = r * p, f = u), z(t, {
+					var n = Qe(t, se), l = n.width, u = n.height, d = l, f = u, p = 1;
+					r && (p = l / r, f = i * p), i && f > u && (p = u / i, d = r * p, f = u), R(t, {
 						width: d,
 						height: f
-					}), z(t.getElementsByTagName("img")[0], I({
+					}), R(t.getElementsByTagName("img")[0], I({
 						width: a * p,
 						height: o * p
-					}, H(I({
+					}, st(I({
 						translateX: -s * p,
 						translateY: -c * p
 					}, e))));
 				}));
 			}
-		}, vt = {
+		}, yt = {
 			bind: function() {
 				var e = this.element, t = this.options, n = this.cropper;
-				P(t.cropstart) && tt(e, me, t.cropstart), P(t.cropmove) && tt(e, pe, t.cropmove), P(t.cropend) && tt(e, fe, t.cropend), P(t.crop) && tt(e, de, t.crop), P(t.zoom) && tt(e, Te, t.zoom), tt(n, ye, this.onCropStart = this.cropStart.bind(this)), t.zoomable && t.zoomOnWheel && tt(n, we, this.onWheel = this.wheel.bind(this), {
+				P(t.cropstart) && B(e, me, t.cropstart), P(t.cropmove) && B(e, pe, t.cropmove), P(t.cropend) && B(e, fe, t.cropend), P(t.crop) && B(e, de, t.crop), P(t.zoom) && B(e, Te, t.zoom), B(n, ye, this.onCropStart = this.cropStart.bind(this)), t.zoomable && t.zoomOnWheel && B(n, we, this.onWheel = this.wheel.bind(this), {
 					passive: !1,
 					capture: !0
-				}), t.toggleDragModeOnDblclick && tt(n, he, this.onDblclick = this.dblclick.bind(this)), tt(e.ownerDocument, be, this.onCropMove = this.cropMove.bind(this)), tt(e.ownerDocument, xe, this.onCropEnd = this.cropEnd.bind(this)), t.responsive && tt(window, Ce, this.onResize = this.resize.bind(this));
+				}), t.toggleDragModeOnDblclick && B(n, he, this.onDblclick = this.dblclick.bind(this)), B(e.ownerDocument, be, this.onCropMove = this.cropMove.bind(this)), B(e.ownerDocument, xe, this.onCropEnd = this.cropEnd.bind(this)), t.responsive && B(window, Ce, this.onResize = this.resize.bind(this));
 			},
 			unbind: function() {
 				var e = this.element, t = this.options, n = this.cropper;
-				P(t.cropstart) && et(e, me, t.cropstart), P(t.cropmove) && et(e, pe, t.cropmove), P(t.cropend) && et(e, fe, t.cropend), P(t.crop) && et(e, de, t.crop), P(t.zoom) && et(e, Te, t.zoom), et(n, ye, this.onCropStart), t.zoomable && t.zoomOnWheel && et(n, we, this.onWheel, {
+				P(t.cropstart) && nt(e, me, t.cropstart), P(t.cropmove) && nt(e, pe, t.cropmove), P(t.cropend) && nt(e, fe, t.cropend), P(t.crop) && nt(e, de, t.crop), P(t.zoom) && nt(e, Te, t.zoom), nt(n, ye, this.onCropStart), t.zoomable && t.zoomOnWheel && nt(n, we, this.onWheel, {
 					passive: !1,
 					capture: !0
-				}), t.toggleDragModeOnDblclick && et(n, he, this.onDblclick), et(e.ownerDocument, be, this.onCropMove), et(e.ownerDocument, xe, this.onCropEnd), t.responsive && et(window, Ce, this.onResize);
+				}), t.toggleDragModeOnDblclick && nt(n, he, this.onDblclick), nt(e.ownerDocument, be, this.onCropMove), nt(e.ownerDocument, xe, this.onCropEnd), t.responsive && nt(window, Ce, this.onResize);
 			}
-		}, yt = {
+		}, bt = {
 			resize: function() {
 				if (!this.disabled) {
 					var e = this.options, t = this.container, n = this.containerData, r = t.offsetWidth / n.width, i = t.offsetHeight / n.height, a = Math.abs(r - 1) > Math.abs(i - 1) ? r : i;
@@ -9654,7 +9673,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				}
 			},
 			dblclick: function() {
-				this.disabled || this.options.dragMode === ue || this.setDragMode(We(this.dragBox, O) ? le : ce);
+				this.disabled || this.options.dragMode === ue || this.setDragMode(qe(this.dragBox, O) ? le : ce);
 			},
 			wheel: function(e) {
 				var t = this, n = Number(this.options.wheelZoomRatio) || .1, r = 1;
@@ -9667,23 +9686,23 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				if (!(this.disabled || (e.type === "mousedown" || e.type === "pointerdown" && e.pointerType === "mouse") && (N(t) && t !== 1 || N(n) && n !== 0 || e.ctrlKey))) {
 					var r = this.options, i = this.pointers, a;
 					e.changedTouches ? F(e.changedTouches, function(e) {
-						i[e.identifier] = ct(e);
-					}) : i[e.pointerId || 0] = ct(e), a = Object.keys(i).length > 1 && r.zoomable && r.zoomOnTouch ? b : Ye(e.target, M), De.test(a) && nt(this.element, me, {
+						i[e.identifier] = U(e);
+					}) : i[e.pointerId || 0] = U(e), a = Object.keys(i).length > 1 && r.zoomable && r.zoomOnTouch ? b : Qe(e.target, M), De.test(a) && rt(this.element, me, {
 						originalEvent: e,
 						action: a
-					}) !== !1 && (e.preventDefault(), this.action = a, this.cropping = !1, a === te && (this.cropping = !0, B(this.dragBox, ae)));
+					}) !== !1 && (e.preventDefault(), this.action = a, this.cropping = !1, a === te && (this.cropping = !0, z(this.dragBox, ae)));
 				}
 			},
 			cropMove: function(e) {
 				var t = this.action;
-				if (!(this.disabled || !t)) {
+				if (!this.disabled && t) {
 					var n = this.pointers;
-					e.preventDefault(), nt(this.element, pe, {
+					e.preventDefault(), rt(this.element, pe, {
 						originalEvent: e,
 						action: t
 					}) !== !1 && (e.changedTouches ? F(e.changedTouches, function(e) {
-						I(n[e.identifier] || {}, ct(e, !0));
-					}) : I(n[e.pointerId || 0] || {}, ct(e, !0)), this.change(e));
+						I(n[e.identifier] || {}, U(e, !0));
+					}) : I(n[e.pointerId || 0] || {}, U(e, !0)), this.change(e));
 				}
 			},
 			cropEnd: function(e) {
@@ -9691,13 +9710,13 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					var t = this.action, n = this.pointers;
 					e.changedTouches ? F(e.changedTouches, function(e) {
 						delete n[e.identifier];
-					}) : delete n[e.pointerId || 0], t && (e.preventDefault(), Object.keys(n).length || (this.action = ""), this.cropping && (this.cropping = !1, Ke(this.dragBox, ae, this.cropped && this.options.modal)), nt(this.element, fe, {
+					}) : delete n[e.pointerId || 0], t && (e.preventDefault(), Object.keys(n).length || (this.action = ""), this.cropping && (this.cropping = !1, Ye(this.dragBox, ae, this.cropped && this.options.modal)), rt(this.element, fe, {
 						originalEvent: e,
 						action: t
 					}));
 				}
 			}
-		}, bt = { change: function(e) {
+		}, xt = { change: function(e) {
 			var t = this.options, n = this.canvasData, r = this.containerData, i = this.cropBoxData, a = this.pointers, o = this.action, s = t.aspectRatio, c = i.left, l = i.top, u = i.width, d = i.height, f = c + u, p = l + d, m = 0, h = 0, g = r.width, _ = r.height, v = !0, y;
 			!s && e.shiftKey && (s = u && d ? u / d : 1), this.limited && (m = i.minLeft, h = i.minTop, g = m + Math.min(r.width, n.width, n.left + n.width), _ = h + Math.min(r.height, n.height, n.top + n.height));
 			var O = a[Object.keys(a)[0]], k = {
@@ -9714,9 +9733,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					case w:
 						l + k.y < h && (k.y = h - l);
 						break;
-					case C:
-						p + k.y > _ && (k.y = _ - p);
-						break;
+					case C: p + k.y > _ && (k.y = _ - p);
 				}
 			};
 			switch (o) {
@@ -9795,22 +9812,21 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					this.move(k.x, k.y), v = !1;
 					break;
 				case b:
-					this.zoom(st(a), e), v = !1;
+					this.zoom(ct(a), e), v = !1;
 					break;
 				case te:
 					if (!k.x || !k.y) {
 						v = !1;
 						break;
 					}
-					y = rt(this.cropper), c = O.startX - y.left, l = O.startY - y.top, u = i.minWidth, d = i.minHeight, k.x > 0 ? o = k.y > 0 ? D : T : k.x < 0 && (c -= u, o = k.y > 0 ? re : E), k.y < 0 && (l -= d), this.cropped || (Ge(this.cropBox, A), this.cropped = !0, this.limited && this.limitCropBox(!0, !0));
-					break;
+					y = it(this.cropper), c = O.startX - y.left, l = O.startY - y.top, u = i.minWidth, d = i.minHeight, k.x > 0 ? o = k.y > 0 ? D : T : k.x < 0 && (c -= u, o = k.y > 0 ? re : E), k.y < 0 && (l -= d), this.cropped || (Je(this.cropBox, A), this.cropped = !0, this.limited && this.limitCropBox(!0, !0));
 			}
 			v && (i.width = u, i.height = d, i.left = c, i.top = l, this.action = o, this.renderCropBox()), F(a, function(e) {
 				e.startX = e.endX, e.startY = e.endY;
 			});
-		} }, xt = {
+		} }, St = {
 			crop: function() {
-				return this.ready && !this.cropped && !this.disabled && (this.cropped = !0, this.limitCropBox(!0, !0), this.options.modal && B(this.dragBox, ae), Ge(this.cropBox, A), this.setCropBoxData(this.initialCropBoxData)), this;
+				return this.ready && !this.cropped && !this.disabled && (this.cropped = !0, this.limitCropBox(!0, !0), this.options.modal && z(this.dragBox, ae), Je(this.cropBox, A), this.setCropBoxData(this.initialCropBoxData)), this;
 			},
 			reset: function() {
 				return this.ready && !this.disabled && (this.imageData = I({}, this.initialImageData), this.canvasData = I({}, this.initialCanvasData), this.cropBoxData = I({}, this.initialCropBoxData), this.renderCanvas(), this.cropped && this.renderCropBox()), this;
@@ -9821,19 +9837,19 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					top: 0,
 					width: 0,
 					height: 0
-				}), this.cropped = !1, this.renderCropBox(), this.limitCanvas(!0, !0), this.renderCanvas(), Ge(this.dragBox, ae), B(this.cropBox, A)), this;
+				}), this.cropped = !1, this.renderCropBox(), this.limitCanvas(!0, !0), this.renderCanvas(), Je(this.dragBox, ae), z(this.cropBox, A)), this;
 			},
 			replace: function(e) {
-				var t = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : !1;
+				var t = arguments.length > 1 && arguments[1] !== void 0 && arguments[1];
 				return !this.disabled && e && (this.isImg && (this.element.src = e), t ? (this.url = e, this.image.src = e, this.ready && (this.viewBoxImage.src = e, F(this.previews, function(t) {
 					t.getElementsByTagName("img")[0].src = e;
 				}))) : (this.isImg && (this.replaced = !0), this.options.data = null, this.uncreate(), this.load(e))), this;
 			},
 			enable: function() {
-				return this.ready && this.disabled && (this.disabled = !1, Ge(this.cropper, k)), this;
+				return this.ready && this.disabled && (this.disabled = !1, Je(this.cropper, k)), this;
 			},
 			disable: function() {
-				return this.ready && !this.disabled && (this.disabled = !0, B(this.cropper, k)), this;
+				return this.ready && !this.disabled && (this.disabled = !0, z(this.cropper, k)), this;
 			},
 			destroy: function() {
 				var e = this.element;
@@ -9841,7 +9857,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			move: function(e) {
 				var t = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : e, n = this.canvasData, r = n.left, i = n.top;
-				return this.moveTo(Le(e) ? e : r + Number(e), Le(t) ? t : i + Number(t));
+				return this.moveTo(ze(e) ? e : r + Number(e), ze(t) ? t : i + Number(t));
 			},
 			moveTo: function(e) {
 				var t = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : e, n = this.canvasData, r = !1;
@@ -9855,18 +9871,18 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				var r = this.options, i = this.canvasData, a = i.width, o = i.height, s = i.naturalWidth, c = i.naturalHeight;
 				if (e = Number(e), e >= 0 && this.ready && !this.disabled && r.zoomable) {
 					var l = s * e, u = c * e;
-					if (nt(this.element, Te, {
+					if (rt(this.element, Te, {
 						ratio: e,
 						oldRatio: a / s,
 						originalEvent: n
 					}) === !1) return this;
 					if (n) {
-						var d = this.pointers, f = rt(this.cropper), p = d && Object.keys(d).length ? U(d) : {
+						var d = this.pointers, f = it(this.cropper), p = d && Object.keys(d).length ? W(d) : {
 							pageX: n.pageX,
 							pageY: n.pageY
 						};
 						i.left -= (l - a) * ((p.pageX - f.left - i.left) / a), i.top -= (u - o) * ((p.pageY - f.top - i.top) / o);
-					} else Be(t) && N(t.x) && N(t.y) ? (i.left -= (l - a) * ((t.x - i.left) / a), i.top -= (u - o) * ((t.y - i.top) / o)) : (i.left -= (l - a) / 2, i.top -= (u - o) / 2);
+					} else He(t) && N(t.x) && N(t.y) ? (i.left -= (l - a) * ((t.x - i.left) / a), i.top -= (u - o) * ((t.y - i.top) / o)) : (i.left -= (l - a) / 2, i.top -= (u - o) / 2);
 					i.width = l, i.height = u, this.renderCanvas(!0);
 				}
 				return this;
@@ -9890,7 +9906,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				return e = Number(e), t = Number(t), this.ready && !this.disabled && this.options.scalable && (N(e) && (n.scaleX = e, r = !0), N(t) && (n.scaleY = t, r = !0), r && this.renderCanvas(!0, !0)), this;
 			},
 			getData: function() {
-				var e = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : !1, t = this.options, n = this.imageData, r = this.canvasData, i = this.cropBoxData, a;
+				var e = arguments.length > 0 && arguments[0] !== void 0 && arguments[0], t = this.options, n = this.imageData, r = this.canvasData, i = this.cropBoxData, a;
 				if (this.ready && this.cropped) {
 					a = {
 						x: i.left - r.left,
@@ -9915,7 +9931,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			setData: function(e) {
 				var t = this.options, n = this.imageData, r = this.canvasData, i = {};
-				if (this.ready && !this.disabled && Be(e)) {
+				if (this.ready && !this.disabled && He(e)) {
 					var a = !1;
 					t.rotatable && N(e.rotate) && e.rotate !== n.rotate && (n.rotate = e.rotate, a = !0), t.scalable && (N(e.scaleX) && e.scaleX !== n.scaleX && (n.scaleX = e.scaleX, a = !0), N(e.scaleY) && e.scaleY !== n.scaleY && (n.scaleY = e.scaleY, a = !0)), a && this.renderCanvas(!0, !0);
 					var o = n.width / n.naturalWidth;
@@ -9944,7 +9960,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			setCanvasData: function(e) {
 				var t = this.canvasData, n = t.aspectRatio;
-				return this.ready && !this.disabled && Be(e) && (N(e.left) && (t.left = e.left), N(e.top) && (t.top = e.top), N(e.width) ? (t.width = e.width, t.height = e.width / n) : N(e.height) && (t.height = e.height, t.width = e.height * n), this.renderCanvas(!0)), this;
+				return this.ready && !this.disabled && He(e) && (N(e.left) && (t.left = e.left), N(e.top) && (t.top = e.top), N(e.width) ? (t.width = e.width, t.height = e.width / n) : N(e.height) && (t.height = e.height, t.width = e.height * n), this.renderCanvas(!0)), this;
 			},
 			getCropBoxData: function() {
 				var e = this.cropBoxData, t;
@@ -9957,32 +9973,32 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			setCropBoxData: function(e) {
 				var t = this.cropBoxData, n = this.options.aspectRatio, r, i;
-				return this.ready && this.cropped && !this.disabled && Be(e) && (N(e.left) && (t.left = e.left), N(e.top) && (t.top = e.top), N(e.width) && e.width !== t.width && (r = !0, t.width = e.width), N(e.height) && e.height !== t.height && (i = !0, t.height = e.height), n && (r ? t.height = t.width / n : i && (t.width = t.height * n)), this.renderCropBox()), this;
+				return this.ready && this.cropped && !this.disabled && He(e) && (N(e.left) && (t.left = e.left), N(e.top) && (t.top = e.top), N(e.width) && e.width !== t.width && (r = !0, t.width = e.width), N(e.height) && e.height !== t.height && (i = !0, t.height = e.height), n && (r ? t.height = t.width / n : i && (t.width = t.height * n)), this.renderCropBox()), this;
 			},
 			getCroppedCanvas: function() {
 				var e = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
 				if (!this.ready || !window.HTMLCanvasElement) return null;
-				var t = this.canvasData, n = ut(this.image, this.imageData, t, e);
+				var t = this.canvasData, n = G(this.image, this.imageData, t, e);
 				if (!this.cropped) return n;
 				var r = this.getData(e.rounded), i = r.x, a = r.y, o = r.width, s = r.height, c = n.width / Math.floor(t.naturalWidth);
 				c !== 1 && (i *= c, a *= c, o *= c, s *= c);
-				var u = o / s, d = W({
-					aspectRatio: u,
+				var l = o / s, d = lt({
+					aspectRatio: l,
 					width: e.maxWidth || Infinity,
 					height: e.maxHeight || Infinity
-				}), f = W({
-					aspectRatio: u,
+				}), f = lt({
+					aspectRatio: l,
 					width: e.minWidth || 0,
 					height: e.minHeight || 0
-				}, "cover"), p = W({
-					aspectRatio: u,
+				}, "cover"), p = lt({
+					aspectRatio: l,
 					width: e.width || (c === 1 ? o : n.width),
 					height: e.height || (c === 1 ? s : n.height)
 				}), m = p.width, h = p.height;
 				m = Math.min(d.width, Math.max(f.width, m)), h = Math.min(d.height, Math.max(f.height, h));
 				var g = document.createElement("canvas"), _ = g.getContext("2d");
-				g.width = R(m), g.height = R(h), _.fillStyle = e.fillColor || "transparent", _.fillRect(0, 0, m, h);
-				var v = e.imageSmoothingEnabled, y = v === void 0 ? !0 : v, ee = e.imageSmoothingQuality;
+				g.width = L(m), g.height = L(h), _.fillStyle = e.fillColor || "transparent", _.fillRect(0, 0, m, h);
+				var v = e.imageSmoothingEnabled, y = v === void 0 || v, ee = e.imageSmoothingQuality;
 				_.imageSmoothingEnabled = y, ee && (_.imageSmoothingQuality = ee);
 				var te = n.width, ne = n.height, b = i, x = a, S, C, w, T, E, D;
 				b <= -o || b > te ? (b = 0, S = 0, w = 0, E = 0) : b <= 0 ? (w = -b, b = 0, S = Math.min(te, o + b), E = S) : b <= te && (w = 0, S = Math.min(o, te - b), E = S), S <= 0 || x <= -s || x > ne ? (x = 0, C = 0, T = 0, D = 0) : x <= 0 ? (T = -x, x = 0, C = Math.min(ne, s + x), D = C) : x <= ne && (T = 0, C = Math.min(s, ne - x), D = C);
@@ -9996,29 +10012,29 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					var O = m / o;
 					re.push(w * O, T * O, E * O, D * O);
 				}
-				return _.drawImage.apply(_, [n].concat(l(re.map(function(e) {
-					return Math.floor(R(e));
+				return _.drawImage.apply(_, [n].concat(u(re.map(function(e) {
+					return Math.floor(L(e));
 				})))), g;
 			},
 			setAspectRatio: function(e) {
 				var t = this.options;
-				return !this.disabled && !Le(e) && (t.aspectRatio = Math.max(0, e) || NaN, this.ready && (this.initCropBox(), this.cropped && this.renderCropBox())), this;
+				return !this.disabled && !ze(e) && (t.aspectRatio = Math.max(0, e) || NaN, this.ready && (this.initCropBox(), this.cropped && this.renderCropBox())), this;
 			},
 			setDragMode: function(e) {
 				var t = this.options, n = this.dragBox, r = this.face;
 				if (this.ready && !this.disabled) {
 					var i = e === ce, a = t.movable && e === le;
-					e = i || a ? e : ue, t.dragMode = e, Xe(n, M, e), Ke(n, O, i), Ke(n, oe, a), t.cropBoxMovable || (Xe(r, M, e), Ke(r, O, i), Ke(r, oe, a));
+					e = i || a ? e : ue, t.dragMode = e, $e(n, M, e), Ye(n, O, i), Ye(n, oe, a), t.cropBoxMovable || ($e(r, M, e), Ye(r, O, i), Ye(r, oe, a));
 				}
 				return this;
 			}
-		}, St = g.Cropper, Ct = /*#__PURE__*/ function() {
+		}, Ct = g.Cropper, wt = /*#__PURE__*/ function() {
 			function e(t) {
-				var n = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
-				if (a(this, e), !t || !Ae.test(t.tagName)) throw Error("The first argument is required and must be an <img> or <canvas> element.");
-				this.element = t, this.options = I({}, Ne, Be(n) && n), this.cropped = !1, this.disabled = !1, this.pointers = {}, this.ready = !1, this.reloading = !1, this.replaced = !1, this.sized = !1, this.sizing = !1, this.init();
+				var r = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
+				if (n(this, e), !t || !je.test(t.tagName)) throw Error("The first argument is required and must be an <img> or <canvas> element.");
+				this.element = t, this.options = I({}, Pe, He(r) && r), this.cropped = !1, this.disabled = !1, this.pointers = {}, this.ready = !1, this.reloading = !1, this.replaced = !1, this.sized = !1, this.sizing = !1, this.init();
 			}
-			return s(e, [
+			return i(e, [
 				{
 					key: "init",
 					value: function() {
@@ -10044,7 +10060,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 								return;
 							}
 							if (Oe.test(e)) {
-								ke.test(e) ? this.read(ft(e)) : this.clone();
+								ke.test(e) ? this.read(pt(e)) : this.clone();
 								return;
 							}
 							var i = new XMLHttpRequest(), a = this.clone.bind(this);
@@ -10054,17 +10070,17 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 								t.read(i.response);
 							}, i.onloadend = function() {
 								t.reloading = !1, t.xhr = null;
-							}, r.checkCrossOrigin && V(e) && n.crossOrigin && (e = ot(e)), i.open("GET", e, !0), i.responseType = "arraybuffer", i.withCredentials = n.crossOrigin === "use-credentials", i.send();
+							}, r.checkCrossOrigin && ot(e) && n.crossOrigin && (e = H(e)), i.open("GET", e, !0), i.responseType = "arraybuffer", i.withCredentials = n.crossOrigin === "use-credentials", i.send();
 						}
 					}
 				},
 				{
 					key: "read",
 					value: function(e) {
-						var t = this.options, n = this.imageData, r = mt(e), i = 0, a = 1, o = 1;
+						var t = this.options, n = this.imageData, r = ht(e), i = 0, a = 1, o = 1;
 						if (r > 1) {
-							this.url = pt(e, Ee);
-							var s = ht(r);
+							this.url = mt(e, Ee);
+							var s = gt(r);
 							i = s.rotate, a = s.scaleX, o = s.scaleY;
 						}
 						t.rotatable && (n.rotate = i), t.scalable && (n.scaleX = a, n.scaleY = o), this.clone();
@@ -10074,9 +10090,9 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 					key: "clone",
 					value: function() {
 						var e = this.element, t = this.url, n = e.crossOrigin, r = t;
-						this.options.checkCrossOrigin && V(t) && (n || (n = "anonymous"), r = ot(t)), this.crossOrigin = n, this.crossOriginUrl = r;
+						this.options.checkCrossOrigin && ot(t) && (n || (n = "anonymous"), r = H(t)), this.crossOrigin = n, this.crossOriginUrl = r;
 						var i = document.createElement("img");
-						n && (i.crossOrigin = n), i.src = r || t, i.alt = e.alt || "The image to crop", this.image = i, i.onload = this.start.bind(this), i.onerror = this.stop.bind(this), B(i, j), e.parentNode.insertBefore(i, e.nextSibling);
+						n && (i.crossOrigin = n), i.src = r || t, i.alt = e.alt || "The image to crop", this.image = i, i.onload = this.start.bind(this), i.onerror = this.stop.bind(this), z(i, j), e.parentNode.insertBefore(i, e.nextSibling);
 					}
 				},
 				{
@@ -10111,11 +10127,11 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				{
 					key: "build",
 					value: function() {
-						if (!(!this.sized || this.ready)) {
+						if (this.sized && !this.ready) {
 							var e = this.element, t = this.options, n = this.image, r = e.parentNode, i = document.createElement("div");
-							i.innerHTML = Pe;
+							i.innerHTML = Fe;
 							var a = i.querySelector(`.${y}-container`), o = a.querySelector(`.${y}-canvas`), s = a.querySelector(`.${y}-drag-box`), c = a.querySelector(`.${y}-crop-box`), l = c.querySelector(`.${y}-face`);
-							this.container = r, this.cropper = a, this.canvas = o, this.dragBox = s, this.cropBox = c, this.viewBox = a.querySelector(`.${y}-view-box`), this.face = l, o.appendChild(n), B(e, A), r.insertBefore(a, e.nextSibling), Ge(n, j), this.initPreview(), this.bind(), t.initialAspectRatio = Math.max(0, t.initialAspectRatio) || NaN, t.aspectRatio = Math.max(0, t.aspectRatio) || NaN, t.viewMode = Math.max(0, Math.min(3, Math.round(t.viewMode))) || 0, B(c, A), t.guides || B(c.getElementsByClassName(`${y}-dashed`), A), t.center || B(c.getElementsByClassName(`${y}-center`), A), t.background && B(a, `${y}-bg`), t.highlight || B(l, ie), t.cropBoxMovable && (B(l, oe), Xe(l, M, ee)), t.cropBoxResizable || (B(c.getElementsByClassName(`${y}-line`), A), B(c.getElementsByClassName(`${y}-point`), A)), this.render(), this.ready = !0, this.setDragMode(t.dragMode), t.autoCrop && this.crop(), this.setData(t.data), P(t.ready) && tt(e, Se, t.ready, { once: !0 }), nt(e, Se);
+							this.container = r, this.cropper = a, this.canvas = o, this.dragBox = s, this.cropBox = c, this.viewBox = a.querySelector(`.${y}-view-box`), this.face = l, o.appendChild(n), z(e, A), r.insertBefore(a, e.nextSibling), Je(n, j), this.initPreview(), this.bind(), t.initialAspectRatio = Math.max(0, t.initialAspectRatio) || NaN, t.aspectRatio = Math.max(0, t.aspectRatio) || NaN, t.viewMode = Math.max(0, Math.min(3, Math.round(t.viewMode))) || 0, z(c, A), t.guides || z(c.getElementsByClassName(`${y}-dashed`), A), t.center || z(c.getElementsByClassName(`${y}-center`), A), t.background && z(a, `${y}-bg`), t.highlight || z(l, ie), t.cropBoxMovable && (z(l, oe), $e(l, M, ee)), t.cropBoxResizable || (z(c.getElementsByClassName(`${y}-line`), A), z(c.getElementsByClassName(`${y}-point`), A)), this.render(), this.ready = !0, this.setDragMode(t.dragMode), t.autoCrop && this.crop(), this.setData(t.data), P(t.ready) && B(e, Se, t.ready, { once: !0 }), rt(e, Se);
 						}
 					}
 				},
@@ -10125,7 +10141,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 						if (this.ready) {
 							this.ready = !1, this.unbind(), this.resetPreview();
 							var e = this.cropper.parentNode;
-							e && e.removeChild(this.cropper), Ge(this.element, A);
+							e && e.removeChild(this.cropper), Je(this.element, A);
 						}
 					}
 				},
@@ -10138,18 +10154,18 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			], [{
 				key: "noConflict",
 				value: function() {
-					return window.Cropper = St, e;
+					return window.Cropper = Ct, e;
 				}
 			}, {
 				key: "setDefaults",
 				value: function(e) {
-					I(Ne, Be(e) && e);
+					I(Pe, He(e) && e);
 				}
 			}]);
 		}();
-		return I(Ct.prototype, gt, _t, vt, yt, bt, xt), Ct;
+		return I(wt.prototype, _t, vt, yt, bt, xt, St), wt;
 	}));
-})))(), 1), oa = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", sa, ca = 2 * 1024 * 1024, la = new Set([
+})))(), 1), oa = "\n.cropper-container {\n  direction: ltr;\n  font-size: 0;\n  line-height: 0;\n  position: relative;\n  -ms-touch-action: none;\n      touch-action: none;\n  -webkit-touch-callout: none;\n  -webkit-user-select: none;\n     -moz-user-select: none;\n      -ms-user-select: none;\n          user-select: none;\n}\n.cropper-container img {\n  backface-visibility: hidden;\n  display: block;\n  height: 100%;\n  image-orientation: 0deg;\n  max-height: none !important;\n  max-width: none !important;\n  min-height: 0 !important;\n  min-width: 0 !important;\n  width: 100%;\n}\n.cropper-wrap-box,\n.cropper-canvas,\n.cropper-drag-box,\n.cropper-crop-box,\n.cropper-modal {\n  bottom: 0;\n  left: 0;\n  position: absolute;\n  right: 0;\n  top: 0;\n}\n.cropper-wrap-box,\n.cropper-canvas {\n  overflow: hidden;\n}\n.cropper-drag-box {\n  background-color: #fff;\n  opacity: 0;\n}\n.cropper-modal {\n  background-color: #000;\n  opacity: 0.5;\n}\n.cropper-view-box {\n  display: block;\n  height: 100%;\n  outline: 1px solid #39f;\n  outline-color: rgba(51, 153, 255, 0.75);\n  overflow: hidden;\n  width: 100%;\n}\n.cropper-dashed {\n  border: 0 dashed #eee;\n  display: block;\n  opacity: 0.5;\n  position: absolute;\n}\n.cropper-dashed.dashed-h {\n  border-bottom-width: 1px;\n  border-top-width: 1px;\n  height: calc(100% / 3);\n  left: 0;\n  top: calc(100% / 3);\n  width: 100%;\n}\n.cropper-dashed.dashed-v {\n  border-left-width: 1px;\n  border-right-width: 1px;\n  height: 100%;\n  left: calc(100% / 3);\n  top: 0;\n  width: calc(100% / 3);\n}\n.cropper-center {\n  display: block;\n  height: 0;\n  left: 50%;\n  opacity: 0.75;\n  position: absolute;\n  top: 50%;\n  width: 0;\n}\n.cropper-center::before,\n.cropper-center::after {\n  background-color: #eee;\n  content: ' ';\n  display: block;\n  position: absolute;\n}\n.cropper-center::before {\n  height: 1px;\n  left: -3px;\n  top: 0;\n  width: 7px;\n}\n.cropper-center::after {\n  height: 7px;\n  left: 0;\n  top: -3px;\n  width: 1px;\n}\n.cropper-face,\n.cropper-line,\n.cropper-point {\n  display: block;\n  height: 100%;\n  opacity: 0.1;\n  position: absolute;\n  width: 100%;\n}\n.cropper-face {\n  background-color: #fff;\n  left: 0;\n  top: 0;\n}\n.cropper-line {\n  background-color: #39f;\n}\n.cropper-line.line-e {\n  cursor: ew-resize;\n  right: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-n {\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n  top: -3px;\n}\n.cropper-line.line-w {\n  cursor: ew-resize;\n  left: -3px;\n  top: 0;\n  width: 5px;\n}\n.cropper-line.line-s {\n  bottom: -3px;\n  cursor: ns-resize;\n  height: 5px;\n  left: 0;\n}\n.cropper-point {\n  background-color: #39f;\n  height: 5px;\n  opacity: 0.75;\n  width: 5px;\n}\n.cropper-point.point-e {\n  cursor: ew-resize;\n  margin-top: -3px;\n  right: -3px;\n  top: 50%;\n}\n.cropper-point.point-n {\n  cursor: ns-resize;\n  left: 50%;\n  margin-left: -3px;\n  top: -3px;\n}\n.cropper-point.point-w {\n  cursor: ew-resize;\n  left: -3px;\n  margin-top: -3px;\n  top: 50%;\n}\n.cropper-point.point-s {\n  bottom: -3px;\n  cursor: s-resize;\n  left: 50%;\n  margin-left: -3px;\n}\n.cropper-point.point-ne {\n  cursor: nesw-resize;\n  right: -3px;\n  top: -3px;\n}\n.cropper-point.point-nw {\n  cursor: nwse-resize;\n  left: -3px;\n  top: -3px;\n}\n.cropper-point.point-sw {\n  bottom: -3px;\n  cursor: nesw-resize;\n  left: -3px;\n}\n.cropper-point.point-se {\n  bottom: -3px;\n  cursor: nwse-resize;\n  height: 20px;\n  opacity: 1;\n  right: -3px;\n  width: 20px;\n}\n@media (min-width: 768px) {\n  .cropper-point.point-se {\n    height: 15px;\n    width: 15px;\n  }\n}\n@media (min-width: 992px) {\n  .cropper-point.point-se {\n    height: 10px;\n    width: 10px;\n  }\n}\n@media (min-width: 1200px) {\n  .cropper-point.point-se {\n    height: 5px;\n    opacity: 0.75;\n    width: 5px;\n  }\n}\n.cropper-point.point-se::before {\n  background-color: #39f;\n  bottom: -50%;\n  content: ' ';\n  display: block;\n  height: 200%;\n  opacity: 0;\n  position: absolute;\n  right: -50%;\n  width: 200%;\n}\n.cropper-invisible {\n  opacity: 0;\n}\n.cropper-bg {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC\");\n}\n.cropper-hide {\n  display: block;\n  height: 0;\n  position: absolute;\n  width: 0;\n}\n.cropper-hidden {\n  display: none !important;\n}\n.cropper-move {\n  cursor: move;\n}\n.cropper-crop {\n  cursor: crosshair;\n}\n.cropper-disabled .cropper-drag-box,\n.cropper-disabled .cropper-face,\n.cropper-disabled .cropper-line,\n.cropper-disabled .cropper-point {\n  cursor: not-allowed;\n}\n", sa, ca = 2097152, la = /* @__PURE__ */ new Set([
 	"image/png",
 	"image/jpeg",
 	"image/webp"
@@ -10259,7 +10275,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		super.disconnectedCallback(), this._setSource(null);
 	}
 	render() {
-		return L`
+		return F`
       <div class="backdrop" @click=${(e) => {
 			e.target === e.currentTarget && this._close();
 		}}>
@@ -10286,7 +10302,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 
           ${this._mode === "emoji" ? this._renderEmojiMode() : this._renderUploadMode()}
 
-          ${this._error ? L`<div class="error-msg">${this._error}</div>` : ""}
+          ${this._error ? F`<div class="error-msg">${this._error}</div>` : ""}
 
           <div class="actions">
             <button class="btn btn-secondary" @click=${this._close}>Cancel</button>
@@ -10301,9 +10317,9 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
     `;
 	}
 	_renderEmojiMode() {
-		return L`
+		return F`
       <div class="emoji-grid">
-        ${da.map((e) => L`
+        ${da.map((e) => F`
             <button
               class="emoji-btn ${this._selectedEmoji === e ? "selected" : ""}"
               @click=${() => this._selectEmoji(e)}
@@ -10314,7 +10330,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
     `;
 	}
 	_renderUploadMode() {
-		return this._sourceUrl ? L`
+		return this._sourceUrl ? F`
         <div class="upload-area">
           <div class="crop-stage">
             <img
@@ -10329,7 +10345,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
             <span class="crop-hint">Drag to position · drag corners to resize</span>
           </div>
         </div>
-      ` : L`
+      ` : F`
       <div class="upload-area">
         <div class="picker">
           <button type="button" class="picker-button" @click=${this._openFilePicker}>Add picture</button>
@@ -10540,7 +10556,7 @@ var aa = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 K([U({ attribute: !1 })], fa.prototype, "hass", void 0), K([U()], fa.prototype, "memberSlug", void 0), K([U()], fa.prototype, "memberName", void 0), K([W()], fa.prototype, "_mode", void 0), K([W()], fa.prototype, "_selectedEmoji", void 0), K([W()], fa.prototype, "_sourceUrl", void 0), K([W()], fa.prototype, "_error", void 0), K([W()], fa.prototype, "_submitting", void 0), K([ut("#crop-image")], fa.prototype, "_cropImage", void 0), fa = K([H("lucarne-avatar-upload-modal")], fa);
 //#endregion
 //#region src/editors/lucarne-chores-card-editor.ts
-var pa, ma = (pa = class extends V {
+var pa = class extends V {
 	constructor(...e) {
 		super(...e), this._familyState = null, this._avatarModalMember = null;
 	}
@@ -10615,10 +10631,10 @@ var pa, ma = (pa = class extends V {
 		});
 	}
 	_renderMemberContent(e, t) {
-		return L`
+		return F`
       <div class="member-content ${t ? "hidden-member" : ""}" slot=${e.slug} data-slug=${e.slug}>
         <div class="member-avatar">
-          ${e.avatar && e.avatar.startsWith("/local/") ? L`<img src=${e.avatar} alt=${e.name} style="width:100%;height:100%;object-fit:cover;" />` : L`${e.avatar ?? e.name[0]}`}
+          ${e.avatar && e.avatar.startsWith("/local/") ? F`<img src=${e.avatar} alt=${e.name} style="width:100%;height:100%;object-fit:cover;" />` : F`${e.avatar ?? e.name[0]}`}
         </div>
         <span class="member-name">${e.name}</span>
         <button
@@ -10630,7 +10646,7 @@ var pa, ma = (pa = class extends V {
         >
           <ha-icon icon=${t ? "mdi:eye-off-outline" : "mdi:eye-outline"}></ha-icon>
         </button>
-        ${e.slug === "household" ? "" : L`<button
+        ${e.slug === "household" ? "" : F`<button
               class="icon-btn change-avatar-btn"
               type="button"
               title="Edit avatar"
@@ -10645,8 +10661,8 @@ var pa, ma = (pa = class extends V {
     `;
 	}
 	render() {
-		if (!this._config) return L``;
-		if (this._familyState !== null && this._familyState.integrationError !== null) return L`
+		if (!this._config) return F``;
+		if (this._familyState !== null && this._familyState.integrationError !== null) return F`
         <div class="error-block">
           Install the Lucarne Family integration first.
           <a href="/config/integrations/dashboard#search=lucarne" target="_blank"
@@ -10654,12 +10670,12 @@ var pa, ma = (pa = class extends V {
           >
         </div>
       `;
-		if (this._familyState === null) return L`<div class="loading">Loading members…</div>`;
+		if (this._familyState === null) return F`<div class="loading">Loading members…</div>`;
 		let { ordered: e, hidden: t } = this._membersModel(), n = e.map((e) => ({
 			key: e.slug,
 			label: e.name
 		}));
-		return L`
+		return F`
       <div class="section-label">General</div>
       <input
         id="ed-title"
@@ -10678,7 +10694,7 @@ var pa, ma = (pa = class extends V {
         ${e.map((e) => this._renderMemberContent(e, t.has(e.slug)))}
       </lucarne-reorder-list>
 
-      ${this._avatarModalMember ? L`<lucarne-avatar-upload-modal
+      ${this._avatarModalMember ? F`<lucarne-avatar-upload-modal
             .hass=${this.hass}
             .memberSlug=${this._avatarModalMember.slug}
             .memberName=${this._avatarModalMember.name}
@@ -10696,7 +10712,7 @@ var pa, ma = (pa = class extends V {
 			["show_tasks", "Show tasks"],
 			["show_streak", "Show streak"],
 			["hide_names", "Hide names"]
-		].map(([e, t]) => L`
+		].map(([e, t]) => F`
           <div class="toggle-row">
             <input
               type="checkbox"
@@ -10740,7 +10756,7 @@ var pa, ma = (pa = class extends V {
       </div>
     `;
 	}
-}, pa.styles = [G, M`
+}, ma = (pa.styles = [G, M`
       :host {
         display: flex;
         flex-direction: column;
