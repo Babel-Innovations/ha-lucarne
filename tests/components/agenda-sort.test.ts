@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { filterAndSortEvents } from '../../src/components/agenda-strip.js';
+import { filterAndSortEvents, splitByDay } from '../../src/components/agenda-strip.js';
 import type { CalendarEvent } from '../../src/shared/types.js';
 
 function makeEvent(start: string, end: string, summary = 'Test'): CalendarEvent {
@@ -79,5 +79,34 @@ describe('filterAndSortEvents', () => {
     const events = [makeEvent('2026-05-21', '2026-05-22', 'AllDayToday')];
     const result = filterAndSortEvents(events, now, 1);
     assert.deepEqual(result.map((e) => e.summary), ['AllDayToday']);
+  });
+});
+
+describe('splitByDay', () => {
+  it('puts events starting tomorrow under tomorrow, all-day and timed alike', () => {
+    const events = [
+      makeEvent('2026-05-21T18:00:00Z', '2026-05-21T19:00:00Z', 'Today'),
+      makeEvent('2026-05-22', '2026-05-23', 'AllDayTomorrow'),
+      makeEvent('2026-05-22T16:00:00Z', '2026-05-22T17:00:00Z', 'TimedTomorrow'),
+    ];
+    const { today, tomorrow } = splitByDay(filterAndSortEvents(events, now, 2), now);
+    assert.deepEqual(today.map((e) => e.summary), ['Today']);
+    assert.deepEqual(tomorrow.map((e) => e.summary), ['AllDayTomorrow', 'TimedTomorrow']);
+  });
+
+  it('keeps an event that started today and runs past midnight under today', () => {
+    // 2026-05-21 23:00 PDT → 2026-05-22 01:00 PDT.
+    const events = [makeEvent('2026-05-22T06:00:00Z', '2026-05-22T08:00:00Z', 'LateShow')];
+    const { today, tomorrow } = splitByDay(events, now);
+    assert.deepEqual(today.map((e) => e.summary), ['LateShow']);
+    assert.deepEqual(tomorrow, []);
+  });
+
+  it('puts an event starting exactly at local midnight under tomorrow', () => {
+    // 2026-05-22 00:00 PDT.
+    const events = [makeEvent('2026-05-22T07:00:00Z', '2026-05-22T08:00:00Z', 'Midnight')];
+    const { today, tomorrow } = splitByDay(events, now);
+    assert.deepEqual(today, []);
+    assert.deepEqual(tomorrow.map((e) => e.summary), ['Midnight']);
   });
 });

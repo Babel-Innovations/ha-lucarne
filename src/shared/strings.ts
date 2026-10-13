@@ -1,5 +1,6 @@
 export const STRINGS = {
   today: 'Today',
+  tomorrow: 'Tomorrow',
   nothingOnCalendar: 'Nothing on the calendar today',
   allDone: 'All done!',
   allDoneForNow: 'All done for now!',
@@ -16,7 +17,6 @@ export const STRINGS = {
   timePillNow: 'now',
   timePillInMinutes: (m: number) => `in ${m}m`,
   timePillInHours: (h: number) => `in ${h}h`,
-  timePillTomorrow: (time: string) => `tomorrow ${time}`,
   errorUnavailable: '—',
   noRoutinesToday: 'no routines today',
   familyReady: (n: number, m: number) => `${n}/${m} ready`,

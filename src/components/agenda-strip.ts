@@ -41,6 +41,23 @@ export function filterAndSortEvents(
     .sort((a, b) => parseEventBoundary(a.start).getTime() - parseEventBoundary(b.start).getTime());
 }
 
+/** Split an already-windowed list at local midnight: an event belongs to the
+ *  day it starts on, so one running past midnight stays under today. */
+export function splitByDay(
+  events: CalendarEvent[],
+  now: Date,
+): { today: CalendarEvent[]; tomorrow: CalendarEvent[] } {
+  const tomorrowStart = new Date(now);
+  tomorrowStart.setHours(0, 0, 0, 0);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const today: CalendarEvent[] = [];
+  const tomorrow: CalendarEvent[] = [];
+  for (const e of events) {
+    (parseEventBoundary(e.start) < tomorrowStart ? today : tomorrow).push(e);
+  }
+  return { today, tomorrow };
+}
+
 function formatTimePill(start: Date, end: Date, now: Date): string {
   const diffMs = start.getTime() - now.getTime();
   const isHappeningNow = start <= now && now < end;
@@ -59,13 +76,10 @@ function formatTimePill(start: Date, end: Date, now: Date): string {
   const timeStr = start.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false });
 
   const sameDay = start.toDateString() === now.toDateString();
-  if (sameDay) return timeStr;
-
+  // Tomorrow's rows sit under the "Tomorrow" divider, which already names the day.
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
-  if (start.toDateString() === tomorrow.toDateString()) {
-    return STRINGS.timePillTomorrow(timeStr);
-  }
+  if (sameDay || start.toDateString() === tomorrow.toDateString()) return timeStr;
 
   const dayName = start.toLocaleDateString('en', { weekday: 'short' });
   return `${dayName} ${timeStr}`;
@@ -114,6 +128,15 @@ export class LucarneAgendaStrip extends LitElement {
       }
       .event-row.past .event-summary {
         text-decoration: line-through;
+      }
+      .day-divider {
+        padding: var(--lucarne-spacing-md) 0 var(--lucarne-spacing-xs);
+        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        font-size: var(--lucarne-fs-sm);
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--lucarne-on-surface-muted);
       }
       .time-pill {
         flex-shrink: 0;
@@ -194,31 +217,38 @@ export class LucarneAgendaStrip extends LitElement {
       return html`<div class="empty-state">${STRINGS.nothingOnCalendar}</div>`;
     }
 
+    const { today, tomorrow } = splitByDay(sorted, now);
     return html`
-      ${sorted.map((event) => {
-        const startDate = parseEventBoundary(event.start);
-        const endDate = parseEventBoundary(event.end);
-        const isNow = startDate <= now && now < endDate;
-        // A timed event that already ended earlier today: keep it visible but
-        // dimmed so it reads as done. All-day events span the whole day, so they
-        // are never treated as past.
-        const isPast = !isAllDay(event) && endDate <= now;
-        const pill = isAllDay(event) ? 'all day' : formatTimePill(startDate, endDate, now);
-        const color = this._colorForEvent(event);
+      ${today.map((event) => this._renderEvent(event, now))}
+      ${tomorrow.length > 0
+        ? html`<div class="day-divider" role="heading" aria-level="3">${STRINGS.tomorrow}</div>`
+        : ''}
+      ${tomorrow.map((event) => this._renderEvent(event, now))}
+    `;
+  }
 
-        return html`
-          <div class="event-row ${isPast ? 'past' : ''}">
-            <div class="time-pill ${isNow ? 'now' : ''}">
-              ${isNow ? html`<span class="pulse-dot"></span>` : ''} ${pill}
-            </div>
-            <div class="color-bar" style="background:${color}"></div>
-            <div class="event-content">
-              <div class="event-summary">${event.summary}</div>
-              ${event.location ? html`<div class="event-secondary">${event.location}</div>` : ''}
-            </div>
-          </div>
-        `;
-      })}
+  private _renderEvent(event: CalendarEvent, now: Date) {
+    const startDate = parseEventBoundary(event.start);
+    const endDate = parseEventBoundary(event.end);
+    const isNow = startDate <= now && now < endDate;
+    // A timed event that already ended earlier today: keep it visible but
+    // dimmed so it reads as done. All-day events span the whole day, so they
+    // are never treated as past.
+    const isPast = !isAllDay(event) && endDate <= now;
+    const pill = isAllDay(event) ? 'all day' : formatTimePill(startDate, endDate, now);
+    const color = this._colorForEvent(event);
+
+    return html`
+      <div class="event-row ${isPast ? 'past' : ''}">
+        <div class="time-pill ${isNow ? 'now' : ''}">
+          ${isNow ? html`<span class="pulse-dot"></span>` : ''} ${pill}
+        </div>
+        <div class="color-bar" style="background:${color}"></div>
+        <div class="event-content">
+          <div class="event-summary">${event.summary}</div>
+          ${event.location ? html`<div class="event-secondary">${event.location}</div>` : ''}
+        </div>
+      </div>
     `;
   }
 
