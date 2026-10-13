@@ -112,6 +112,21 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
         padding: 0;
         overflow: hidden;
       }
+      /* A fixed row count in the Layout tab puts the card in a fixed-height grid
+         cell: fill it, and let the member columns scroll inside (issue #156). */
+      :host([fit-rows]) {
+        height: 100%;
+      }
+      :host([fit-rows]) ha-card {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      :host([fit-rows]) .members-grid {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+      }
       .card-header {
         display: flex;
         align-items: center;

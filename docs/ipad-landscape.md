@@ -63,6 +63,14 @@ each take the remaining space below their header and scroll internally rather th
 (or clipping) the card. The `114px` offset is the dashboard chrome above the card plus the gap
 below it — tune it there if the viewport chrome changes.
 
+That constant applies only while the card's height is **Auto height** in the dashboard's
+Layout tab. A fixed row count there (`grid_options.rows`, or the legacy
+`layout_options.grid_rows`) makes `LucarneCardBase` set a `fit-rows` attribute on the card,
+and all three cards then fill the grid cell Home Assistant sizes for them, scrolling inside it.
+Only a sections view and a view footer size that cell, so a row count left in a card's config
+anywhere else (a masonry or panel view, say) makes the Today and Calendar cards size to their
+content instead of the viewport.
+
 ## Touch targets
 
 All interactive elements (chore checkboxes, calendar nav buttons, visibility pills, create-event
