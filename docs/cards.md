@@ -25,7 +25,8 @@ presence:                           # optional; shows home/away pills in header
   - entity: binary_sensor.ingrid_home
     name: I
 agenda_show_tomorrow: false         # optional, default false; agenda shows today only,
-                                    #   set true to also include tomorrow (scrolls if long)
+                                    #   set true to also include tomorrow under a
+                                    #   "Tomorrow" divider (scrolls if long)
 max_tasks: 5                        # optional, default 5; max ACTIVE tasks shown — extra
                                     #   tasks stay hidden (not scrollable). Crossed-out
                                     #   completions reuse their own slot when
