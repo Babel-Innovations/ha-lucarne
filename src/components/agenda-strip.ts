@@ -73,16 +73,9 @@ function formatTimePill(start: Date, end: Date, now: Date): string {
     return STRINGS.timePillInHours(hrs);
   }
 
-  const timeStr = start.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-  const sameDay = start.toDateString() === now.toDateString();
-  // Tomorrow's rows sit under the "Tomorrow" divider, which already names the day.
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  if (sameDay || start.toDateString() === tomorrow.toDateString()) return timeStr;
-
-  const dayName = start.toLocaleDateString('en', { weekday: 'short' });
-  return `${dayName} ${timeStr}`;
+  // The window ends after tomorrow, whose rows sit under the "Tomorrow" divider,
+  // so the time alone is never ambiguous.
+  return start.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 function isAllDay(event: CalendarEvent): boolean {
@@ -137,6 +130,13 @@ export class LucarneAgendaStrip extends LitElement {
         letter-spacing: 0.05em;
         text-transform: uppercase;
         color: var(--lucarne-on-surface-muted);
+      }
+      /* Nothing on today: the divider leads the list, so there is nothing to rule
+         off. A class, not :first-child — without adoptedStyleSheets Lit's <style>
+         is the shadow root's first child (iPadOS 15). */
+      .day-divider.leading {
+        border-top: none;
+        padding-top: 0;
       }
       .time-pill {
         flex-shrink: 0;
@@ -221,7 +221,7 @@ export class LucarneAgendaStrip extends LitElement {
     return html`
       ${today.map((event) => this._renderEvent(event, now))}
       ${tomorrow.length > 0
-        ? html`<div class="day-divider" role="heading" aria-level="3">${STRINGS.tomorrow}</div>`
+        ? html`<div class="day-divider ${today.length === 0 ? 'leading' : ''}" role="heading" aria-level="3">${STRINGS.tomorrow}</div>`
         : ''}
       ${tomorrow.map((event) => this._renderEvent(event, now))}
     `;

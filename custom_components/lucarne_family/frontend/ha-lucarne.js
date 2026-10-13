@@ -1633,12 +1633,11 @@ function Cn(e, t, n) {
 		let e = Math.round(r / 36e5);
 		return J.timePillInHours(e);
 	}
-	let i = e.toLocaleTimeString("en", {
+	return e.toLocaleTimeString("en", {
 		hour: "2-digit",
 		minute: "2-digit",
 		hour12: !1
-	}), a = e.toDateString() === n.toDateString(), o = new Date(n);
-	return o.setDate(n.getDate() + 1), a || e.toDateString() === o.toDateString() ? i : `${e.toLocaleDateString("en", { weekday: "short" })} ${i}`;
+	});
 }
 function wn(e) {
 	return e.start.length === 10 && e.end.length === 10;
@@ -1653,7 +1652,7 @@ var Tn = (yn = class extends V {
 		let { today: n, tomorrow: r } = Sn(t, e);
 		return F`
       ${n.map((t) => this._renderEvent(t, e))}
-      ${r.length > 0 ? F`<div class="day-divider" role="heading" aria-level="3">${J.tomorrow}</div>` : ""}
+      ${r.length > 0 ? F`<div class="day-divider ${n.length === 0 ? "leading" : ""}" role="heading" aria-level="3">${J.tomorrow}</div>` : ""}
       ${r.map((t) => this._renderEvent(t, e))}
     `;
 	}
@@ -1723,6 +1722,13 @@ var Tn = (yn = class extends V {
         letter-spacing: 0.05em;
         text-transform: uppercase;
         color: var(--lucarne-on-surface-muted);
+      }
+      /* Nothing on today: the divider leads the list, so there is nothing to rule
+         off. A class, not :first-child — without adoptedStyleSheets Lit's <style>
+         is the shadow root's first child (iPadOS 15). */
+      .day-divider.leading {
+        border-top: none;
+        padding-top: 0;
       }
       .time-pill {
         flex-shrink: 0;
