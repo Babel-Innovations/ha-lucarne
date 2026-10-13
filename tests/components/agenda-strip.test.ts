@@ -52,6 +52,16 @@ describe('lucarne-agenda-strip day divider', () => {
     assert.equal(divider.getAttribute('role'), 'heading');
   });
 
+  it('marks the divider as leading only when nothing is on today', async () => {
+    const tomorrowOnly = makeStrip([allDay(1, 'Pay day')], 2);
+    await tomorrowOnly.updateComplete;
+    assert.ok(tomorrowOnly.shadowRoot!.querySelector('.day-divider')!.classList.contains('leading'));
+
+    const both = makeStrip([allDay(0, 'Rates'), allDay(1, 'Pay day')], 2);
+    await both.updateComplete;
+    assert.ok(!both.shadowRoot!.querySelector('.day-divider')!.classList.contains('leading'));
+  });
+
   it('renders no divider when nothing is on tomorrow', async () => {
     const el = makeStrip([allDay(0, 'Rates')], 2);
     await el.updateComplete;
