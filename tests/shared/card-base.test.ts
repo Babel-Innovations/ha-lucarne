@@ -179,3 +179,49 @@ describe('LucarneCardBase config boundary', () => {
     assert.ok(el.shadowRoot?.querySelector('.ok'));
   });
 });
+
+// HA's sections grid gives a card a fixed-height cell only when its rows are a
+// number (`.card.fit-rows` in hui-grid-section); the cards fill that cell
+// instead of sizing to the viewport (issue #156).
+describe('LucarneCardBase fit-rows', () => {
+  const cases: Array<[string, Record<string, unknown>, boolean]> = [
+    ['numeric grid_options.rows', { grid_options: { rows: 5 } }, true],
+    ['auto grid_options.rows', { grid_options: { rows: 'auto' } }, false],
+    ['grid_options without rows', { grid_options: { columns: 6 } }, false],
+    ['no grid_options', {}, false],
+    ['legacy numeric layout_options.grid_rows', { layout_options: { grid_rows: 4 } }, true],
+    ['legacy auto layout_options.grid_rows', { layout_options: { grid_rows: 'auto' } }, false],
+    ['grid_options winning over legacy layout_options', { grid_options: { rows: 'auto' }, layout_options: { grid_rows: 4 } }, false],
+  ];
+  for (const [name, config, expected] of cases) {
+    it(`${expected ? 'sets' : 'omits'} fit-rows for ${name}`, () => {
+      const el = document.createElement('test-ok-card') as OkCard;
+      el.setConfig(config);
+      assert.equal(el.hasAttribute('fit-rows'), expected);
+    });
+  }
+
+  it('drops fit-rows when the user switches back to auto height', () => {
+    const el = document.createElement('test-ok-card') as OkCard;
+    el.setConfig({ grid_options: { rows: 5 } });
+    el.setConfig({ grid_options: { rows: 'auto' } });
+    assert.equal(el.hasAttribute('fit-rows'), false);
+  });
+
+  it('still sets fit-rows when applyConfig fails and the base contains it', () => {
+    // A LucarneConfigError is rethrown and HA swaps in its own error card, so only
+    // a contained failure leaves this element (and its notice) in the cell.
+    class BuggyConfigCard extends LucarneCardBase {
+      protected applyConfig(): void {
+        throw new TypeError('boom in ha-lucarne');
+      }
+      protected renderContent(): unknown {
+        return html``;
+      }
+    }
+    customElements.define('test-buggy-fit-rows-card', BuggyConfigCard);
+    const el = document.createElement('test-buggy-fit-rows-card') as BuggyConfigCard;
+    el.setConfig({ grid_options: { rows: 5 } });
+    assert.equal(el.hasAttribute('fit-rows'), true);
+  });
+});

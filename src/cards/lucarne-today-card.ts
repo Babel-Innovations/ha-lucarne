@@ -98,6 +98,14 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
            fill the remainder below the header. */
         height: var(--lucarne-card-fill-height);
       }
+      /* A fixed row count in the Layout tab puts the card in a fixed-height grid
+         cell: fill that instead of the viewport (issue #156). */
+      :host([fit-rows]) {
+        height: 100%;
+      }
+      :host([fit-rows]) ha-card {
+        height: 100%;
+      }
       .card-header {
         display: flex;
         align-items: center;
