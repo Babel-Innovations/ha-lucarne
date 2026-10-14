@@ -1,7 +1,7 @@
 import { html, css } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
-import { LucarneCardBase, LucarneConfigError } from '../shared/card-base.js';
+import { LucarneCardBase, LucarneConfigError, MAX_GRID_ROWS } from '../shared/card-base.js';
 import { installPreviewColumnOverride, type PreviewOverrideHandle } from '../shared/grid-preview-override.js';
 import { resolveCalendars, resolveCalendarLabel } from '../shared/calendar-helpers.js';
 import { layoutEvents, isoDateKey } from '../shared/calendar-layout.js';
@@ -309,7 +309,7 @@ export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConf
   }
 
   getGridOptions() {
-    return { columns: 9, rows: 'auto', min_columns: 6, max_columns: 12 };
+    return { columns: 9, rows: 'auto', max_rows: MAX_GRID_ROWS, min_columns: 6, max_columns: 12 };
   }
 
   static getConfigElement() {

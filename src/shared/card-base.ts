@@ -32,6 +32,12 @@ export function hasFixedGridRows(config: unknown): boolean {
 }
 
 /**
+ * Top of the Layout tab's row slider. Without a `max_rows` HA caps the slider
+ * at 8 rows, too short for a family's worth of tasks (issue #156).
+ */
+export const MAX_GRID_ROWS = 16;
+
+/**
  * A deliberate, user-facing config validation failure — "you wrote the YAML
  * wrong", not "the card has a bug".
  *

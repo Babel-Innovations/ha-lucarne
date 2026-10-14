@@ -24,6 +24,18 @@ for (const tag of ['lucarne-today-card', 'lucarne-calendar-card', 'lucarne-chore
   });
 }
 
+// HA's row slider falls back to 8 rows without max_rows (issue #156).
+for (const tag of ['lucarne-today-card', 'lucarne-calendar-card', 'lucarne-chores-card']) {
+  describe(`${tag} — grid options`, () => {
+    it('lets the Layout tab slider go past 8 rows', () => {
+      const el = document.createElement(tag) as HTMLElement & {
+        getGridOptions(): { max_rows?: number };
+      };
+      assert.ok((el.getGridOptions().max_rows ?? 0) > 8);
+    });
+  });
+}
+
 describe('lucarne-chores-card — fit-rows scrolling', () => {
   it('lets the member grid shrink into the cell and scroll', () => {
     // Without this rule ha-card's overflow: hidden clips the columns instead.

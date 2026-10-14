@@ -2919,6 +2919,7 @@ var wr = (xr = class extends pt {
 		return {
 			columns: 6,
 			rows: "auto",
+			max_rows: 16,
 			min_columns: 3,
 			max_columns: 6
 		};
@@ -5913,6 +5914,7 @@ var X = (Oi = class extends pt {
 		return {
 			columns: 9,
 			rows: "auto",
+			max_rows: 16,
 			min_columns: 6,
 			max_columns: 12
 		};
@@ -8735,6 +8737,7 @@ var oa = (na = class extends pt {
 		return {
 			columns: 12,
 			rows: "auto",
+			max_rows: 16,
 			min_columns: 6,
 			max_columns: 12
 		};

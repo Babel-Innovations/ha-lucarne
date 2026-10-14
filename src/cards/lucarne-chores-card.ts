@@ -1,7 +1,7 @@
 import { html, css, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
-import { LucarneCardBase, LucarneConfigError } from '../shared/card-base.js';
+import { LucarneCardBase, LucarneConfigError, MAX_GRID_ROWS } from '../shared/card-base.js';
 import type { HomeAssistant, MemberSummary, RenderableTask } from '../shared/types.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
@@ -295,7 +295,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
   }
 
   getGridOptions() {
-    return { columns: 12, rows: 'auto', min_columns: 6, max_columns: 12 };
+    return { columns: 12, rows: 'auto', max_rows: MAX_GRID_ROWS, min_columns: 6, max_columns: 12 };
   }
 
   static getStubConfig() {
