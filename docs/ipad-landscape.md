@@ -64,15 +64,8 @@ rather than stretching (or clipping) the card. The `114px` offset is the dashboa
 card plus the gap below it — tune it there if the viewport chrome changes. The `/wall-ipad`
 dashboard sets the option on both cards.
 
-Without `fill_viewport`, a card at **Auto height** in the dashboard's Layout tab sizes to its
-content, as Home Assistant means that setting. A viewport-derived height is wrong on a desktop
-dashboard: it grows as the page zooms out.
-
-A fixed row count in the Layout tab (`grid_options.rows`, or the legacy
-`layout_options.grid_rows`) overrides both: `LucarneCardBase` sets a `fit-rows` attribute on the
-card, and all three cards fill the grid cell Home Assistant sizes for them, scrolling inside it.
-Only a sections view and a view footer size that cell. The Layout tab's row slider stops at 8 rows;
-a taller cell needs the row count in YAML (`grid_options: { rows: 14 }`).
+Without the option, or with a fixed row count in the Layout tab, the cards size as
+[Card height](cards.md#card-height) describes.
 
 ## Touch targets
 
