@@ -213,10 +213,10 @@ The frontend `family-subscription.ts` subscribes to this event to refresh member
 
 Fired when a task with `source == "apple"` **and a non-empty `apple_uid`** (set by the Apple
 sentinel backfill when the item first appeared) flips to `completed` **and**
-`round_trip.enabled == true` in the Options Flow config. A future subscriber is responsible for
-the POST to the Reminders bridge. See
-[`docs/reminders-bridge.md`](reminders-bridge.md#round-trip-writeback) for the full protocol,
-accessor contract, and why `webhook_url`/`secret` are excluded from the payload.
+`round_trip.enabled == true` in the Options Flow config. Nothing consumes it: the Mac-side
+receiver it was designed for was never built, and the Companion app's two-way Reminders sync
+has superseded the idea — see
+[`docs/reminders-bridge.md`](reminders-bridge.md#round-trip-writeback).
 
 **Payload:**
 
