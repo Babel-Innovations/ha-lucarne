@@ -39,6 +39,8 @@ export interface LucarneCalendarCardConfig {
   render_buffer_days?: number;
   /** When true, forward card errors to a Home Assistant persistent_notification. */
   debug?: boolean;
+  /** When true, Auto height fills the viewport (kiosk layout) instead of sizing to content. */
+  fill_viewport?: boolean;
 }
 
 /** How often (ms) to nudge the view so "now" stays in place as time advances. */
@@ -85,9 +87,13 @@ export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConf
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        /* Fixed outer height shared with the Today card; the grid-area flexes to
-           fill the remainder and scrolls internally (not a min-height — that lets
-           the tall time-grid push the card open instead of capping it). */
+      }
+      /* fill_viewport: a fixed outer height shared with the Today card; the
+         grid-area flexes to fill the remainder and scrolls internally (not a
+         min-height — that lets the tall time-grid push the card open instead of
+         capping it). Without it the card sizes to its content, as Auto height
+         means (issue #156). */
+      :host([fill-viewport]) ha-card {
         height: var(--lucarne-card-fill-height);
       }
       /* A fixed row count in the Layout tab puts the card in a fixed-height grid

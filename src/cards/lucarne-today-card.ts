@@ -62,6 +62,8 @@ export interface LucarneTodayCardConfig {
   section_order?: TodaySectionId[];
   /** When true, forward card errors to a Home Assistant persistent_notification. */
   debug?: boolean;
+  /** When true, Auto height fills the viewport (kiosk layout) instead of sizing to content. */
+  fill_viewport?: boolean;
 }
 
 (window as Window & typeof globalThis & { customCards?: object[] }).customCards =
@@ -94,8 +96,11 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        /* Fixed outer height shared with the Calendar card; the body flexes to
-           fill the remainder below the header. */
+      }
+      /* fill_viewport: a fixed outer height shared with the Calendar card; the
+         body flexes to fill the remainder below the header. Without it the card
+         sizes to its content, as Auto height means (issue #156). */
+      :host([fill-viewport]) ha-card {
         height: var(--lucarne-card-fill-height);
       }
       /* A fixed row count in the Layout tab puts the card in a fixed-height grid

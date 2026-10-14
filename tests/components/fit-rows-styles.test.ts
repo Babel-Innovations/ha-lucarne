@@ -33,3 +33,19 @@ describe('lucarne-chores-card — fit-rows scrolling', () => {
     );
   });
 });
+
+// Auto height must size to content, not to the viewport: only the opt-in
+// fill-viewport attribute may use --lucarne-card-fill-height (issue #156).
+for (const tag of ['lucarne-today-card', 'lucarne-calendar-card']) {
+  describe(`${tag} — auto height`, () => {
+    it('applies the viewport height only under fill-viewport', () => {
+      const css = styleText(tag).replace(/\/\*[\s\S]*?\*\//g, '');
+      const rules = css.match(/[^{}]+\{[^}]*--lucarne-card-fill-height[^}]*\}/g) ?? [];
+      const users = rules.filter((r) => /height:\s*var\(--lucarne-card-fill-height\)/.test(r));
+      assert.ok(users.length > 0, 'some rule applies the viewport height');
+      for (const rule of users) {
+        assert.match(rule.trim(), /^:host\(\[fill-viewport\]\)\s+ha-card\s*\{/);
+      }
+    });
+  });
+}

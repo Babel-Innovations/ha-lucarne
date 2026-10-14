@@ -54,22 +54,25 @@ The cards have no hard-coded `max-width` constraints, so they fill the container
 
 ## Equal card heights
 
-The Today and Calendar cards share a single height constant, `--lucarne-card-fill-height`
-(`calc(100dvh - 114px)`, with a `100vh` fallback), defined once in `design-tokens.ts`. Each
-card applies it as a fixed `height` on its own `ha-card` and lays the card out as a flex column,
-so the two cards line up side by side regardless of their differing header/chrome heights. The
-inner scroll region flexes to fill: the calendar's `.grid-area` and the Today card's `.card-body`
-each take the remaining space below their header and scroll internally rather than stretching
-(or clipping) the card. The `114px` offset is the dashboard chrome above the card plus the gap
-below it — tune it there if the viewport chrome changes.
+With `fill_viewport: true` set on both cards, the Today and Calendar cards share a single height
+constant, `--lucarne-card-fill-height` (`calc(100dvh - 114px)`, with a `100vh` fallback), defined
+once in `design-tokens.ts`. Each card applies it as a fixed `height` on its own `ha-card` and lays
+the card out as a flex column, so the two cards line up side by side regardless of their differing
+header/chrome heights. The inner scroll region flexes to fill: the calendar's `.grid-area` and the
+Today card's `.card-body` each take the remaining space below their header and scroll internally
+rather than stretching (or clipping) the card. The `114px` offset is the dashboard chrome above the
+card plus the gap below it — tune it there if the viewport chrome changes. The `/wall-ipad`
+dashboard sets the option on both cards.
 
-That constant applies only while the card's height is **Auto height** in the dashboard's
-Layout tab. A fixed row count there (`grid_options.rows`, or the legacy
-`layout_options.grid_rows`) makes `LucarneCardBase` set a `fit-rows` attribute on the card,
-and all three cards then fill the grid cell Home Assistant sizes for them, scrolling inside it.
-Only a sections view and a view footer size that cell, so a row count left in a card's config
-anywhere else (a masonry or panel view, say) makes the Today and Calendar cards size to their
-content instead of the viewport.
+Without `fill_viewport`, a card at **Auto height** in the dashboard's Layout tab sizes to its
+content, as Home Assistant means that setting. A viewport-derived height is wrong on a desktop
+dashboard: it grows as the page zooms out.
+
+A fixed row count in the Layout tab (`grid_options.rows`, or the legacy
+`layout_options.grid_rows`) overrides both: `LucarneCardBase` sets a `fit-rows` attribute on the
+card, and all three cards fill the grid cell Home Assistant sizes for them, scrolling inside it.
+Only a sections view and a view footer size that cell. The Layout tab's row slider stops at 8 rows;
+a taller cell needs the row count in YAML (`grid_options: { rows: 14 }`).
 
 ## Touch targets
 

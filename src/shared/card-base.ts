@@ -90,7 +90,12 @@ export abstract class LucarneCardBase<TConfig = unknown> extends LitElement {
     // hass yet at this point, and the reporter buffers until one arrives.
     configureErrorReporter(undefined, (config as { debug?: boolean } | undefined)?.debug);
     // Before applyConfig, so the notice a contained failure renders still fills the cell.
-    this.toggleAttribute('fit-rows', hasFixedGridRows(config));
+    const fitRows = hasFixedGridRows(config);
+    this.toggleAttribute('fit-rows', fitRows);
+    // Auto height sizes to content; the viewport fill is an opt-in for kiosks, and a
+    // fixed row count overrides it because the grid cell then sets the height.
+    const fillViewport = (config as { fill_viewport?: unknown } | undefined)?.fill_viewport === true;
+    this.toggleAttribute('fill-viewport', fillViewport && !fitRows);
     this._configFailure = undefined;
     try {
       this.applyConfig(config);
