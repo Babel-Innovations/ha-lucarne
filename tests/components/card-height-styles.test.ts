@@ -68,6 +68,7 @@ describe('lucarne-chores-card — member grid', () => {
   it('shrinks into a fixed-height cell and scrolls', () => {
     // Without this ha-card's overflow: hidden clips the columns instead.
     const body = rule(styleText('lucarne-chores-card'), '.members-grid');
+    assert.match(body, /flex:\s*1 1 auto/);
     assert.match(body, /min-height:\s*0/);
     assert.match(body, /overflow-y:\s*auto/);
   });

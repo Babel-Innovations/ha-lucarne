@@ -102,8 +102,8 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
         display: flex;
         flex-direction: column;
       }
-      /* fill_viewport: the kiosk layout, sharing its height with the Calendar card. max-height lets a fixed row count win —
-         at Auto height it resolves to none. */
+      /* fill_viewport: the kiosk layout, sharing its height with the Calendar card.
+         max-height lets a fixed row count win — at Auto height it resolves to none. */
       :host([fill-viewport]) ha-card {
         height: var(--lucarne-card-fill-height);
         max-height: 100%;
