@@ -756,7 +756,7 @@ var G = M`
 
     /* Shared OUTER height for the Today + Calendar cards so their ha-card boxes
        line up side by side regardless of differing header/chrome heights. Applied
-       to each card's ha-card; the inner scroll region flexes to fill. The ~114px
+       to each card's ha-card under fill_viewport; the inner scroll region flexes to fill. The ~114px
        offset is the dashboard chrome above the card plus the gap below it. */
     --lucarne-card-fill-height: calc(100vh - 114px);
   }
@@ -795,7 +795,11 @@ var ft = class extends Error {
 	}
 }, pt = class e extends V {
 	setConfig(e) {
-		te(void 0, e == null ? void 0 : e.debug), this.toggleAttribute("fit-rows", dt(e)), this._configFailure = void 0;
+		te(void 0, e == null ? void 0 : e.debug);
+		let t = dt(e);
+		this.toggleAttribute("fit-rows", t);
+		let n = (e == null ? void 0 : e.fill_viewport) === !0;
+		this.toggleAttribute("fill-viewport", n && !t), this._configFailure = void 0;
 		try {
 			this.applyConfig(e);
 		} catch (e) {
@@ -3189,8 +3193,11 @@ var wr = (xr = class extends pt {
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        /* Fixed outer height shared with the Calendar card; the body flexes to
-           fill the remainder below the header. */
+      }
+      /* fill_viewport: a fixed outer height shared with the Calendar card; the
+         body flexes to fill the remainder below the header. Without it the card
+         sizes to its content, as Auto height means (issue #156). */
+      :host([fill-viewport]) ha-card {
         height: var(--lucarne-card-fill-height);
       }
       /* A fixed row count in the Layout tab puts the card in a fixed-height grid
@@ -6203,9 +6210,13 @@ var X = (Oi = class extends pt {
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        /* Fixed outer height shared with the Today card; the grid-area flexes to
-           fill the remainder and scrolls internally (not a min-height — that lets
-           the tall time-grid push the card open instead of capping it). */
+      }
+      /* fill_viewport: a fixed outer height shared with the Today card; the
+         grid-area flexes to fill the remainder and scrolls internally (not a
+         min-height — that lets the tall time-grid push the card open instead of
+         capping it). Without it the card sizes to its content, as Auto height
+         means (issue #156). */
+      :host([fill-viewport]) ha-card {
         height: var(--lucarne-card-fill-height);
       }
       /* A fixed row count in the Layout tab puts the card in a fixed-height grid

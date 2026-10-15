@@ -40,6 +40,9 @@ refill_tasks_on_complete: false     # optional, default false; when false a comp
                                     #   from the backlog. Set true for a rolling list, where
                                     #   the backlog slides up and the crossed row becomes an
                                     #   extra row rather than holding a slot.
+fill_viewport: false                # optional, default false; at Auto height the card sizes
+                                    #   to its content. Set true to fill the viewport instead
+                                    #   (wall-tablet kiosk). See "Card height" below.
 section_order:                      # optional; drag to reorder in the visual editor
   - calendar
   - weather
@@ -111,8 +114,27 @@ max_days: 7             # cap at this many columns even on wide screens
 min_col_width: 140      # refuse to make columns narrower than this (px)
 max_col_width: 220      # show more days if columns would be wider than this (px)
 show_create_button: true  # optional; shows a + button on empty slots
+fill_viewport: false    # optional; see "Card height" below
 # NOTE: week_starts_on is deprecated and silently ignored
 ```
+
+## Card height
+
+In a `sections` view the dashboard's **Layout** tab sets the height of every card:
+
+- **Auto height** (the default): the card sizes to its content. On the Calendar card,
+  `visible_hours` sets how tall the time grid is.
+- **A fixed row count**: the card fills the grid cell and scrolls inside it. The Layout tab's
+  slider stops at 8 rows; set a taller cell in YAML:
+
+  ```yaml
+  grid_options:
+    rows: 14
+  ```
+
+- **`fill_viewport: true`** (Today and Calendar only, at Auto height): the card fills the
+  viewport, and the two cards line up side by side. This suits a wall tablet in kiosk mode,
+  not a desktop browser, where the card grows as the page zooms out.
 
 ## `lucarne-chores-card`
 

@@ -125,10 +125,15 @@ views:
       - type: horizontal-stack
         cards:
           - type: custom:lucarne-today-card
+            fill_viewport: true   # fill the screen and line up with the calendar
             # ...your today-card config (see docs/cards.md)...
           - type: custom:lucarne-calendar-card
+            fill_viewport: true
             # ...your calendar-card config...
 ```
+
+Without `fill_viewport` each card sizes to its content; see
+[Card height](docs/cards.md#card-height).
 
 A panel view shows just this one stack (no badges or extra sections), which is usually exactly what
 you want on a dedicated tablet.
