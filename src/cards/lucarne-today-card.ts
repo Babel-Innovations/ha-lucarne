@@ -1,7 +1,7 @@
 import { html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
-import { LucarneCardBase, LucarneConfigError, MAX_GRID_ROWS } from '../shared/card-base.js';
+import { LucarneCardBase, LucarneConfigError } from '../shared/card-base.js';
 import { fetchCalendarEvents, subscribeTodoItems } from '../shared/ha-subscriptions.js';
 import { clearAway, sinkCompleted } from '../shared/completed-window.js';
 import { installPreviewColumnOverride, type PreviewOverrideHandle } from '../shared/grid-preview-override.js';
@@ -87,29 +87,26 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
       :host {
         display: block;
         width: 100%;
+        height: 100%;
         font-family: var(--primary-font-family, sans-serif);
         container-type: inline-size;
       }
+      /* Fill HA's grid cell: a fixed row count gives it a height, and at Auto
+         height 100% resolves to auto, so the card sizes to its content — the
+         same rule HA's own cards use (issue #156). */
       ha-card {
         width: 100%;
+        height: 100%;
         padding: 0;
         overflow: hidden;
         display: flex;
         flex-direction: column;
       }
-      /* fill_viewport: a fixed outer height shared with the Calendar card; the
-         body flexes to fill the remainder below the header. Without it the card
-         sizes to its content, as Auto height means (issue #156). */
+      /* fill_viewport: the kiosk layout, sharing its height with the Calendar card. max-height lets a fixed row count win —
+         at Auto height it resolves to none. */
       :host([fill-viewport]) ha-card {
         height: var(--lucarne-card-fill-height);
-      }
-      /* A fixed row count in the Layout tab puts the card in a fixed-height grid
-         cell: fill that instead of the viewport (issue #156). */
-      :host([fit-rows]) {
-        height: 100%;
-      }
-      :host([fit-rows]) ha-card {
-        height: 100%;
+        max-height: 100%;
       }
       .card-header {
         display: flex;
@@ -228,7 +225,7 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
   }
 
   getGridOptions() {
-    return { columns: 6, rows: 'auto', max_rows: MAX_GRID_ROWS, min_columns: 3, max_columns: 6 };
+    return { columns: 6, rows: 'auto', min_columns: 3, max_columns: 6 };
   }
 
   connectedCallback() {

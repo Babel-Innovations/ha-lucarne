@@ -13,30 +13,6 @@ type ReporterContext = {
   _config?: { debug?: boolean };
 };
 
-/** The slice of a Lovelace card config that HA's sections grid sizes from. */
-type GridSizedConfig = {
-  grid_options?: { rows?: unknown };
-  layout_options?: { grid_rows?: unknown };
-};
-
-/**
- * True when the user gave the card a fixed row count in the Layout tab. HA's
- * sections grid then wraps it in a fixed-height `.card.fit-rows` cell that the
- * card must fill (issue #156); `"auto"` or no value leaves it content-sized.
- * `layout_options.grid_rows` is the pre-2024.11 spelling HA still honours.
- */
-export function hasFixedGridRows(config: unknown): boolean {
-  const c = config as GridSizedConfig | undefined;
-  const rows = c?.grid_options ? c.grid_options.rows : c?.layout_options?.grid_rows;
-  return typeof rows === 'number';
-}
-
-/**
- * Top of the Layout tab's row slider. Without a `max_rows` HA caps the slider
- * at 8 rows, too short for a family's worth of tasks (issue #156).
- */
-export const MAX_GRID_ROWS = 16;
-
 /**
  * A deliberate, user-facing config validation failure — "you wrote the YAML
  * wrong", not "the card has a bug".
@@ -95,13 +71,9 @@ export abstract class LucarneCardBase<TConfig = unknown> extends LitElement {
     // still forwarded. Passing `undefined` for hass is deliberate: there is no
     // hass yet at this point, and the reporter buffers until one arrives.
     configureErrorReporter(undefined, (config as { debug?: boolean } | undefined)?.debug);
-    // Before applyConfig, so the notice a contained failure renders still fills the cell.
-    const fitRows = hasFixedGridRows(config);
-    this.toggleAttribute('fit-rows', fitRows);
-    // Auto height sizes to content; the viewport fill is an opt-in for kiosks, and a
-    // fixed row count overrides it because the grid cell then sets the height.
+    // Before applyConfig, so the notice a contained failure renders is sized the same.
     const fillViewport = (config as { fill_viewport?: unknown } | undefined)?.fill_viewport === true;
-    this.toggleAttribute('fill-viewport', fillViewport && !fitRows);
+    this.toggleAttribute('fill-viewport', fillViewport);
     this._configFailure = undefined;
     try {
       this.applyConfig(config);

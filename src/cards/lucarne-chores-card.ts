@@ -1,7 +1,7 @@
 import { html, css, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
-import { LucarneCardBase, LucarneConfigError, MAX_GRID_ROWS } from '../shared/card-base.js';
+import { LucarneCardBase, LucarneConfigError } from '../shared/card-base.js';
 import type { HomeAssistant, MemberSummary, RenderableTask } from '../shared/types.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
@@ -106,26 +106,18 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
     css`
       :host {
         display: block;
+        height: 100%;
         font-family: var(--primary-font-family, sans-serif);
       }
+      /* Fill HA's grid cell: a fixed row count gives it a height, and at Auto
+         height 100% resolves to auto, so the card sizes to its content — the
+         same rule HA's own cards use (issue #156). */
       ha-card {
+        height: 100%;
         padding: 0;
         overflow: hidden;
-      }
-      /* A fixed row count in the Layout tab puts the card in a fixed-height grid
-         cell: fill it, and let the member columns scroll inside (issue #156). */
-      :host([fit-rows]) {
-        height: 100%;
-      }
-      :host([fit-rows]) ha-card {
-        height: 100%;
         display: flex;
         flex-direction: column;
-      }
-      :host([fit-rows]) .members-grid {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
       }
       .card-header {
         display: flex;
@@ -143,8 +135,12 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
         display: flex;
         flex-direction: row;
         flex-wrap: nowrap;
+        /* Shrink into a fixed-height cell and scroll there, rather than being
+           clipped by ha-card. */
+        flex: 1 1 auto;
+        min-height: 0;
         overflow-x: auto;
-        overflow-y: hidden;
+        overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         scroll-snap-type: x proximity;
       }
@@ -168,8 +164,6 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
       @media (max-width: 600px) {
         .members-grid {
           flex-direction: column;
-          overflow-x: visible;
-          overflow-y: visible;
           scroll-snap-type: none;
         }
         .member-cell {
@@ -295,7 +289,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
   }
 
   getGridOptions() {
-    return { columns: 12, rows: 'auto', max_rows: MAX_GRID_ROWS, min_columns: 6, max_columns: 12 };
+    return { columns: 12, rows: 'auto', min_columns: 6, max_columns: 12 };
   }
 
   static getStubConfig() {

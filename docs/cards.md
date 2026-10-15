@@ -124,12 +124,19 @@ In a `sections` view the dashboard's **Layout** tab sets the height of every car
 
 - **Auto height** (the default): the card sizes to its content. On the Calendar card,
   `visible_hours` sets how tall the time grid is.
-- **A fixed row count**: the card fills the grid cell and scrolls inside it. The Layout tab's
-  slider goes up to 16 rows.
+- **A fixed row count**: the card fills the grid cell and scrolls inside it. Home Assistant's
+  Layout tab slider stops at 8 rows for every card; for a taller card, set the count in the
+  card's YAML (**Show code editor**):
 
-- **`fill_viewport: true`** (Today and Calendar only, at Auto height): the card fills the
+  ```yaml
+  grid_options:
+    rows: 14
+  ```
+
+- **`fill_viewport: true`** (Today and Calendar only): at Auto height the card fills the
   viewport, and the two cards line up side by side. This suits a wall tablet in kiosk mode,
-  not a desktop browser, where the card grows as the page zooms out.
+  not a desktop browser, where the card grows as the page zooms out. A fixed row count still
+  wins: the card never grows past its grid cell.
 
 ## `lucarne-chores-card`
 
