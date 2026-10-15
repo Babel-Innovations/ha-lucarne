@@ -132,17 +132,18 @@ export class LucarneMemberColumn extends LitElement {
     .add-task-btn:hover {
       background: rgba(0, 0, 0, 0.04);
     }
-    /* Scrollable list region: flex:1 pushes the streak to the bottom of every
-       column (so streaks align across equal-height columns), and the cap makes
-       an overlong list scroll internally instead of stretching the card. */
+    /* List region: flex:1 pushes the streak to the bottom of every column (so
+       streaks align across equal-height columns). At Auto height the list shows
+       every task; in a fixed-height grid cell it shrinks to fit and scrolls, but
+       never below about two tasks, so a short cell scrolls the card instead of
+       hiding the list (issue #156). */
     .lists {
       display: flex;
       flex-direction: column;
       gap: 4px;
       flex: 1 1 auto;
-      min-height: 0;
+      min-height: 112px;
       overflow-y: auto;
-      max-height: var(--lucarne-chores-list-max-height, 420px);
     }
     .section {
       display: flex;

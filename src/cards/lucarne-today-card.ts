@@ -225,7 +225,8 @@ export class LucarneTodayCard extends LucarneCardBase<LucarneTodayCardConfig> {
   }
 
   getGridOptions() {
-    return { columns: 6, rows: 'auto', min_columns: 3, max_columns: 6 };
+    // min_rows: HA clamps a fixed row count up to it (header plus one section).
+    return { columns: 6, rows: 'auto', min_rows: 3, min_columns: 3, max_columns: 6 };
   }
 
   connectedCallback() {

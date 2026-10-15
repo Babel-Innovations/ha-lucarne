@@ -306,7 +306,8 @@ export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConf
   }
 
   getGridOptions() {
-    return { columns: 9, rows: 'auto', min_columns: 6, max_columns: 12 };
+    // min_rows: HA clamps a fixed row count up to it (header, pills, a few hours).
+    return { columns: 9, rows: 'auto', min_rows: 4, min_columns: 6, max_columns: 12 };
   }
 
   static getConfigElement() {

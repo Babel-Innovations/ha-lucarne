@@ -289,7 +289,9 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
   }
 
   getGridOptions() {
-    return { columns: 12, rows: 'auto', min_columns: 6, max_columns: 12 };
+    // min_rows: HA clamps a fixed row count up to it, so avatars, a few tasks per
+    // list and the streaks fit without scrolling the whole card (issue #156).
+    return { columns: 12, rows: 'auto', min_rows: 7, min_columns: 6, max_columns: 12 };
   }
 
   static getStubConfig() {
