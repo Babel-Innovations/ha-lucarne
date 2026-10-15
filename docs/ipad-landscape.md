@@ -27,6 +27,9 @@ uses Lovelace's `panel: false` (default) with a grid layout:
   available width (680 px after the 40 px time gutter, 680÷220=3.1→4 min-fitting, 680÷140=4.86→4 max-fitting).
 - **Chores tab**: `lucarne-chores-card` full-width. Three kids render in a `auto-fit minmax(200px,
   1fr)` grid → 3 columns at 1080 px (each ≈ 360 px), 4 columns if a fourth kid is added.
+  It sets `grid_options: rows: 11` so each kid's list scrolls on its own and the card fills the
+  screen: 810 px less the [114 px offset](#equal-card-heights) leaves 696 px, and (696 + 8) ÷ 64 = 11 rows
+  (see [Card height](cards.md#card-height)).
 
 ## Typography scaling
 
