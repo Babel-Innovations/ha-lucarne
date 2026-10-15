@@ -79,7 +79,7 @@ export const lucarneStyles = css`
 
     /* Shared OUTER height for the Today + Calendar cards so their ha-card boxes
        line up side by side regardless of differing header/chrome heights. Applied
-       to each card's ha-card; the inner scroll region flexes to fill. The ~114px
+       to each card's ha-card under fill_viewport; the inner scroll region flexes to fill. The ~114px
        offset is the dashboard chrome above the card plus the gap below it. */
     --lucarne-card-fill-height: calc(100vh - 114px);
   }

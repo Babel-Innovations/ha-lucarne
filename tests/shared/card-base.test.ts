@@ -225,3 +225,30 @@ describe('LucarneCardBase fit-rows', () => {
     assert.equal(el.hasAttribute('fit-rows'), true);
   });
 });
+
+// Auto height sizes a card to its content, as HA means it; `fill_viewport: true`
+// opts back into the viewport-tall kiosk layout. A fixed row count still wins,
+// because the grid cell then sets the height (issue #156).
+describe('LucarneCardBase fill-viewport', () => {
+  const cases: Array<[string, Record<string, unknown>, boolean]> = [
+    ['no fill_viewport', {}, false],
+    ['fill_viewport: false', { fill_viewport: false }, false],
+    ['fill_viewport: true', { fill_viewport: true }, true],
+    ['fill_viewport: true with auto rows', { fill_viewport: true, grid_options: { rows: 'auto' } }, true],
+    ['fill_viewport: true with a fixed row count', { fill_viewport: true, grid_options: { rows: 8 } }, false],
+  ];
+  for (const [name, config, expected] of cases) {
+    it(`${expected ? 'sets' : 'omits'} fill-viewport for ${name}`, () => {
+      const el = document.createElement('test-ok-card') as OkCard;
+      el.setConfig(config);
+      assert.equal(el.hasAttribute('fill-viewport'), expected);
+    });
+  }
+
+  it('drops fill-viewport when the option is removed', () => {
+    const el = document.createElement('test-ok-card') as OkCard;
+    el.setConfig({ fill_viewport: true });
+    el.setConfig({});
+    assert.equal(el.hasAttribute('fill-viewport'), false);
+  });
+});

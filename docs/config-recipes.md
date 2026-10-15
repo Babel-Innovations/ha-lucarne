@@ -25,6 +25,7 @@ views:
       # Devices & services → Entities.
       - type: custom:lucarne-today-card
         title: Today
+        fill_viewport: true  # fill the screen and line up with the calendar
         calendars:
           - entity: calendar.family
             color: "#a8d8b9"
@@ -42,6 +43,7 @@ views:
 
       - type: custom:lucarne-calendar-card
         title: Calendar
+        fill_viewport: true
         calendars:
           - entity: calendar.family
             color: "#a8d8b9"
