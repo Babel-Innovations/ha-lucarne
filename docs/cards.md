@@ -123,18 +123,28 @@ fill_viewport: false    # optional; see "Card height" below
 In a `sections` view the dashboard's **Layout** tab sets the height of every card:
 
 - **Auto height** (the default): the card sizes to its content. On the Calendar card,
-  `visible_hours` sets how tall the time grid is.
-- **A fixed row count**: the card fills the grid cell and scrolls inside it. The Layout tab's
-  slider stops at 8 rows; set a taller cell in YAML:
+  `visible_hours` sets how tall the time grid is; on the Chores card every member's full
+  list shows, so a long list makes a tall card.
+- **A fixed row count**: the card fills the grid cell and scrolls inside it. On the Chores
+  card each member's list scrolls on its own, with the streaks pinned at the bottom; on a
+  wall tablet, this is how to keep a long Chores card to one screen. Each card has a minimum
+  (Today 3 rows, Calendar 4, Chores 7), and Home Assistant raises a smaller count to it.
+  The Layout tab slider stops at 8 rows for every card; for a taller card, set the count in
+  the card's YAML (**Show code editor**):
 
   ```yaml
   grid_options:
     rows: 14
   ```
 
-- **`fill_viewport: true`** (Today and Calendar only, at Auto height): the card fills the
+  A row is 56px plus an 8px gap, so N rows are `N × 64 − 8` px tall. To fill a screen, take
+  the height left for the card and round `(height + 8) ÷ 64` down. The
+  [iPad landscape](ipad-landscape.md#dashboard-layout) layout is a worked example.
+
+- **`fill_viewport: true`** (Today and Calendar only): at Auto height the card fills the
   viewport, and the two cards line up side by side. This suits a wall tablet in kiosk mode,
-  not a desktop browser, where the card grows as the page zooms out.
+  not a desktop browser, where the card grows as the page zooms out. A fixed row count still
+  wins: the card never grows past its grid cell.
 
 ## `lucarne-chores-card`
 

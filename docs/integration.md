@@ -347,8 +347,8 @@ show them.
 - **Groups tasks by time of day**: routines *and* chores are bucketed into Morning →
   Afternoon → Night → Anytime sections by their `time_of_day`. A chore tagged `morning`
   shows under **Morning** alongside routines (there is no separate "Tasks" section).
-- **Pins the streak** to the bottom of every column (columns share a height) and scrolls
-  an over-long list internally so the streak stays visible.
+- **Pins the streak** to the bottom of every column (columns share a height); for how lists
+  size and scroll, see [Card height](cards.md#card-height).
 - **+ Add task**: a top-right **+** icon opens an inline popover that calls
   `lucarne_family.add_task`.
 - **Tap a task**: calls `todo.update_item` to toggle `needs_action ↔ completed`.

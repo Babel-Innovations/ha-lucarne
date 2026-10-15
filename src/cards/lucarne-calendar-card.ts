@@ -80,29 +80,26 @@ export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConf
     css`
       :host {
         display: block;
+        height: 100%;
         font-family: var(--primary-font-family, sans-serif);
       }
+      /* Fill HA's grid cell: a fixed row count gives it a height, and at Auto
+         height 100% resolves to auto, so the card sizes to its content — the
+         same rule HA's own cards use (issue #156). */
       ha-card {
+        height: 100%;
         padding: 0;
         overflow: hidden;
         display: flex;
         flex-direction: column;
       }
-      /* fill_viewport: a fixed outer height shared with the Today card; the
-         grid-area flexes to fill the remainder and scrolls internally (not a
-         min-height — that lets the tall time-grid push the card open instead of
-         capping it). Without it the card sizes to its content, as Auto height
-         means (issue #156). */
+      /* fill_viewport: the kiosk layout, sharing its height with the Today card.
+         A height, not a min-height, which would let the tall time grid push the
+         card open. max-height lets a fixed row count win — at Auto height it
+         resolves to none. */
       :host([fill-viewport]) ha-card {
         height: var(--lucarne-card-fill-height);
-      }
-      /* A fixed row count in the Layout tab puts the card in a fixed-height grid
-         cell: fill that instead of the viewport (issue #156). */
-      :host([fit-rows]) {
-        height: 100%;
-      }
-      :host([fit-rows]) ha-card {
-        height: 100%;
+        max-height: 100%;
       }
       .card-header {
         display: flex;
@@ -309,7 +306,8 @@ export class LucarneCalendarCard extends LucarneCardBase<LucarneCalendarCardConf
   }
 
   getGridOptions() {
-    return { columns: 9, rows: 'auto', min_columns: 6, max_columns: 12 };
+    // min_rows: HA clamps a fixed row count up to it (header, pills, a few hours).
+    return { columns: 9, rows: 'auto', min_rows: 4, min_columns: 6, max_columns: 12 };
   }
 
   static getConfigElement() {
