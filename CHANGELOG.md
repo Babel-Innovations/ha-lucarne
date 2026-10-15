@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.7.0 — 2026-10-15
+
+**Features:**
+-  divide tomorrow's agenda events under a header (fixes #157)
+
+**Fixes:**
+-  fill HA's grid cell, show every chore, set min_rows (#156)
+-  size Today and Calendar to content at Auto height (#156)
+-  fill the grid cell when the Layout tab sets a row count (fixes #156)
+
+
 ## v1.6.0 — 2026-10-09
 
 **Features:**
