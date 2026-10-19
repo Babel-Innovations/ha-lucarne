@@ -108,6 +108,7 @@ def default_task_metadata(
         "time_of_day": "anytime",
         "rotation_owners": "",
         "current_owner": "",
+        "points": 0,
     }
 
 

@@ -1,4 +1,5 @@
 import { css } from 'lit';
+import { themedCheckboxStyles } from './form-control-styles.js';
 
 export const editorBaseStyles = css`
   :host {
@@ -38,42 +39,7 @@ export const editorBaseStyles = css`
     flex-shrink: 0;
     margin: 0;
   }
-  /* Custom checkbox: the native control follows the OS color-scheme and renders
-     as a black box on a light HA theme when the OS is dark. Render it ourselves
-     from theme tokens so it matches the card surface + accent. (Same treatment
-     the chores editor applies to its own checkboxes.) */
-  input[type='checkbox'] {
-    appearance: none;
-    -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    flex-shrink: 0;
-    position: relative;
-    cursor: pointer;
-    border: 2px solid var(--lucarne-on-surface-muted, #727272);
-    border-radius: 4px;
-    background: var(--lucarne-surface, var(--ha-card-background, #fff));
-  }
-  input[type='checkbox']:checked {
-    background: var(--primary-color, #03a9f4);
-    border-color: var(--primary-color, #03a9f4);
-  }
-  input[type='checkbox']:checked::after {
-    content: '';
-    position: absolute;
-    left: 4px;
-    top: 1px;
-    width: 4px;
-    height: 8px;
-    border: solid #fff;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-  }
-  input[type='checkbox']:focus-visible {
-    outline: 2px solid var(--primary-color, #03a9f4);
-    outline-offset: 1px;
-  }
+  ${themedCheckboxStyles}
   .field-label {
     font-size: var(--lucarne-fs-sm);
     color: var(--lucarne-on-surface-muted);

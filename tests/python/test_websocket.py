@@ -288,3 +288,65 @@ async def test_get_family_skips_members_whose_todo_entity_is_missing(
     assert msg["success"] is True
     slugs = [m["slug"] for m in msg["result"]["members"]]
     assert slugs == ["anna"], "the member with a missing todo entity is filtered out"
+
+
+async def _rewards_setup(hass: HomeAssistant, tmp_path: Path) -> LucarneFamilyStore:
+    members = [
+        Member(
+            slug=slug, name=slug.capitalize(), color="#ff0000", avatar=None,
+            created_at=datetime.now(UTC), preset="school-age",
+            todo_entity_id=f"todo.{slug}", streak_counter_id="",
+        ).to_dict()
+        for slug in ("anna", "bob")
+    ]
+    entry = _make_entry(hass, members=members)
+    store = await _make_store(hass, entry.entry_id, tmp_path)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store}
+    async_register_websocket_commands(hass)
+    return store
+
+
+async def test_get_rewards_is_admin_flag_and_zero_balances(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    hass_read_only_access_token: str,
+    tmp_path: Path,
+) -> None:
+    await _rewards_setup(hass, tmp_path)
+
+    ws = await hass_ws_client(hass, hass_read_only_access_token)
+    await ws.send_json({"id": 1, "type": "lucarne_family/get_rewards"})
+    msg = await ws.receive_json()
+    assert msg["success"] is True
+    assert msg["result"]["is_admin"] is False
+    assert msg["result"]["balances"] == {"anna": 0, "bob": 0}
+    assert "history" not in msg["result"]
+    assert msg["result"]["rewards"] == [] and msg["result"]["claims"] == []
+
+    admin_ws = await hass_ws_client(hass)
+    await admin_ws.send_json({"id": 1, "type": "lucarne_family/get_rewards"})
+    assert (await admin_ws.receive_json())["result"]["is_admin"] is True
+
+
+async def test_get_rewards_history_newest_first(
+    hass: HomeAssistant, hass_ws_client: Any, tmp_path: Path
+) -> None:
+    store = await _rewards_setup(hass, tmp_path)
+    async with store.rewards_lock:
+        await store.async_ledger_grant("anna", 2, "first", None)
+        await store.async_ledger_grant("anna", 3, "second", None)
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "lucarne_family/get_rewards", "history_limit": 10})
+    result = (await ws.receive_json())["result"]
+
+    assert result["balances"]["anna"] == 5
+    assert [h["reason"] for h in result["history"]] == ["second", "first"]
+    assert result["history"][0]["actor_name"] is None
+    assert "actor_user_id" not in result["history"][0]
+
+
+def test_relay_forwards_rewards_updated() -> None:
+    from custom_components.lucarne_family.websocket_api import LUCARNE_FRONTEND_EVENTS
+
+    assert "lucarne_family_rewards_updated" in LUCARNE_FRONTEND_EVENTS

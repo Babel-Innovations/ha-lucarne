@@ -12,6 +12,8 @@ export interface AddTaskParams {
   time_of_day?: TimeOfDay;
   rotation_owners?: string[];
   current_owner?: string;
+  /** Admin-only: a non-admin caller must leave this undefined so the key is never sent. */
+  points?: number;
 }
 
 /**
@@ -40,6 +42,7 @@ export async function addTask(
   if (params.time_of_day !== undefined) serviceData.time_of_day = params.time_of_day;
   if (params.rotation_owners !== undefined) serviceData.rotation_owners = params.rotation_owners;
   if (params.current_owner !== undefined) serviceData.current_owner = params.current_owner;
+  if (params.points !== undefined) serviceData.points = params.points;
 
   // Invoke as a method on `hass` so the receiver binding is preserved — the
   // live HA frontend's callService may rely on `this`.
@@ -62,6 +65,8 @@ export interface UpdateTaskMetadataFields {
   time_of_day?: TimeOfDay;
   rotation_owners?: string[];
   current_owner?: string;
+  /** Admin-only: presence of the key triggers the server's admin gate. */
+  points?: number;
 }
 
 export async function updateTaskMetadata(
@@ -77,6 +82,7 @@ export async function updateTaskMetadata(
   if (fields.time_of_day !== undefined) serviceData.time_of_day = fields.time_of_day;
   if (fields.rotation_owners !== undefined) serviceData.rotation_owners = fields.rotation_owners;
   if (fields.current_owner !== undefined) serviceData.current_owner = fields.current_owner;
+  if (fields.points !== undefined) serviceData.points = fields.points;
 
   await hass.callService('lucarne_family', 'update_task_metadata', serviceData);
 }
@@ -114,4 +120,95 @@ export async function setMemberAvatar(
     member: memberSlug,
     avatar,
   });
+}
+
+export async function grantPoints(
+  hass: HomeAssistant,
+  member: string,
+  points: number,
+  reason?: string,
+): Promise<void> {
+  const serviceData: Record<string, unknown> = { member, points };
+  if (reason !== undefined) serviceData.reason = reason;
+  await hass.callService('lucarne_family', 'grant_points', serviceData);
+}
+
+export async function createReward(
+  hass: HomeAssistant,
+  f: { name: string; cost: number; description?: string; poolable?: boolean },
+): Promise<{ id: number }> {
+  const serviceData: Record<string, unknown> = { name: f.name, cost: f.cost };
+  if (f.description !== undefined) serviceData.description = f.description;
+  if (f.poolable !== undefined) serviceData.poolable = f.poolable;
+  const result = await hass.callService<{ id: number }>(
+    'lucarne_family',
+    'create_reward',
+    serviceData,
+    undefined,
+    true,
+    true,
+  );
+  return result?.response ?? { id: -1 };
+}
+
+export async function updateReward(
+  hass: HomeAssistant,
+  rewardId: number,
+  f: Partial<{ name: string; cost: number; description: string; poolable: boolean }>,
+): Promise<void> {
+  const serviceData: Record<string, unknown> = { reward_id: rewardId };
+  if (f.name !== undefined) serviceData.name = f.name;
+  if (f.cost !== undefined) serviceData.cost = f.cost;
+  if (f.description !== undefined) serviceData.description = f.description;
+  if (f.poolable !== undefined) serviceData.poolable = f.poolable;
+  await hass.callService('lucarne_family', 'update_reward', serviceData);
+}
+
+export async function archiveReward(hass: HomeAssistant, rewardId: number): Promise<void> {
+  await hass.callService('lucarne_family', 'archive_reward', { reward_id: rewardId });
+}
+
+export async function setRewardsSettings(
+  hass: HomeAssistant,
+  s: { streak_daily_bonus?: number; streak_milestones?: Array<{ days: number; points: number }> },
+): Promise<void> {
+  const serviceData: Record<string, unknown> = {};
+  if (s.streak_daily_bonus !== undefined) serviceData.streak_daily_bonus = s.streak_daily_bonus;
+  if (s.streak_milestones !== undefined) serviceData.streak_milestones = s.streak_milestones;
+  await hass.callService('lucarne_family', 'set_rewards_settings', serviceData);
+}
+
+export async function claimReward(
+  hass: HomeAssistant,
+  member: string,
+  rewardId: number,
+  poolWith?: string[],
+): Promise<{ claim_id: number; shares: Record<string, number> }> {
+  const serviceData: Record<string, unknown> = { member, reward_id: rewardId };
+  if (poolWith !== undefined) serviceData.pool_with = poolWith;
+  const result = await hass.callService<{ claim_id: number; shares: Record<string, number> }>(
+    'lucarne_family',
+    'claim_reward',
+    serviceData,
+    undefined,
+    true,
+    true,
+  );
+  return result?.response ?? { claim_id: -1, shares: {} };
+}
+
+export async function cancelClaim(hass: HomeAssistant, claimId: number): Promise<void> {
+  await hass.callService('lucarne_family', 'cancel_claim', { claim_id: claimId });
+}
+
+export async function approveClaim(hass: HomeAssistant, claimId: number): Promise<void> {
+  await hass.callService('lucarne_family', 'approve_claim', { claim_id: claimId });
+}
+
+export async function rejectClaim(hass: HomeAssistant, claimId: number): Promise<void> {
+  await hass.callService('lucarne_family', 'reject_claim', { claim_id: claimId });
+}
+
+export async function refundClaim(hass: HomeAssistant, claimId: number): Promise<void> {
+  await hass.callService('lucarne_family', 'refund_claim', { claim_id: claimId });
 }

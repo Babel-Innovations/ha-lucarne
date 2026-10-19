@@ -86,6 +86,17 @@ add_task:
         first entry in rotation_owners when not provided.
       selector:
         text:
+    points:
+      name: Points
+      description: >-
+        Points earned when the task is completed (0-1000). Requires an HA
+        administrator, or a call with no user (automation or script).
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 1
+          mode: box
 
 update_task_metadata:
   name: Update Task Metadata
@@ -151,6 +162,17 @@ update_task_metadata:
       description: New current owner slug for a rotating task. Must be in rotation_owners.
       selector:
         text:
+    points:
+      name: Points
+      description: >-
+        Points earned when the task is completed (0-1000). Requires an HA
+        administrator, or a call with no user (automation or script).
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 1
+          mode: box
 
 delete_task:
   name: Delete Task
@@ -233,3 +255,207 @@ set_member_avatar:
       required: true
       selector:
         text:
+
+grant_points:
+  name: Grant Points
+  description: Give a member bonus points. Requires an HA administrator, or a call with no user.
+  fields:
+    member:
+      name: Member
+      description: Family member slug.
+      required: true
+      selector:
+        text:
+    points:
+      name: Points
+      description: Points to grant (1-10000).
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 10000
+          step: 1
+          mode: box
+    reason:
+      name: Reason
+      description: Optional note shown in the history (max 200 characters).
+      selector:
+        text:
+
+create_reward:
+  name: Create Reward
+  description: Add a reward to the catalog. Requires an HA administrator, or a call with no user.
+  fields:
+    name:
+      name: Name
+      description: Reward name (1-60 characters).
+      required: true
+      selector:
+        text:
+    cost:
+      name: Cost
+      description: Cost in points (1-100000).
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 100000
+          step: 1
+          mode: box
+    description:
+      name: Description
+      description: Optional text (max 500 characters).
+      selector:
+        text:
+    poolable:
+      name: Poolable
+      description: Whether several members can pool points for it.
+      default: false
+      selector:
+        boolean:
+
+update_reward:
+  name: Update Reward
+  description: Change an active reward. Existing claims keep their snapshot. Requires an HA administrator, or a call with no user.
+  fields:
+    reward_id:
+      name: Reward ID
+      description: Id of the reward.
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+    name:
+      name: Name
+      description: Reward name (1-60 characters).
+      selector:
+        text:
+    cost:
+      name: Cost
+      description: Cost in points (1-100000).
+      selector:
+        number:
+          min: 1
+          max: 100000
+          step: 1
+          mode: box
+    description:
+      name: Description
+      description: Text (max 500 characters).
+      selector:
+        text:
+    poolable:
+      name: Poolable
+      description: Whether several members can pool points for it.
+      selector:
+        boolean:
+
+archive_reward:
+  name: Archive Reward
+  description: Hide a reward from the catalog. Pending claims on it can still be resolved. Requires an HA administrator, or a call with no user.
+  fields:
+    reward_id:
+      name: Reward ID
+      description: Id of the reward.
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+
+set_rewards_settings:
+  name: Set Rewards Settings
+  description: Set the family-wide streak bonuses. Omitted fields stay unchanged. Requires an HA administrator, or a call with no user.
+  fields:
+    streak_daily_bonus:
+      name: Daily streak bonus
+      description: Points for every day the streak counts (0 disables it).
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 1
+          mode: box
+    streak_milestones:
+      name: Streak milestones
+      description: List of {days, points}; each pays once when the streak crosses it.
+      selector:
+        object:
+
+claim_reward:
+  name: Claim Reward
+  description: Reserve the points for a reward, alone or pooled with other members. A parent approves or rejects it afterwards.
+  fields:
+    member:
+      name: Member
+      description: Family member slug of the claimer.
+      required: true
+      selector:
+        text:
+    reward_id:
+      name: Reward ID
+      description: Id of the reward.
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+    pool_with:
+      name: Pool with
+      description: Other member slugs sharing the cost (poolable rewards only).
+      selector:
+        text:
+          multiple: true
+
+cancel_claim:
+  name: Cancel Claim
+  description: Cancel a pending claim and give the points back.
+  fields:
+    claim_id:
+      name: Claim ID
+      description: Id of the claim.
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+
+approve_claim:
+  name: Approve Claim
+  description: Approve a pending claim; the reserved points become spent. Requires an HA administrator, or a call with no user.
+  fields:
+    claim_id:
+      name: Claim ID
+      description: Id of the claim.
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+
+reject_claim:
+  name: Reject Claim
+  description: Reject a pending claim and give the points back. Requires an HA administrator, or a call with no user.
+  fields:
+    claim_id:
+      name: Claim ID
+      description: Id of the claim.
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+
+refund_claim:
+  name: Refund Claim
+  description: Refund an approved claim and give the points back. Requires an HA administrator, or a call with no user.
+  fields:
+    claim_id:
+      name: Claim ID
+      description: Id of the claim.
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box

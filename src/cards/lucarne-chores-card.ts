@@ -2,9 +2,11 @@ import { html, css, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { lucarneStyles } from '../shared/design-tokens.js';
 import { LucarneCardBase, LucarneConfigError } from '../shared/card-base.js';
-import type { HomeAssistant, MemberSummary, RenderableTask } from '../shared/types.js';
+import type { HomeAssistant, MemberSummary, RenderableTask, RewardClaim, RewardsState } from '../shared/types.js';
 import { subscribeFamilyState, SYNTHETIC_HOUSEHOLD } from '../shared/family-subscription.js';
 import type { FamilyState } from '../shared/family-subscription.js';
+import { RewardsOverlay } from '../shared/rewards-optimistic.js';
+import { affordableRewards } from '../shared/rewards-math.js';
 import { parseRRule, isRoutineDueToday } from '../shared/recurrence.js';
 import {
   currentScrollBucket,
@@ -15,6 +17,7 @@ import {
 import '../components/member-column.js';
 import '../components/add-task-popover.js';
 import '../components/edit-task-popover.js';
+import '../components/rewards-modal.js';
 import { markBoot } from '../shared/boot-marks.js';
 
 export interface LucarneChoresCardConfig {
@@ -26,6 +29,8 @@ export interface LucarneChoresCardConfig {
   show_routines?: boolean;
   show_tasks?: boolean;
   show_streak?: boolean;
+  /** Balance pill and rewards modal on each member column. Default true. */
+  show_rewards?: boolean;
   hide_names?: boolean;
   /** Auto-scroll each column to the current time-of-day section. Default true. */
   auto_scroll?: boolean;
@@ -82,6 +87,7 @@ function editMatches(real: RenderableTask, opt: RenderableTask): boolean {
     (a.time_of_day ?? 'anytime') === (b.time_of_day ?? 'anytime') &&
     (a.assignee_slug ?? '') === (b.assignee_slug ?? '') &&
     (a.current_owner ?? '') === (b.current_owner ?? '') &&
+    (a.points ?? 0) === (b.points ?? 0) &&
     JSON.stringify(a.rotation_owners ?? []) === JSON.stringify(b.rotation_owners ?? [])
   );
 }
@@ -206,6 +212,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
   @state() private _familyState: FamilyState | null = null;
   @state() private _addTaskMember: MemberSummary | null = null;
   @state() private _editTask: RenderableTask | null = null;
+  @state() private _rewardsMember: MemberSummary | null = null;
   /**
    * Optimistic toggle overrides keyed by task uid. A tap flips the row here
    * immediately (the server round-trip + refetch is too slow to feel live on
@@ -237,6 +244,9 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
    * drops each entry once the pushed task matches the edit, with a TTL backstop.
    */
   @state() private _optimisticEdits: Map<string, RenderableTask> = new Map();
+
+  /** Optimistic rewards state (claims, tick deltas); a plain object, so mutate then requestUpdate(). */
+  private _rewardsOverlay = new RewardsOverlay();
 
   /** Per-uid backstop timers that drop an unreconciled optimistic add. */
   private _addTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -305,7 +315,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
   connectedCallback() {
     super.connectedCallback();
     if (this.hass && !this._unsubFamily) {
-      this._unsubFamily = subscribeFamilyState(this.hass, this._onFamilyState);
+      this._unsubFamily = subscribeFamilyState(this.hass, this._onFamilyState, { rewards: true });
     }
     this._scheduleMidnightRefresh();
     this._scheduleScrollRefresh();
@@ -353,7 +363,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
   updated(changedProps: PropertyValues) {
     super.updated(changedProps);
     if (changedProps.has('hass') && this.hass && !this._unsubFamily) {
-      this._unsubFamily = subscribeFamilyState(this.hass, this._onFamilyState);
+      this._unsubFamily = subscribeFamilyState(this.hass, this._onFamilyState, { rewards: true });
     }
   }
 
@@ -422,6 +432,8 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
         if (changed) this._optimisticEdits = nextEdits;
       }
     }
+    this._rewardsOverlay.reconcile(state.rewardsFetchedAt);
+    if (!state.rewards) this._rewardsMember = null;
     const resetTimeChanged = this._familyState?.resetTime !== state.resetTime;
     this._familyState = state;
     // The reset boundary is a wakeup time; a change to it (first state delivery, or
@@ -527,7 +539,13 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
     this._editTimers.clear();
   }
 
-  private _resolveMembers(): Array<{ member: MemberSummary; tasks: RenderableTask[]; notToday: RenderableTask[]; streak: number }> {
+  /** Server rewards with optimistic claims and tick deltas applied; null when unavailable. */
+  private _overlaidRewards(): RewardsState | null {
+    const server = this._familyState?.rewards;
+    return server ? this._rewardsOverlay.apply(server) : null;
+  }
+
+  private _resolveMembers(): Array<{ member: MemberSummary; tasks: RenderableTask[]; notToday: RenderableTask[]; streak: number; balance: number | null; affordable: boolean; hasActiveRewards: boolean }> {
     if (!this._config || !this._familyState) return [];
     const { members: slugs } = this._config;
     // Hidden members stay in `members` (to keep their slot in the editor's
@@ -638,10 +656,11 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
       return !isRoutineDueToday(parsed, now);
     };
 
+    const rewards = this._overlaidRewards();
     const optimisticAdds = [...this._optimisticAdds.values()];
     const householdUids = new Set(householdTasks.map((t) => t.uid));
 
-    const result: Array<{ member: MemberSummary; tasks: RenderableTask[]; notToday: RenderableTask[]; streak: number }> = [];
+    const result: Array<{ member: MemberSummary; tasks: RenderableTask[]; notToday: RenderableTask[]; streak: number; balance: number | null; affordable: boolean; hasActiveRewards: boolean }> = [];
     for (const slug of slugs) {
       if (hidden.has(slug)) continue;
       const member =
@@ -700,7 +719,17 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
       }
 
       const streak = this._familyState.streakByMember.get(slug) ?? 0;
-      result.push({ member, tasks, notToday, streak });
+      // The household list is not a member: no balance, and claim_reward rejects it.
+      const balance = rewards && slug !== 'household' ? (rewards.balances[slug] ?? 0) : null;
+      result.push({
+        member,
+        tasks,
+        notToday,
+        streak,
+        balance,
+        affordable: rewards !== null && balance !== null && affordableRewards(rewards.rewards, balance).length > 0,
+        hasActiveRewards: rewards?.rewards.some((r) => !r.archived) ?? false,
+      });
     }
     return result;
   }
@@ -728,6 +757,18 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
       this._optimistic = reverted;
       throw err;
     }
+    this._recordTickDelta(task, newStatus === 'completed');
+  }
+
+  /** Display approximation of the server's earn/revoke; the next fetch corrects it. */
+  private _recordTickDelta(task: RenderableTask, completed: boolean) {
+    const points = task.metadata.points ?? 0;
+    if (points <= 0 || !this._familyState?.rewards) return;
+    const member =
+      task.metadata.type === 'rotating' ? (task.metadata.current_owner ?? '') : task.metadata.member_slug;
+    if (!member || member === 'household') return;
+    this._rewardsOverlay.addTickDelta(task.uid, member, completed ? points : -points);
+    this.requestUpdate();
   }
 
   private _handleAddTask(e: Event) {
@@ -739,6 +780,33 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
         : (this._familyState.members.find((m) => m.slug === memberSlug) ?? null);
     if (member) this._addTaskMember = member;
   }
+
+  private _handleRewardsOpen = (e: Event) => {
+    const { memberSlug } = (e as CustomEvent<{ memberSlug: string }>).detail;
+    const member = this._familyState?.members.find((m) => m.slug === memberSlug);
+    if (member && this._familyState?.rewards) this._rewardsMember = member;
+  };
+
+  private _handleRewardClaimed = (e: Event) => {
+    this._rewardsOverlay.addClaim((e as CustomEvent<{ claim: RewardClaim }>).detail.claim);
+    this.requestUpdate();
+  };
+
+  private _handleClaimCancelled = (e: Event) => {
+    this._rewardsOverlay.resolveClaim((e as CustomEvent<{ claimId: number }>).detail.claimId, 'cancelled');
+    this.requestUpdate();
+  };
+
+  /** Unmount the rewards modal and hand focus back to the pill that opened it. */
+  private _closeRewards = async () => {
+    const slug = this._rewardsMember?.slug;
+    this._rewardsMember = null;
+    await this.updateComplete;
+    const columns = Array.from(this.renderRoot.querySelectorAll('lucarne-member-column'));
+    const col = columns.find((c) => (c as unknown as { member?: MemberSummary }).member?.slug === slug);
+    const pill = col?.shadowRoot?.querySelector('lucarne-reward-balance-pill');
+    (pill?.shadowRoot?.querySelector('button') as HTMLElement | null)?.focus();
+  };
 
   private _handleLongPress(e: Event) {
     const { task } = (e as CustomEvent<{ task: RenderableTask }>).detail;
@@ -764,6 +832,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
     const showRoutines = this._config.show_routines ?? true;
     const showTasks = this._config.show_tasks ?? true;
     const showStreak = this._config.show_streak ?? true;
+    const showRewards = this._config.show_rewards ?? true;
     const hideNames = this._config.hide_names ?? false;
     const autoScroll = this._config.auto_scroll ?? true;
     const scrollBucket = autoScroll
@@ -803,8 +872,9 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
           @task-toggle=${this._handleTaskToggle}
           @task-long-press=${this._handleLongPress}
           @task-edit=${this._handleLongPress}
+          @rewards-open=${this._handleRewardsOpen}
         >
-          ${resolvedMembers.map(({ member, tasks, notToday, streak }) => html`
+          ${resolvedMembers.map(({ member, tasks, notToday, streak, balance, affordable, hasActiveRewards }) => html`
             <div class="member-cell">
               <lucarne-member-column
                 .member=${member}
@@ -815,6 +885,10 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
                 ?show-routines=${showRoutines}
                 ?show-tasks=${showTasks}
                 ?show-streak=${showStreak}
+                ?show-rewards=${showRewards}
+                .balance=${balance}
+                .affordable=${affordable}
+                ?has-active-rewards=${hasActiveRewards}
                 ?hide-name=${hideNames}
                 scroll-to-bucket=${scrollBucket}
               ></lucarne-member-column>
@@ -829,9 +903,24 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
               .hass=${this.hass}
               .member=${this._addTaskMember}
               .members=${allMembers}
+              .isAdmin=${this._familyState?.rewards?.is_admin ?? false}
               @task-added=${this._handleTaskAdded}
               @popover-close=${() => { this._addTaskMember = null; }}
             ></lucarne-add-task-popover>
+          `
+        : ''}
+
+      ${this._rewardsMember !== null && this._overlaidRewards() !== null
+        ? html`
+            <lucarne-rewards-modal
+              .hass=${this.hass}
+              .member=${this._rewardsMember}
+              .members=${this._familyState!.members}
+              .rewards=${this._overlaidRewards()!}
+              @reward-claimed=${this._handleRewardClaimed}
+              @claim-cancelled=${this._handleClaimCancelled}
+              @popover-close=${this._closeRewards}
+            ></lucarne-rewards-modal>
           `
         : ''}
 
@@ -841,6 +930,7 @@ export class LucarneChoresCard extends LucarneCardBase<LucarneChoresCardConfig> 
               .hass=${this.hass}
               .task=${this._editTask}
               .members=${allMembers}
+              .isAdmin=${this._familyState?.rewards?.is_admin ?? false}
               @task-updated=${this._handleTaskUpdated}
               @task-deleted=${this._handleTaskDeleted}
               @popover-close=${() => { this._editTask = null; }}

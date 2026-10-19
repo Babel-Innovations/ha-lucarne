@@ -759,4 +759,67 @@ describe('lucarne-add-task-popover', () => {
       assert.equal(await submitted(el), 'DTSTART:20261019\nRRULE:FREQ=WEEKLY;BYDAY=MO;INTERVAL=2');
     });
   });
+
+  describe('Points field', () => {
+    async function submit(el: LucarneAddTaskPopover) {
+      const summaryInput = shadow(el, '#at-summary') as HTMLInputElement;
+      summaryInput.value = 'Water plants';
+      summaryInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      (shadow(el, '.btn-submit') as HTMLButtonElement).click();
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
+    it('is absent for a non-admin and sends no points key', async () => {
+      const el = makeEl();
+      await el.updateComplete;
+      assert.equal(shadow(el, '#at-points'), null);
+      await submit(el);
+      const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+      assert.equal(fakeHass.calls.callService.length, 1);
+      assert.ok(!('points' in (fakeHass.calls.callService[0] as any).payload));
+    });
+
+    it('sends points: 5 for an admin', async () => {
+      const el = makeEl();
+      el.isAdmin = true;
+      await el.updateComplete;
+      const input = shadow(el, '#at-points') as HTMLInputElement;
+      assert.ok(input, 'Points input renders for an admin');
+      input.value = '5';
+      input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      await submit(el);
+      const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+      assert.strictEqual((fakeHass.calls.callService[0] as any).payload.points, 5);
+    });
+
+    it('shows an inline error and makes no call for 1001', async () => {
+      const el = makeEl();
+      el.isAdmin = true;
+      await el.updateComplete;
+      const input = shadow(el, '#at-points') as HTMLInputElement;
+      input.value = '1001';
+      input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      await submit(el);
+      await el.updateComplete;
+      const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+      assert.equal(fakeHass.calls.callService.length, 0);
+      assert.match(shadow(el, '.error-msg')!.textContent ?? '', /0 to 1000/);
+    });
+
+    it('is hidden for a household chore and shown again for rotating', async () => {
+      const el = makeEl(HOUSEHOLD);
+      el.isAdmin = true;
+      await el.updateComplete;
+      const memberSelect = shadow(el, '#at-member') as HTMLSelectElement;
+      memberSelect.value = 'household';
+      memberSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await el.updateComplete;
+      assert.equal(shadow(el, '#at-points'), null);
+      const typeSelect = shadow(el, '#at-type') as HTMLSelectElement;
+      typeSelect.value = 'rotating';
+      typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await el.updateComplete;
+      assert.ok(shadow(el, '#at-points'));
+    });
+  });
 });

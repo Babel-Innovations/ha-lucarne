@@ -78,19 +78,27 @@ describe('describeError', () => {
 });
 
 describe('defineFallbackCards', () => {
-  it('claims all three card tags when none are registered', () => {
+  it('claims every card tag when none are registered', () => {
     const registry = fakeRegistry();
     assert.deepEqual(defineFallbackCards('boom', registry), [...CARD_TAGS]);
   });
 
+  it('knows the four card tags, rewards admin included', () => {
+    assert.deepEqual(
+      [...CARD_TAGS],
+      ['lucarne-today-card', 'lucarne-calendar-card', 'lucarne-chores-card', 'lucarne-rewards-admin-card'],
+    );
+  });
+
   it('leaves a tag the bundle already registered alone', () => {
-    // The bundle registers today -> calendar -> chores across the module graph,
+    // The bundle registers today -> calendar -> chores -> rewards admin across the module graph,
     // so a partial abort leaves some real classes in place. Clobbering one would
     // downgrade a working card to an error box.
     const registry = fakeRegistry(['lucarne-today-card']);
     assert.deepEqual(defineFallbackCards('boom', registry), [
       'lucarne-calendar-card',
       'lucarne-chores-card',
+      'lucarne-rewards-admin-card',
     ]);
   });
 

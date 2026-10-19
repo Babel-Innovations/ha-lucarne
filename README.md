@@ -29,9 +29,13 @@ that auto-fits 3–7 days to the screen width with per-person color coding:
 ![Today and Calendar cards](images/today-and-calendar.png)
 
 **Chores** — per-member routines and chores grouped by time of day, with emoji icons, one-tap
-check-off, and a streak counter per person:
+check-off, a streak counter, and a points balance per person:
 
 ![Chores card](images/chores.png)
+
+**Rewards** — kids spend points on rewards a parent approves, alone or pooled with others:
+
+![Rewards modal](images/rewards-modal.png)
 
 ---
 
@@ -79,6 +83,8 @@ width on any theme.
 - **Managed daily reset & streaks** — routines reset each morning and streaks are
   checked each night, on a schedule you can change without restarting. Nothing to
   babysit.
+- **Rewards** — tasks earn points, kids claim rewards (alone or pooled with siblings)
+  from the chores card, and a parent approves each claim.
 - **Safe renames** — renaming a member shows which automations, scripts, and
   dashboards reference the old entity IDs before anything changes.
 
@@ -92,6 +98,8 @@ width on any theme.
   recurrence labels, one-tap add/check-off, and a per-member streak counter with a
   celebration when a member finishes their routines. Includes an optional shared
   **Household** column.
+- **Rewards admin** — approve reward claims, manage the reward catalog, grant points
+  and set streak bonuses from a parent-only dashboard.
 
 ---
 

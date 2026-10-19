@@ -1063,6 +1063,21 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                 # between the awaits — lands on the harmless side.
                 await self._save_members(remaining)
 
+                # A failure leaves the claims pending, which an admin can still
+                # reject, so it must not abort the removal (same reasoning as above).
+                try:
+                    from .rewards import async_release_member_claims
+
+                    await async_release_member_claims(
+                        self.hass,
+                        self.hass.data[DOMAIN][self._entry.entry_id]["store"],
+                        removed_slug,
+                    )
+                except Exception:
+                    _LOGGER.exception(
+                        "Could not release the pending claims of %r", removed_slug
+                    )
+
                 # This issue's own text tells the user to remove the member,
                 # which they just did; it must not linger as an unactionable
                 # warning until the next restart.

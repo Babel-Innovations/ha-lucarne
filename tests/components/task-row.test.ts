@@ -872,3 +872,50 @@ describe('not-today rows (#133)', () => {
     assert.equal(shadow(el, '.due')!.textContent, expected);
   });
 });
+
+describe('points chip', () => {
+  const withPoints = (points?: number) => {
+    const t = makeTask();
+    return makeTask({ metadata: { ...t.metadata, points } });
+  };
+
+  it('renders +N and announces it in the aria-label', async () => {
+    const el = makeEl(withPoints(3));
+    await el.updateComplete;
+    assert.equal(shadow(el, '.points')!.textContent!.trim(), '+3');
+    assert.ok((shadow(el, '.row') as HTMLElement).getAttribute('aria-label')!.endsWith(', 3 points'));
+  });
+
+  it('is absent for 0 and undefined points', async () => {
+    for (const p of [0, undefined]) {
+      const el = makeEl(withPoints(p));
+      await el.updateComplete;
+      assert.equal(shadow(el, '.points'), null);
+      assert.ok(!(shadow(el, '.row') as HTMLElement).getAttribute('aria-label')!.includes('points'));
+    }
+  });
+
+  it('is absent on not-today rows', async () => {
+    const el = makeEl(withPoints(3));
+    el.notToday = true;
+    await el.updateComplete;
+    assert.equal(shadow(el, '.points'), null);
+  });
+});
+
+describe('points label grammar', () => {
+  it('says "1 point" for a single point', async () => {
+    const t = makeTask();
+    const el = makeEl(makeTask({ metadata: { ...t.metadata, points: 1 } }));
+    await el.updateComplete;
+    assert.ok((shadow(el, '.row') as HTMLElement).getAttribute('aria-label')!.endsWith(', 1 point'));
+  });
+
+  it('omits the suffix on not-today rows', async () => {
+    const t = makeTask();
+    const el = makeEl(makeTask({ metadata: { ...t.metadata, points: 3 } }));
+    el.notToday = true;
+    await el.updateComplete;
+    assert.equal((shadow(el, '.row') as HTMLElement).getAttribute('aria-label')!.includes(', 3 point'), false);
+  });
+});

@@ -292,7 +292,7 @@ export class LucarneChoresCardEditor extends LitElement {
   }
 
   private _toggleChanged(
-    field: 'show_routines' | 'show_tasks' | 'show_streak' | 'hide_names',
+    field: 'show_routines' | 'show_tasks' | 'show_streak' | 'show_rewards' | 'hide_names',
     e: Event,
   ) {
     const v = (e.target as HTMLInputElement).checked;
@@ -398,6 +398,7 @@ export class LucarneChoresCardEditor extends LitElement {
           ['show_routines', 'Show routines'],
           ['show_tasks', 'Show tasks'],
           ['show_streak', 'Show streak'],
+          ['show_rewards', 'Show rewards'],
           ['hide_names', 'Hide names'],
         ] as const
       ).map(

@@ -1,6 +1,21 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { addTask, updateTaskMetadata, deleteTask, uploadAvatar } from '../../src/shared/integration-services.js';
+import {
+  addTask,
+  updateTaskMetadata,
+  deleteTask,
+  uploadAvatar,
+  grantPoints,
+  createReward,
+  updateReward,
+  archiveReward,
+  setRewardsSettings,
+  claimReward,
+  cancelClaim,
+  approveClaim,
+  rejectClaim,
+  refundClaim,
+} from '../../src/shared/integration-services.js';
 import { makeFakeHass } from '../setup/ha-mock.mjs';
 import type { HomeAssistant } from '../../src/shared/types.js';
 
@@ -172,5 +187,74 @@ describe('uploadAvatar', () => {
     assert.ok((call.payload.image_data as string).length > 0);
     // Verify it doesn't use 'mime' (wrong field name)
     assert.ok(!('mime' in call.payload), 'field must be mime_type, not mime');
+  });
+});
+
+describe('points field', () => {
+  it('updateTaskMetadata sends no points key unless given', async () => {
+    const hass = makeHass();
+    await updateTaskMetadata(hass, 'u1', { icon: '⭐' });
+    assert.ok(!('points' in hass.calls.callService[0].payload));
+  });
+
+  it('updateTaskMetadata forwards points: 0', async () => {
+    const hass = makeHass();
+    await updateTaskMetadata(hass, 'u1', { points: 0 });
+    assert.strictEqual(hass.calls.callService[0].payload.points, 0);
+  });
+
+  it('addTask omits points by default and forwards it when given', async () => {
+    const hass = makeHass();
+    await addTask(hass, { member: 'anna', summary: 'x', type: 'chore' });
+    await addTask(hass, { member: 'anna', summary: 'x', type: 'chore', points: 5 });
+    assert.ok(!('points' in hass.calls.callService[0].payload));
+    assert.strictEqual(hass.calls.callService[1].payload.points, 5);
+  });
+});
+
+describe('rewards wrappers', () => {
+  it('call the right service with snake_case payloads', async () => {
+    const hass = makeHass();
+    await grantPoints(hass, 'anna', 5, 'well done');
+    await grantPoints(hass, 'anna', 2);
+    await updateReward(hass, 3, { name: 'Movie', poolable: true });
+    await archiveReward(hass, 3);
+    await setRewardsSettings(hass, { streak_daily_bonus: 1, streak_milestones: [{ days: 7, points: 10 }] });
+    await cancelClaim(hass, 9);
+    await approveClaim(hass, 9);
+    await rejectClaim(hass, 9);
+    await refundClaim(hass, 9);
+    const got = hass.calls.callService.map((c) => [c.domain, c.service, c.payload]);
+    assert.deepEqual(got, [
+      ['lucarne_family', 'grant_points', { member: 'anna', points: 5, reason: 'well done' }],
+      ['lucarne_family', 'grant_points', { member: 'anna', points: 2 }],
+      ['lucarne_family', 'update_reward', { reward_id: 3, name: 'Movie', poolable: true }],
+      ['lucarne_family', 'archive_reward', { reward_id: 3 }],
+      [
+        'lucarne_family',
+        'set_rewards_settings',
+        { streak_daily_bonus: 1, streak_milestones: [{ days: 7, points: 10 }] },
+      ],
+      ['lucarne_family', 'cancel_claim', { claim_id: 9 }],
+      ['lucarne_family', 'approve_claim', { claim_id: 9 }],
+      ['lucarne_family', 'reject_claim', { claim_id: 9 }],
+      ['lucarne_family', 'refund_claim', { claim_id: 9 }],
+    ]);
+  });
+
+  it('createReward and claimReward return the service response', async () => {
+    const hass = makeHass();
+    (hass as unknown as { callService: unknown }).callService = async (
+      domain: string,
+      service: string,
+      payload: Record<string, unknown>,
+    ) => {
+      hass.calls.callService.push({ domain, service, payload });
+      return { context: {}, response: service === 'create_reward' ? { id: 4 } : { claim_id: 8, shares: { anna: 3 } } };
+    };
+    assert.deepEqual(await createReward(hass, { name: 'Movie', cost: 5, poolable: false }), { id: 4 });
+    assert.deepEqual(await claimReward(hass, 'anna', 4, ['bob']), { claim_id: 8, shares: { anna: 3 } });
+    assert.deepEqual(hass.calls.callService[0].payload, { name: 'Movie', cost: 5, poolable: false });
+    assert.deepEqual(hass.calls.callService[1].payload, { member: 'anna', reward_id: 4, pool_with: ['bob'] });
   });
 });

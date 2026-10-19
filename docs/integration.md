@@ -74,6 +74,8 @@ On confirm: the todo and streak-counter entity IDs are renamed, all SQLite rows 
 
 Removing a member deletes the `todo.<slug>` config entry (which removes the todo entity and its stored items) and the `counter.<slug>_streak` helper. The member entry is dropped from the config entry.
 
+Every pending reward claim the member made or contributed to is rejected, which returns each contributor's reserved points. The member's points-ledger rows are kept, so re-adding the same slug restores the balance. If releasing the claims fails, the removal still completes and an admin can reject them with `reject_claim`.
+
 SQLite `task_metadata` and `completion_log` rows keyed to the removed member's slug are left in place — no member-level cleanup is performed.
 
 > **Known limitation**: if you re-add a member with the same name (same slug), their orphaned task metadata resurfaces. The new todo list will be empty, but the WebSocket API will report the old task metadata, and preset seeding will be skipped if historical `source="template"` rows exist. A clean re-add flow (with explicit old-data cleanup) is deferred to a future phase.
@@ -243,6 +245,8 @@ The streak is computed by walking backward from today:
 
 **Known limitation**: streak computation uses the *current* routine set for all historical days. If a routine is added or removed, historical streak values may shift. This will be addressed in a future phase by snapshotting the routine set at reset time.
 
+**Streak bonuses.** The same streak check pays the family-wide bonuses set with `set_rewards_settings`: the daily bonus on every counted day (routines were expected today and all were completed), and each milestone once when the streak crosses it. A member's first evaluation sets a baseline, so milestones already passed are never paid retroactively. Like the streak counter, bonuses are awarded only at the streak check time, with no catch-up if Home Assistant is down then. Rules: [Streak bonuses](../features/rewards/README.md#streak-bonuses).
+
 ### Avatar upload
 
 The chores card editor exposes an ✏️ button next to each member. Click it to open a modal where you can either pick an emoji or upload a photo with a square crop dialog (powered by Cropper.js). On Save the cropped JPEG is sent to the `lucarne_family.upload_avatar` service. The service:
@@ -365,6 +369,27 @@ created at integration setup. Household tasks may have an optional `assignee` (a
 slug) stored as metadata. The assignee is stored and surfaced in the edit popover but is not
 displayed in the task row (planned for a future phase). The household column has no streak
 subscription; if `show_streak` is enabled, it renders 0.
+
+## Rewards
+
+Tasks earn points, points buy rewards, and a parent approves each claim. The rules (when points
+are earned, how pooled claims split, what a refund returns) are in
+[`features/rewards/README.md`](../features/rewards/README.md#concepts).
+
+**Set task points (admin only).** In the chores card's add or edit popover, set **Points**
+(member and rotating tasks). A task with no points earns nothing. Non-admins do not see the field.
+
+**Add rewards and streak bonuses.** Put `lucarne-rewards-admin-card` on an admin-only
+dashboard (see [cards](cards.md#lucarne-rewards-admin-card)). The **Rewards** tab adds, edits
+and archives the catalog; **Settings** sets the daily and milestone streak bonuses; **Points**
+grants points with an optional reason.
+
+**Approve claims.** Kids claim from the pill on their column in the chores card. Pending claims
+appear in the admin card's **Claims** tab, where a parent approves or rejects them.
+
+**Refunds.** An approved claim can be refunded from the admin card's **History** tab.
+
+Rewards fires no automation-grade events (such as a claim being approved).
 
 ## Troubleshooting
 

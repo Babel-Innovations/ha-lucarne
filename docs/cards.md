@@ -161,6 +161,7 @@ members:                # slugs of members to show — must match integration me
 show_routines: true     # optional, default true
 show_tasks: true        # optional, default true
 show_streak: true       # optional, default true
+show_rewards: true      # optional, default true — balance pill and rewards modal
 auto_scroll: true       # optional, default true — scroll each column to the
                         # section matching the current time of day
 afternoon_start: '12:00' # optional, default 12:00 — local time the columns
@@ -177,6 +178,21 @@ time-of-day section for the current local time, and re-scrolls as the clock cros
 `afternoon_start` and `night_start` — handy for a wall-mounted tablet left open all day.
 Manually scrolling a column is preserved until the next threshold (toggling a task
 does not jump it back). Set `auto_scroll: false` to keep every column at the top.
+
+### Rewards in the chores card
+
+With the integration's rewards in use, each member column shows a **⭐ balance pill** next to
+the streak. The pill fills with the accent colour when the member can afford at least one
+reward. Tapping the pill opens the member's rewards: claims waiting for a grown-up (with
+**Cancel** for the member who claimed), then every active reward, affordable ones first. An
+affordable reward's cost is its **Claim** button, which asks for confirmation first; any other
+reward shows its cost as a tag and how many points it still needs. **Claim together** lets
+members pool points, with each person's share shown before asking. Task rows that earn points show a **+N** chip. The household column
+never shows a pill. The pill is hidden for a member with a zero balance while no active reward exists,
+and everywhere when `show_rewards` is `false`. See [Rewards](integration.md#rewards) for
+how the rules work.
+
+![Rewards modal](../images/rewards-modal.png)
 
 ### Rotating tasks in the chores card
 
@@ -198,3 +214,27 @@ so it will always agree with what the reset produces.
 
 **Column placement**: `show_tasks` controls whether rotating tasks are visible (same toggle as chores).
 The `show_routines` toggle does not affect rotating tasks.
+
+## `lucarne-rewards-admin-card`
+
+> **Requires the Lucarne Family integration.** Put this card on an **admin-only
+> dashboard**. Hiding the dashboard is for tidiness: the server enforces admin on
+> every write either way, and a non-admin who opens the card sees it read-only.
+
+```yaml
+type: custom:lucarne-rewards-admin-card
+title: Rewards          # optional
+history_limit: 200      # optional, 1–500, default 200 — ledger rows shown on the History tab
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `title` | none | Heading above the tabs. |
+| `history_limit` | `200` | How many ledger rows the History tab loads. Must be a whole number from 1 to 500. |
+
+Tabs: **Claims** (approve or reject pending claims; the label shows the pending count),
+**Points** (balances, and a **Grant** dialog per member), **Rewards** (add, edit and
+archive the catalog), **History** (the points ledger, with refund for approved claims)
+and **Settings** (daily and milestone streak bonuses).
+
+![Rewards admin card](../images/rewards-admin.png)

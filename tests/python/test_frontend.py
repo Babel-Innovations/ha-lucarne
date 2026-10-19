@@ -94,7 +94,7 @@ async def test_bundle_is_served_but_not_auto_imported(hass: HomeAssistant) -> No
     Both halves matter. Serving it keeps the loader able to import it by a URL
     relative to its own. Not registering it is the #101 fix: Home Assistant renders
     extra module URLs in a script block that runs before frontend_es5/app.js
-    replaces window.customElements, so a directly-imported bundle registers all 31
+    replaces window.customElements, so a directly-imported bundle registers all 38
     elements into a registry that is then thrown away — define() returning cleanly
     and every card showing "Custom element doesn't exist".
     """

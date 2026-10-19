@@ -1,7 +1,7 @@
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LucarneChoresCard } from '../../src/cards/lucarne-chores-card.js';
-import type { HomeAssistant, RenderableTask } from '../../src/shared/types.js';
+import type { HomeAssistant, MemberSummary, RenderableTask } from '../../src/shared/types.js';
 import type { FamilyState } from '../../src/shared/family-subscription.js';
 import { makeFakeHass } from '../setup/ha-mock.mjs';
 
@@ -38,6 +38,8 @@ function makeFakeHassWithMembers() {
     ...base.connection,
     async sendMessagePromise(payload: Record<string, unknown>) {
       if (payload['type'] === 'lucarne_family/get_family') return GET_FAMILY_RESPONSE;
+      // Rewards unavailable: the subscription then leaves `rewards` null.
+      if (payload['type'] === 'lucarne_family/get_rewards') throw new Error('Unknown command');
       return { response: {} };
     },
   };
@@ -438,6 +440,8 @@ describe('lucarne-chores-card', () => {
       resetTime: '03:00',
       streakCheckTime: '02:00',
       integrationError: null,
+      rewards: null,
+      rewardsFetchedAt: 0,
     });
 
     assert.equal(internals._optimistic.size, 0, 'override pruned for the vanished task');
@@ -760,6 +764,8 @@ describe('lucarne-chores-card', () => {
       resetTime: '03:00',
       streakCheckTime: '02:00',
       integrationError: null,
+      rewards: null,
+      rewardsFetchedAt: 0,
     });
     await el.updateComplete;
 
@@ -876,6 +882,8 @@ describe('lucarne-chores-card', () => {
       resetTime: '03:00',
       streakCheckTime: '02:00',
       integrationError: null,
+      rewards: null,
+      rewardsFetchedAt: 0,
     });
     await el.updateComplete;
 
@@ -906,6 +914,8 @@ describe('lucarne-chores-card', () => {
       resetTime: '03:00',
       streakCheckTime: '02:00',
       integrationError: null,
+      rewards: null,
+      rewardsFetchedAt: 0,
     });
     await el.updateComplete;
 
@@ -981,6 +991,8 @@ describe('lucarne-chores-card', () => {
       resetTime: '03:00',
       streakCheckTime: '02:00',
       integrationError: null,
+      rewards: null,
+      rewardsFetchedAt: 0,
     });
     await el.updateComplete;
 
@@ -1016,11 +1028,84 @@ describe('lucarne-chores-card', () => {
       resetTime: '03:00',
       streakCheckTime: '02:00',
       integrationError: null,
+      rewards: null,
+      rewardsFetchedAt: 0,
     });
     await el.updateComplete;
 
     assert.ok(internals._optimisticEdits.has('c-1'), 'override kept while server is stale');
     assert.equal(annaTaskRow(el)!.task.summary, 'Clean up the playroom', 'edited value still shown');
+  });
+
+  it('an optimistic edit that changes only points is kept until a push carries the new points', async () => {
+    const el = await makeCard(['anna']);
+    const internals = el as unknown as {
+      _optimisticEdits: Map<string, RenderableTask>;
+      _onFamilyState: (s: FamilyState) => void;
+    };
+    seedAnnaTask(el, makeChore('needs_action'));
+    await el.updateComplete;
+
+    const edited: RenderableTask = {
+      ...makeChore('needs_action'),
+      metadata: { ...makeChore().metadata, points: 7 },
+    };
+    dispatchTaskUpdated(el, edited);
+    const push = (task: RenderableTask) =>
+      internals._onFamilyState({
+        members: [
+          { slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null, todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak' },
+        ],
+        tasksByMember: new Map([['anna', [task]]]),
+        streakByMember: new Map([['anna', 0]]),
+        taskMetadataByUid: new Map(),
+        resetTime: '03:00',
+        streakCheckTime: '02:00',
+        integrationError: null,
+        rewards: null,
+        rewardsFetchedAt: 0,
+      });
+
+    push({ ...makeChore('needs_action'), metadata: { ...makeChore().metadata, points: 0 } });
+    assert.ok(internals._optimisticEdits.has('c-1'), 'kept while the push still has the old points');
+    push(edited);
+    assert.equal(internals._optimisticEdits.size, 0, 'dropped once the push carries the new points');
+  });
+
+  it('opts in to rewards and passes is_admin to the add-task popover', async () => {
+    const base = makeFakeHass();
+    const sent: string[] = [];
+    const hass = {
+      ...base,
+      connection: {
+        ...base.connection,
+        async sendMessagePromise(payload: Record<string, unknown>) {
+          sent.push(String(payload['type']));
+          if (payload['type'] === 'lucarne_family/get_family') return GET_FAMILY_RESPONSE;
+          if (payload['type'] === 'lucarne_family/get_rewards') {
+            return {
+              is_admin: true,
+              balances: {},
+              rewards: [],
+              claims: [],
+              settings: { streak_daily_bonus: 0, streak_milestones: [] },
+            };
+          }
+          return { response: {} };
+        },
+      },
+    };
+    const el = await makeCard(['anna'], hass as unknown as Parameters<typeof makeCard>[1]);
+    assert.ok(sent.includes('lucarne_family/get_rewards'), 'card asks for rewards');
+    (el as unknown as { _addTaskMember: MemberSummary })._addTaskMember = {
+      slug: 'anna', name: 'Anna', color: '#f5c89c', avatar: null,
+      todo_entity_id: 'todo.anna', streak_counter_id: 'counter.anna_streak',
+    };
+    await el.updateComplete;
+    const popover = shadow(el, 'lucarne-add-task-popover') as HTMLElement & { isAdmin: boolean };
+    await (popover as unknown as { updateComplete: Promise<void> }).updateComplete;
+    assert.equal(popover.isAdmin, true);
+    assert.ok(popover.shadowRoot!.querySelector('#at-points'), 'Points field renders');
   });
 
   it('drops an unreconciled optimistic edit after the backstop timeout', async () => {
@@ -1282,5 +1367,244 @@ describe('lucarne-chores-card', () => {
     } finally {
       mock.timers.reset();
     }
+  });
+});
+
+describe('lucarne-chores-card rewards balance (phase 4)', () => {
+  const rewardsState = (balance: number, withReward = true) => ({
+    is_admin: false,
+    balances: { anna: balance, bob: 0 },
+    rewards: withReward
+      ? [{ id: 1, name: 'Movie', cost: 10, description: '', poolable: true, archived: false }]
+      : [],
+    claims: [],
+    settings: { streak_daily_bonus: 0, streak_milestones: [] },
+  });
+
+  function routine(points = 2): RenderableTask {
+    return {
+      uid: 'p-1',
+      summary: 'Make bed',
+      status: 'needs_action',
+      due: null,
+      description: '',
+      metadata: {
+        item_uid: 'p-1',
+        member_slug: 'anna',
+        assignee_slug: '',
+        type: 'routine',
+        recurrence: 'FREQ=DAILY',
+        icon: '',
+        source: 'manual',
+        time_of_day: 'anytime',
+        points,
+      },
+    };
+  }
+
+  function stateWith(balance: number, fetchedAt: number, withReward = true): FamilyState {
+    return {
+      members: GET_FAMILY_RESPONSE.members as MemberSummary[],
+      tasksByMember: new Map([['anna', [routine()]], ['bob', []], ['household', []]]),
+      streakByMember: new Map([['anna', 0], ['bob', 0]]),
+      taskMetadataByUid: new Map(),
+      resetTime: '03:00',
+      streakCheckTime: '02:00',
+      integrationError: null,
+      rewards: rewardsState(balance, withReward),
+      rewardsFetchedAt: fetchedAt,
+    } as FamilyState;
+  }
+
+  function push(el: LucarneChoresCard, s: FamilyState) {
+    (el as unknown as { _onFamilyState(s: FamilyState): void })._onFamilyState(s);
+  }
+
+  function pillText(el: LucarneChoresCard, index = 0): string | null {
+    const col = el.shadowRoot!.querySelectorAll('lucarne-member-column')[index];
+    const pill = col?.shadowRoot?.querySelector('lucarne-reward-balance-pill');
+    return pill?.shadowRoot?.textContent?.trim() ?? null;
+  }
+
+  async function tick(el: LucarneChoresCard) {
+    const col = el.shadowRoot!.querySelector('lucarne-member-column')!;
+    const task = (col.shadowRoot!.querySelector('lucarne-task-row') as HTMLElement & { task: RenderableTask }).task;
+    const h = el as unknown as { _handleTaskToggle(e: Event): Promise<void> };
+    await h._handleTaskToggle(new CustomEvent('task-toggle', { detail: { task } })).catch(() => {});
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  async function mount(hass = makeFakeHassWithMembers()) {
+    const el = await makeCard(['anna', 'household'], hass);
+    push(el, stateWith(5, Date.now() - 1000));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    return el;
+  }
+
+  it('shows the balance, and a tick raises it before any new fetch', async () => {
+    const el = await mount();
+    assert.ok(pillText(el)!.includes('5'));
+    await tick(el);
+    assert.ok(pillText(el)!.includes('7'), pillText(el)!);
+  });
+
+  it('a later push that already includes the earn is not counted twice', async () => {
+    const el = await mount();
+    await tick(el);
+    push(el, stateWith(7, Date.now() + 10));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    assert.ok(pillText(el)!.includes('7'), pillText(el)!);
+  });
+
+  it('a rejected todo.update_item leaves the balance alone', async () => {
+    const base = makeFakeHassWithMembers();
+    const hass = {
+      ...base,
+      async callService(): Promise<undefined> {
+        throw new Error('nope');
+      },
+    } as unknown as ReturnType<typeof makeFakeHassWithMembers>;
+    const el = await mount(hass);
+    await tick(el);
+    assert.ok(pillText(el)!.includes('5'));
+  });
+
+  it('renders no pill on the household column', async () => {
+    const el = await mount();
+    assert.equal(pillText(el, 1), null);
+    assert.ok(pillText(el, 0));
+  });
+
+  it('show_rewards: false hides the pill', async () => {
+    const el = await mount();
+    el.setConfig({ type: 'custom:lucarne-chores-card', members: ['anna'], show_rewards: false });
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(pillText(el), null);
+  });
+
+  describe('rewards modal', () => {
+    const claimedHass = () => {
+      const base = makeFakeHassWithMembers();
+      return {
+        ...base,
+        async callService(d: string, svc: string) {
+          if (svc === 'claim_reward') return { response: { claim_id: 9, shares: { anna: 10 } } };
+          return undefined;
+        },
+      } as unknown as ReturnType<typeof makeFakeHassWithMembers>;
+    };
+
+    const pillButton = (el: LucarneChoresCard) =>
+      el.shadowRoot!
+        .querySelector('lucarne-member-column')!
+        .shadowRoot!.querySelector('lucarne-reward-balance-pill')!
+        .shadowRoot!.querySelector('button') as HTMLElement;
+    const modal = (el: LucarneChoresCard) => el.shadowRoot!.querySelector('lucarne-rewards-modal') as HTMLElement | null;
+    const flush = async (el: LucarneChoresCard) => {
+      await new Promise((r) => setTimeout(r, 0));
+      await el.updateComplete;
+      await new Promise((r) => setTimeout(r, 0));
+    };
+    const mbtn = (el: LucarneChoresCard, text: string) =>
+      Array.from(modal(el)!.shadowRoot!.querySelectorAll('button')).find((b) => b.textContent!.trim() === text)!;
+
+    async function mountRich(balance = 15) {
+      const el = await makeCard(['anna'], claimedHass());
+      push(el, stateWith(balance, Date.now() - 1000));
+      await flush(el);
+      return el;
+    }
+
+    it('tapping the pill mounts the modal', async () => {
+      const el = await mountRich();
+      assert.equal(modal(el), null);
+      pillButton(el).click();
+      await flush(el);
+      assert.ok(modal(el));
+    });
+
+    async function claimMovie(el: LucarneChoresCard) {
+      pillButton(el).click();
+      await flush(el);
+      (modal(el)!.shadowRoot!.querySelector('.claim-btn') as HTMLElement).click();
+      await flush(el);
+      mbtn(el, 'Claim').click();
+      await flush(el);
+      await flush(el);
+    }
+    const pendingEntries = (el: LucarneChoresCard) =>
+      Array.from(modal(el)!.shadowRoot!.querySelectorAll('.item')).filter((i) =>
+        Array.from(i.querySelectorAll('button')).some((b) => b.textContent!.trim() === 'Cancel'),
+      ).length;
+
+    it('a claim reduces the pill at once and shows the pending entry', async () => {
+      const el = await mountRich();
+      await claimMovie(el);
+      assert.equal(pillText(el), '⭐ 5');
+      assert.equal(pendingEntries(el), 1);
+      assert.ok(modal(el)!.shadowRoot!.activeElement, 'focus stays in the dialog');
+    });
+
+    it('a push from before the claim keeps it', async () => {
+      const el = await mountRich();
+      await claimMovie(el);
+      push(el, stateWith(15, Date.now() - 60_000));
+      await flush(el);
+      assert.equal(pillText(el), '⭐ 5');
+      assert.equal(pendingEntries(el), 1);
+    });
+
+    it('a newer push that includes the claim shows it once, not twice', async () => {
+      const el = await mountRich();
+      await claimMovie(el);
+      const newer = stateWith(5, Date.now() + 10);
+      newer.rewards!.claims = [
+        { id: 9, reward_id: 1, reward_name: 'Movie', cost: 10, claimer_slug: 'anna', status: 'pending', created_at: '', resolved_at: null, contributors: [{ member_slug: 'anna', share: 10 }] },
+      ];
+      push(el, newer);
+      await flush(el);
+      assert.equal(pillText(el), '⭐ 5');
+      assert.equal(pendingEntries(el), 1);
+    });
+
+    it('cancel restores the balance immediately', async () => {
+      const el = await mountRich();
+      pillButton(el).click();
+      await flush(el);
+      (modal(el)!.shadowRoot!.querySelector('.claim-btn') as HTMLElement).click();
+      await flush(el);
+      mbtn(el, 'Claim').click();
+      await flush(el);
+      await flush(el);
+      mbtn(el, 'Cancel').click();
+      await flush(el);
+      mbtn(el, 'Yes, cancel').click();
+      await flush(el);
+      await flush(el);
+      assert.equal(pillText(el), '⭐ 15');
+    });
+
+    it('closing returns focus to the pill and rewards going null closes the modal', async () => {
+      const el = await mountRich();
+      pillButton(el).click();
+      await flush(el);
+      modal(el)!.dispatchEvent(new CustomEvent('popover-close', { bubbles: true, composed: true }));
+      await flush(el);
+      assert.equal(modal(el), null);
+      const col = el.shadowRoot!.querySelector('lucarne-member-column')!;
+      const pill = col.shadowRoot!.querySelector('lucarne-reward-balance-pill')!;
+      assert.equal(pill.shadowRoot!.activeElement, pill.shadowRoot!.querySelector('button'));
+
+      pillButton(el).click();
+      await flush(el);
+      assert.ok(modal(el));
+      push(el, { ...stateWith(15, 0), rewards: null } as FamilyState);
+      await flush(el);
+      assert.equal(modal(el), null);
+    });
   });
 });

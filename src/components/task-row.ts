@@ -149,6 +149,13 @@ export class LucarneTaskRow extends LitElement {
       color: var(--secondary-text-color, #727272);
       flex-shrink: 0;
     }
+    .points {
+      font-size: 0.75rem;
+      color: var(--secondary-text-color, #727272);
+      flex-shrink: 0;
+      min-width: 2em;
+      text-align: right;
+    }
     .rotation-badge {
       font-size: 0.9rem;
       opacity: 0.55;
@@ -441,6 +448,7 @@ export class LucarneTaskRow extends LitElement {
     }
 
     const nextDate = this.notToday ? this._nextDate() : undefined;
+    const points = this.task.metadata.points ?? 0;
 
     return html`
       <div
@@ -482,6 +490,7 @@ export class LucarneTaskRow extends LitElement {
         </div>
         ${isRotating ? html`<span class="rotation-badge" aria-hidden="true">↻</span>` : ''}
         ${due ? html`<span class="due">${this._formatDue(due)}</span>` : ''}
+        ${points > 0 && !this.notToday ? html`<span class="points" aria-hidden="true">+${points}</span>` : ''}
         ${nextDate ? html`<span class="due">${this._formatNext(nextDate)}</span>` : ''}
       </div>
     `;
@@ -518,6 +527,8 @@ export class LucarneTaskRow extends LitElement {
     let label = this.task.summary;
     if (due) label += `, due ${this._formatDue(due)}`;
     if (nextName) label += `, next: ${nextName}`;
+    const points = this.task.metadata.points ?? 0;
+    if (points > 0 && !this.notToday) label += `, ${points} ${points === 1 ? 'point' : 'points'}`;
     return label;
   }
 
