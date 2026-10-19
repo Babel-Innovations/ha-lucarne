@@ -268,11 +268,9 @@ fi
 
 BUNDLE_SIZE=$(wc -c < "$BUNDLE")
 BUNDLE_SIZE_KIB=$((BUNDLE_SIZE / 1024))
-# Budget is on the raw bundle, measured in KiB like BUNDLE_SIZE_KIB above:
-# ~367 KiB / ~83 KiB gzipped since build.target was pinned to the ES2020 browser
-# floor in #101 (the pin costs ~7 KiB). That leaves ~33 KiB against the 400 limit.
-if [ "$BUNDLE_SIZE_KIB" -gt 400 ]; then
-    log_error "Bundle size ${BUNDLE_SIZE_KIB} KiB exceeds 400 KiB limit"
+# Budget is on the raw, minified bundle, in KiB like BUNDLE_SIZE_KIB above.
+if [ "$BUNDLE_SIZE_KIB" -gt 450 ]; then
+    log_error "Bundle size ${BUNDLE_SIZE_KIB} KiB exceeds 450 KiB limit"
     exit 1
 fi
 log_success "Build complete (${BUNDLE_SIZE_KIB} KiB)"

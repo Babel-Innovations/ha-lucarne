@@ -9,6 +9,9 @@ export default defineConfig({
     },
     rollupOptions: {
       external: [],
+      // Vite keeps whitespace in ES-library output even with build.minify, which
+      // shipped cropperjs's UMD build line for line; minifying here saves ~60 kB.
+      output: { minify: true },
     },
     // Browser floor, pinned deliberately — do NOT drop this (see issue #101).
     //
