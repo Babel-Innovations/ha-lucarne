@@ -802,3 +802,45 @@ async def test_add_routine_to_existing_preset_returns_to_edit_custom_preset(
     assert result["type"] == data_entry_flow.FlowResultType.MENU
     assert result["step_id"] == "edit_custom_preset"
 
+
+async def test_rename_holds_rewards_lock_until_the_member_list_is_saved(
+    hass: HomeAssistant,
+) -> None:
+    """A grant or claim waiting on the lock must see the renamed member list."""
+    entry = _make_entry(hass)
+    await _setup_entry(hass, entry)
+    await _add_anna(hass, entry)
+    from custom_components.lucarne_family.store import LucarneFamilyStore
+
+    store: LucarneFamilyStore = hass.data[DOMAIN][entry.entry_id]["store"]
+    held: dict[str, bool] = {}
+    real_save = store.async_save_members
+
+    async def _rename(_hass, old_todo, new_slug, old_counter):
+        held["entity_rename"] = store.rewards_lock.locked()
+        return (f"todo.{new_slug}", f"counter.{new_slug}_streak")
+
+    async def _save(members):
+        held["save"] = store.rewards_lock.locked()
+        await real_save(members)
+
+    result = await _init_options_flow(hass, entry)
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "manage_members"})
+    result = await _configure(hass, result["flow_id"], {"next_step_id": "edit_member"})
+    result = await _configure(hass, result["flow_id"], {"member_slug": "anna"})
+    result = await _configure(
+        hass,
+        result["flow_id"],
+        {"name": "Anna-Maria", "color": [245, 200, 156], "preset": "school-age"},
+    )
+    with (
+        patch(
+            "custom_components.lucarne_family.entity_manager.async_rename_member_entities",
+            side_effect=_rename,
+        ),
+        patch.object(store, "async_save_members", side_effect=_save),
+    ):
+        await _configure(hass, result["flow_id"], {"confirm": True})
+
+    assert held == {"entity_rename": True, "save": True}
+    assert not store.rewards_lock.locked()

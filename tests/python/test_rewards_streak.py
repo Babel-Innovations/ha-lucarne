@@ -211,3 +211,35 @@ async def test_streak_run_matches_streak_and_run_start_skips_no_routine_days(
     assert run.length == await store.async_get_streak(
         "anna", date(2025, 1, 13), lambda d: [UID] if d.weekday() < 5 else []
     )
+
+
+async def test_a_new_members_first_day_pays_a_one_day_milestone(
+    hass: HomeAssistant, tmp_path: Path, freezer: Any
+) -> None:
+    _entry, store = await _setup(hass, tmp_path)
+    await _settings(store, milestones=[(1, 5)])
+
+    await _evaluate(hass, freezer, JAN1)  # nothing done yet: a zero baseline
+    assert _state(store) == (0, "2025-01-01")
+
+    _complete(store, date(2025, 1, 2))
+    await _evaluate(hass, freezer, date(2025, 1, 2))
+
+    assert _rows(store, "streak_milestone") == [("ms:1:2025-01-02", 5)]
+
+
+async def test_a_zero_first_check_on_an_older_run_still_pays_no_backpay(
+    hass: HomeAssistant, tmp_path: Path, freezer: Any
+) -> None:
+    _entry, store = await _setup(hass, tmp_path)
+    await _settings(store, milestones=[(7, 10)])
+    _complete_range(store, JAN1, date(2025, 1, 10))
+
+    await _evaluate(hass, freezer, date(2025, 1, 11))  # Jan 11 ticked only after the check
+    assert _state(store) == (0, "2025-01-11")
+
+    _complete_range(store, date(2025, 1, 11), date(2025, 1, 12))
+    await _evaluate(hass, freezer, date(2025, 1, 12))
+
+    assert _rows(store, "streak_milestone") == []
+    assert _state(store) == (12, "2025-01-01")

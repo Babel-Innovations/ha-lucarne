@@ -136,6 +136,10 @@ def async_start_completion_listener(
         old_snapshot = _snapshots.get(entity_id, {})
         new_snapshot = _read_entity_snapshot(entity_id)
         _snapshots[entity_id] = new_snapshot
+        # Read with the snapshot, before any await: by the time a transition is
+        # recorded below, a later change by someone else may own the entity's context.
+        state = hass.states.get(entity_id)
+        actor_user_id = state.context.user_id if state else None
 
         members_with_completions: set[str] = set()
 
@@ -227,7 +231,6 @@ def async_start_completion_listener(
 
             # A rewards failure must never stop completion logging or the event.
             try:
-                state = hass.states.get(entity_id)
                 await async_record_task_transition(
                     hass,
                     store,
@@ -237,7 +240,7 @@ def async_start_completion_listener(
                     metadata=metadata,
                     member_slug=member_slug,
                     summary=summary,
-                    actor_user_id=state.context.user_id if state else None,
+                    actor_user_id=actor_user_id,
                     read_status=partial(_current_status, entity_id, uid),
                 )
             except Exception:

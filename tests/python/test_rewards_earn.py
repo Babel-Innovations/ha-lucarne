@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 from homeassistant.components.todo import TodoItem
 from homeassistant.components.todo.const import DATA_COMPONENT, TodoItemStatus
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -295,3 +295,69 @@ async def test_stale_undone_transition_is_skipped(
     )
 
     assert await _balances(store) == {"anna": 5}
+
+
+async def test_earn_credits_the_user_who_ticked_not_a_later_writer(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    store = await _setup(hass, tmp_path)
+    await _add_item(hass, store, "todo.anna", "u1", points=5)
+    unsub = async_start_completion_listener(hass, store, {"todo.anna"})
+    original = store.async_append_completion
+
+    async def _someone_else_writes_meanwhile(**kwargs: Any) -> None:
+        # Another user changes the list while the handler is between awaits.
+        state = hass.states.get("todo.anna")
+        assert state is not None
+        hass.states.async_set(
+            "todo.anna",
+            state.state,
+            state.attributes,
+            force_update=True,
+            context=Context(user_id="later"),
+        )
+        await original(**kwargs)
+
+    with patch.object(store, "async_append_completion", _someone_else_writes_meanwhile):
+        _entity(hass, "todo.anna").async_set_context(Context(user_id="ticker"))
+        await _set(hass, "todo.anna", "u1", TodoItemStatus.COMPLETED)
+
+    unsub()
+    with store._db_connect() as con:
+        actors = [r[0] for r in con.execute("SELECT actor_user_id FROM points_ledger")]
+    assert actors == ["ticker"]
+
+
+async def test_earn_for_a_member_gone_while_waiting_writes_nothing(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    store = await _setup(hass, tmp_path)
+    await _add_item(hass, store, "todo.anna", "u1", points=5)
+    metadata = await store.async_get_task_metadata("u1")
+    # anna is removed while the earn waits on the lock.
+    await store.async_save_members([m for m in store.get_members() if m.slug != "anna"])
+
+    await async_record_task_transition(
+        hass, store, entity_id="todo.anna", uid="u1", action="completed",
+        metadata=metadata, member_slug="anna", summary="s",
+        actor_user_id=None, read_status=lambda: "completed",
+    )
+
+    assert _ledger(store) == []
+
+
+async def test_earn_resolved_before_a_rename_credits_the_new_slug(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    store = await _setup(hass, tmp_path)
+    await _add_item(hass, store, "todo.bob", "u1", points=5)
+    metadata = await store.async_get_task_metadata("u1")
+
+    # The listener resolved "anna_before_rename"; the store now says bob owns it.
+    await async_record_task_transition(
+        hass, store, entity_id="todo.bob", uid="u1", action="completed",
+        metadata=metadata, member_slug="anna_before_rename", summary="s",
+        actor_user_id=None, read_status=lambda: "completed",
+    )
+
+    assert _ledger(store) == [("earn", "bob", 5)]

@@ -1026,14 +1026,21 @@ class LucarneFamilyStore:
         )
 
     async def async_get_claims(
-        self, statuses: list[str], limit: int | None = None
+        self,
+        statuses: list[str],
+        limit: int | None = None,
+        ids: list[int] | None = None,
     ) -> list[dict[str, Any]]:
-        """Return claims in ``statuses``, newest first, each with its contributors."""
+        """Return claims in ``statuses`` (and ``ids``), newest first, with contributors."""
 
         def _read() -> list[dict[str, Any]]:
             marks = ", ".join("?" for _ in statuses)
-            sql = f"SELECT * FROM claims WHERE status IN ({marks}) ORDER BY id DESC"
+            sql = f"SELECT * FROM claims WHERE status IN ({marks})"
             params: list[Any] = list(statuses)
+            if ids is not None:
+                sql += f" AND id IN ({', '.join('?' for _ in ids)})"
+                params.extend(ids)
+            sql += " ORDER BY id DESC"
             if limit is not None:
                 sql += " LIMIT ?"
                 params.append(limit)
@@ -1200,9 +1207,17 @@ class LucarneFamilyStore:
                         "streak_milestone", points, f"ms:{days}:{start}",
                         f"{days}-day streak",
                     )
-            # A zero-length run never writes the state: it only means today's
+            # A zero-length run never overwrites the state: it only means today's
             # routines were not done *yet* at check time, and overwriting the
-            # baseline with 0 would re-pay milestones already passed.
+            # baseline with 0 would re-pay milestones already passed. A member with
+            # no state gets a zero baseline stamped with today, so their first run
+            # pays its milestones (see effective_prev_streak).
+            if run.length == 0 and state is None:
+                con.execute(
+                    "INSERT INTO streak_bonus_state (member_slug, last_streak, last_run_start)"
+                    " VALUES (?, 0, ?) ON CONFLICT(member_slug) DO NOTHING",
+                    (member_slug, today.isoformat()),
+                )
             if run.length > 0:
                 con.execute(
                     "INSERT INTO streak_bonus_state (member_slug, last_streak, last_run_start)"

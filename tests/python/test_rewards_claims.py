@@ -429,3 +429,26 @@ async def test_cancelled_claim_lands_whole_and_keeps_the_lock(
     [claim] = await store.async_get_claims(["pending"])
     assert _ledger(store, claim["id"]) == [("anna", "claim_reserve", -10)]
     assert await _balance(store, "anna") == 0
+
+
+async def test_claim_and_grant_recheck_members_once_they_hold_the_lock(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    store = await _setup(hass, tmp_path)
+    await _grant(hass, "anna", 10)
+    await _grant(hass, "bob", 10)
+    reward_id = await _reward(hass, cost=10, poolable=True)
+
+    async with store.rewards_lock:
+        claim = asyncio.ensure_future(_claim(hass, reward_id, member="bob", pool_with=["anna"]))
+        grant = asyncio.ensure_future(_grant(hass, "anna", 1))
+        await asyncio.sleep(0.05)  # both validated and now wait on the lock
+        # anna is removed (or renamed away) while they wait.
+        await store.async_save_members([m for m in store.get_members() if m.slug != "anna"])
+
+    for task in (claim, grant):
+        with pytest.raises(ServiceValidationError, match="anna"):
+            await task
+    assert await store.async_get_claims(["pending"]) == []
+    assert await _balance(store, "anna") == 10
+    assert await _balance(store, "bob") == 10

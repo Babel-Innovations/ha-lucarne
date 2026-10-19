@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import cast
+from typing import Any, cast
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
@@ -152,23 +152,39 @@ async def ws_get_rewards(
         return
 
     store: LucarneFamilyStore = entry_data["store"]
-    balances = await store.async_get_balances()
+    limit = msg.get("history_limit")
+    rows: list[dict[str, Any]] | None = None
+    # Every rewards write holds rewards_lock, so holding it across the reads makes them
+    # one snapshot: a claim can't appear beside a balance it hasn't been deducted from.
+    async with store.rewards_lock:
+        balances = await store.async_get_balances()
+        rewards = await store.async_get_rewards(bool(msg.get("include_archived")))
+        claims = await store.async_get_claims(["pending"])
+        settings = await store.async_get_rewards_settings()
+        if limit is not None:
+            rows = await store.async_get_ledger_history(cast(int, limit))
+            # Exactly the resolved claims the rows reference, so Refund is offered on
+            # every approved reservation that is on screen, however old.
+            claim_ids = sorted({r["claim_id"] for r in rows if r["claim_id"] is not None})
+            if claim_ids:
+                claims += await store.async_get_claims(
+                    ["approved", "rejected", "cancelled", "refunded"], ids=claim_ids
+                )
     payload: dict[str, object] = {
         "is_admin": bool(connection.user and connection.user.is_admin),
         "balances": {m.slug: balances.get(m.slug, 0) for m in store.get_members()},
-        "rewards": await store.async_get_rewards(bool(msg.get("include_archived"))),
-        "claims": await store.async_get_claims(["pending"]),
-        "settings": await store.async_get_rewards_settings(),
+        # The frontend's RewardItem carries an `archived` flag, not the timestamp.
+        "rewards": [
+            {
+                **{k: v for k, v in r.items() if k != "archived_at"},
+                "archived": r["archived_at"] is not None,
+            }
+            for r in rewards
+        ],
+        "claims": claims,
+        "settings": settings,
     }
-    limit = msg.get("history_limit")
-    if limit is not None:
-        payload["claims"] = [
-            *cast(list[dict[str, object]], payload["claims"]),
-            *await store.async_get_claims(
-                ["approved", "rejected", "cancelled", "refunded"], 50
-            ),
-        ]
-        rows = await store.async_get_ledger_history(cast(int, limit))
+    if rows is not None:
         names: dict[str | None, str | None] = {None: None}
         for row in rows:
             user_id = row.pop("actor_user_id")

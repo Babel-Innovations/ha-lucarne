@@ -105,6 +105,19 @@ async def async_record_task_transition(
         if action == "completed":
             if current is not None and current != "completed":
                 return
+            known = {m.slug for m in store.get_members()}
+            if member_slug not in known:
+                # Resolved before a rename that ran while this waited: the migrated
+                # metadata names the member now. A removed member stays uncredited.
+                fresh = await store.async_get_task_metadata(uid) or {}
+                member_slug = (
+                    fresh.get("current_owner")
+                    if fresh.get("type") == "rotating"
+                    else fresh.get("member_slug")
+                ) or member_slug
+                if member_slug not in known:
+                    _LOGGER.warning("Not crediting %s: %r is not a member", uid, member_slug)
+                    return
             wrote = await store.async_ledger_record_earn(
                 uid, member_slug, int(metadata["points"]), cycle, summary, actor_user_id
             )
@@ -114,6 +127,19 @@ async def async_record_task_transition(
             wrote = await store.async_ledger_record_revoke(uid, cycle, actor_user_id)
     if wrote:
         hass.bus.async_fire(EVENT_REWARDS_UPDATED, {})
+
+
+def _require_members(store: LucarneFamilyStore, slugs: list[str]) -> None:
+    """Raise unless every slug is a current member.
+
+    Call it under ``rewards_lock``. A rename holds the lock until the member list
+    is saved, and a removal saves the list before releasing claims under it, so a
+    check there either fails or runs before a cleanup that will catch it.
+    """
+    known = {m.slug for m in store.get_members()}
+    for slug in slugs:
+        if slug not in known:
+            raise ServiceValidationError(f"Unknown member: {slug!r}")
 
 
 def split_shares(cost: int, claimer: str, others: list[str]) -> dict[str, int]:
@@ -199,7 +225,14 @@ def effective_prev_streak(state: tuple[int, str] | None, run: StreakRun) -> int 
     """
     if state is None:
         return None
-    last_streak, _last_run_start = state
+    last_streak, last_run_start = state
+    if last_streak == 0:
+        # A zero baseline is stamped with the day it was taken. A run that began
+        # before it was already under way (today just wasn't done at check time),
+        # so it is a baseline too; one that began on or after it is new.
+        if run.run_start is not None and run.run_start < date.fromisoformat(last_run_start):
+            return None
+        return 0
     if run.length == 0 or run.length < last_streak:
         return 0
     return last_streak
@@ -274,9 +307,8 @@ async def async_setup_rewards_services(hass: HomeAssistant, entry_id: str) -> No
         await async_require_admin(hass, call.context)
         store = _store()
         member: str = call.data["member"]
-        if member not in {m.slug for m in store.get_members()}:
-            raise ServiceValidationError(f"Unknown member: {member!r}")
         async with store.rewards_lock:
+            _require_members(store, [member])
             balance = await store.async_ledger_grant(
                 member, call.data["points"], call.data["reason"], call.context.user_id
             )
@@ -331,10 +363,7 @@ async def async_setup_rewards_services(hass: HomeAssistant, entry_id: str) -> No
         store = _store()
         member: str = call.data["member"]
         others: list[str] = call.data["pool_with"]
-        known = {m.slug for m in store.get_members()}
-        for slug in (member, *others):
-            if slug not in known:
-                raise ServiceValidationError(f"Unknown member: {slug!r}")
+        _require_members(store, [member, *others])
         reward = next(
             (r for r in await store.async_get_rewards() if r["id"] == call.data["reward_id"]),
             None,
@@ -347,6 +376,9 @@ async def async_setup_rewards_services(hass: HomeAssistant, entry_id: str) -> No
             raise ServiceValidationError("Too many people for this reward") from err
         try:
             async with store.rewards_lock:
+                # Again under the lock: a member removed or renamed while the reward
+                # was read must not end up holding a claim.
+                _require_members(store, [member, *others])
                 claim_id = await store.async_create_claim(
                     call.data["reward_id"], member, shares, call.context.user_id
                 )
