@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import cast
+from typing import Any, cast
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
@@ -28,6 +28,7 @@ LUCARNE_FRONTEND_EVENTS: tuple[str, ...] = (
     "lucarne_family_all_routines_done",
     "lucarne_family_member_updated",
     "lucarne_family_avatar_uploaded",
+    "lucarne_family_rewards_updated",
 )
 
 
@@ -127,6 +128,74 @@ async def ws_get_family(
     connection.send_result(msg["id"], payload)
 
 
+@websocket_api.websocket_command(  # type: ignore[attr-defined]
+    {
+        vol.Required("type"): "lucarne_family/get_rewards",
+        vol.Optional("history_limit"): vol.All(int, vol.Range(min=1, max=500)),
+        vol.Optional("include_archived", default=False): bool,
+    }
+)
+@websocket_api.async_response  # type: ignore[attr-defined]
+async def ws_get_rewards(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,  # type: ignore[name-defined]
+    msg: dict[str, object],
+) -> None:
+    """Return balances (and optionally ledger history). Not admin-gated."""
+    domain_data = hass.data.get(DOMAIN, {})
+    entry_data = next(
+        (v for v in domain_data.values() if isinstance(v, dict) and "store" in v),
+        None,
+    )
+    if entry_data is None:
+        connection.send_error(msg["id"], "not_found", "Lucarne Family integration not set up")
+        return
+
+    store: LucarneFamilyStore = entry_data["store"]
+    limit = msg.get("history_limit")
+    rows: list[dict[str, Any]] | None = None
+    # Every rewards write holds rewards_lock, so holding it across the reads makes them
+    # one snapshot: a claim can't appear beside a balance it hasn't been deducted from.
+    async with store.rewards_lock:
+        balances = await store.async_get_balances()
+        rewards = await store.async_get_rewards(bool(msg.get("include_archived")))
+        claims = await store.async_get_claims(["pending"])
+        settings = await store.async_get_rewards_settings()
+        if limit is not None:
+            rows = await store.async_get_ledger_history(cast(int, limit))
+            # Exactly the resolved claims the rows reference, so Refund is offered on
+            # every approved reservation that is on screen, however old.
+            claim_ids = sorted({r["claim_id"] for r in rows if r["claim_id"] is not None})
+            if claim_ids:
+                claims += await store.async_get_claims(
+                    ["approved", "rejected", "cancelled", "refunded"], ids=claim_ids
+                )
+    payload: dict[str, object] = {
+        "is_admin": bool(connection.user and connection.user.is_admin),
+        "balances": {m.slug: balances.get(m.slug, 0) for m in store.get_members()},
+        # The frontend's RewardItem carries an `archived` flag, not the timestamp.
+        "rewards": [
+            {
+                **{k: v for k, v in r.items() if k != "archived_at"},
+                "archived": r["archived_at"] is not None,
+            }
+            for r in rewards
+        ],
+        "claims": claims,
+        "settings": settings,
+    }
+    if rows is not None:
+        names: dict[str | None, str | None] = {None: None}
+        for row in rows:
+            user_id = row.pop("actor_user_id")
+            if user_id not in names:
+                user = await hass.auth.async_get_user(user_id)
+                names[user_id] = user.name if user else None
+            row["actor_name"] = names[user_id]
+        payload["history"] = rows
+    connection.send_result(msg["id"], payload)
+
+
 @websocket_api.websocket_command({vol.Required("type"): "lucarne_family/subscribe"})  # type: ignore[attr-defined]
 @callback
 def ws_subscribe(
@@ -176,5 +245,6 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     if domain_data.get(_WS_REGISTERED_KEY):
         return
     websocket_api.async_register_command(hass, ws_get_family)
+    websocket_api.async_register_command(hass, ws_get_rewards)
     websocket_api.async_register_command(hass, ws_subscribe)
     domain_data[_WS_REGISTERED_KEY] = True

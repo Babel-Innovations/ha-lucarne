@@ -10,6 +10,8 @@ import './cards/lucarne-calendar-card';
 import './editors/lucarne-calendar-card-editor';
 import './cards/lucarne-chores-card';
 import './editors/lucarne-chores-card-editor';
+import './cards/lucarne-rewards-admin-card';
+import './editors/lucarne-rewards-admin-card-editor';
 
 import { markBoot } from './shared/boot-marks.js';
 

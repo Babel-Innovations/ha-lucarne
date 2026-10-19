@@ -1,12 +1,11 @@
 /**
  * Breadcrumbs for how far bundle evaluation got (issue #101).
  *
- * The bundle registers 31 elements and pushes to `window.customCards` three
- * separate times, spread right across the module graph — today card at roughly
- * a quarter of the way in, chores card at three quarters, the last editor at the
- * very end. An abort partway therefore leaves a *partially* initialised page,
- * and `window.customCards` being non-empty says nothing about whether our code
- * finished. Reading it as "the bundle ran" is what sent the first pass of this
+ * The bundle registers dozens of elements and pushes to `window.customCards` once
+ * per card, spread right across the module graph — today card early on, the
+ * rewards admin card late, the last editor at the very end. An abort partway
+ * therefore leaves a *partially* initialised page, and `window.customCards`
+ * being non-empty says nothing about whether our code finished. Reading it as "the bundle ran" is what sent the first pass of this
  * investigation down a dead end.
  *
  * These marks make the same question answerable: the last one present is the

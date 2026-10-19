@@ -41,7 +41,7 @@
  *
  * Two things then happen:
  *
- *   failure → `defineFallbackCards` registers the three card tags with a
+ *   failure → `defineFallbackCards` registers the card tags with a
  *             dependency-free element that RENDERS THE ERROR TEXT. Home
  *             Assistant's `_customCreate` is already waiting on
  *             `customElements.whenDefined(tag)` and fires `ll-rebuild` when it
@@ -56,11 +56,12 @@
  * this code has to keep working precisely when the main bundle does not.
  */
 
-/** The three tags Home Assistant resolves from a dashboard config. */
+/** The card tags Home Assistant resolves from a dashboard config. */
 export const CARD_TAGS = [
   'lucarne-today-card',
   'lucarne-calendar-card',
   'lucarne-chores-card',
+  'lucarne-rewards-admin-card',
 ] as const;
 
 export const ISSUE_URL = 'https://github.com/Babel-Innovations/ha-lucarne/issues/101';
@@ -190,7 +191,7 @@ function buildFallbackShadow(root: ShadowRoot, tag: string, message: string): vo
  * Claim the card tags with an element that shows why the bundle did not load.
  *
  * Only ever called after a failed import, and only for tags still free: if the
- * bundle registered a tag before dying (it registers today → calendar → chores,
+ * bundle registered a tag before dying (it registers today → calendar → chores → rewards admin,
  * spread across the module graph) that real class must be left alone.
  */
 export function defineFallbackCards(
@@ -522,7 +523,7 @@ export async function boot(options: BootOptions): Promise<LucarneBootState> {
   //
   // On success it covers a late registration HA did not recover from. On failure
   // it is what actually delivers the fix: `defineFallbackCards` has just claimed
-  // the three tags, so the error cards standing in for them can be rebuilt into
+  // the card tags, so the error cards standing in for them can be rebuilt into
   // our own element and the exception finally becomes readable on the dashboard.
   // Leaving the failure path to HA's `whenDefined` -> `ll-rebuild` alone would
   // stake the entire point of this module on the self-heal that the success path

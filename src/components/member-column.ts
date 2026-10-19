@@ -7,6 +7,7 @@ import { iconTimeMorning, iconTimeAfternoon, iconTimeNight } from '../shared/ico
 import './member-avatar.js';
 import './task-row.js';
 import './streak-display.js';
+import './reward-balance-pill.js';
 import './celebration-overlay.js';
 
 // Display order for the time-of-day bucket sections (routines + one-off
@@ -188,6 +189,14 @@ export class LucarneMemberColumn extends LitElement {
       margin-top: 8px;
       flex: 0 0 auto;
     }
+    /* Reserve the pill's 44px in every column, pill or not, so the streak rows line up. */
+    .streak-area.rewards lucarne-streak-display {
+      --lucarne-streak-row-min-height: 44px;
+    }
+    .streak-area.pill-only {
+      display: flex;
+      justify-content: center;
+    }
   `;
 
   @property({ attribute: false }) member!: MemberSummary;
@@ -199,6 +208,11 @@ export class LucarneMemberColumn extends LitElement {
   @property({ type: Boolean, attribute: 'show-routines' }) showRoutines = true;
   @property({ type: Boolean, attribute: 'show-tasks' }) showTasks = true;
   @property({ type: Boolean, attribute: 'show-streak' }) showStreak = true;
+  /** Points balance; null hides the pill (rewards unavailable, or the household column). */
+  @property({ attribute: false }) balance: number | null = null;
+  @property({ type: Boolean }) affordable = false;
+  @property({ type: Boolean, attribute: 'has-active-rewards' }) hasActiveRewards = false;
+  @property({ type: Boolean, attribute: 'show-rewards' }) showRewards = false;
   @property({ type: Boolean, attribute: 'hide-name' }) hideName = false;
   /** Time-of-day bucket to auto-scroll the list to ('morning' | 'afternoon' |
    *  'night'); empty disables auto-scroll. The card recomputes this from the
@@ -399,13 +413,31 @@ export class LucarneMemberColumn extends LitElement {
           ${this._renderNotToday()}
         </div>
 
+        ${this._renderBottom()}
+      </div>
+    `;
+  }
+
+  private _renderBottom() {
+    const showPill =
+      this.showRewards && this.balance !== null && !(this.balance === 0 && !this.hasActiveRewards);
+    if (!this.showStreak && !showPill) return '';
+    // Inside the streak row when there is one, so it centres on "🔥 N" rather than
+    // on the streak and its label together.
+    const pill = showPill
+      ? html`<lucarne-reward-balance-pill
+          slot="aside"
+          .balance=${this.balance as number}
+          .affordable=${this.affordable}
+          member-name=${this.member.name}
+          member-slug=${this.member.slug}
+        ></lucarne-reward-balance-pill>`
+      : '';
+    return html`
+      <div class="streak-area ${this.showRewards ? 'rewards' : ''} ${this.showStreak ? '' : 'pill-only'}">
         ${this.showStreak
-          ? html`
-              <div class="streak-area">
-                <lucarne-streak-display .streak=${this.streak}></lucarne-streak-display>
-              </div>
-            `
-          : ''}
+          ? html`<lucarne-streak-display .streak=${this.streak}>${pill}</lucarne-streak-display>`
+          : pill}
       </div>
     `;
   }

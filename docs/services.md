@@ -40,6 +40,7 @@ Add a task to a family member's or household todo list.
 | `time_of_day` | string | no | One of `"anytime"`, `"morning"`, `"afternoon"`, `"night"` (default: `"anytime"`). Display attribute only — does not affect reset/streak logic. |
 | `rotation_owners` | list[string] | no | **Rotating tasks only.** Ordered list of member slugs (minimum 2 unique known slugs). Duplicates are removed preserving order. |
 | `current_owner` | string | no | **Rotating tasks only.** Slug of the member whose turn it is. Defaults to `rotation_owners[0]` when not provided. Must be in `rotation_owners`. |
+| `points` | integer | no | Points earned when the task is completed (0–1000). **Requires an HA administrator**, or a call with no user (automation/script); otherwise `Unauthorized`. Plain household tasks cannot carry points. |
 
 **Rotating task rules:**
 - `member` must be `"household"` — rotating tasks only live in the shared list.
@@ -113,6 +114,7 @@ you're after.
 | `time_of_day` | string | no | New bucket value (`"anytime"`, `"morning"`, `"afternoon"`, `"night"`). |
 | `rotation_owners` | list[string] | no | **Rotating tasks only.** New ordered owner list (≥ 1 unique known slug; `current_owner` must remain in the list). |
 | `current_owner` | string | no | **Rotating tasks only.** New current-owner slug. Must be in `rotation_owners`. |
+| `points` | integer | no | Points earned on completion (0–1000). Requires an HA administrator or a userless call; a refused call adopts nothing. A plain household task cannot carry points, including after a `type` change. |
 
 **Fires event**: `lucarne_family_task_metadata_updated`
 
@@ -244,6 +246,112 @@ data:
 
 ---
 
+## `lucarne_family.grant_points`
+
+Give a member bonus points. Requires an HA administrator, or a call with no user.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `member` | string | yes | Member slug (`"household"` is rejected) |
+| `points` | integer | yes | 1–10000 |
+| `reason` | string | no | Trimmed, at most 200 characters |
+
+Returns `{"balance": <new balance>}` when called with `return_response`. Fires
+`lucarne_family_rewards_updated`. Unknown member → `ServiceValidationError`; non-admin →
+`Unauthorized`.
+
+---
+
+## `lucarne_family.create_reward`
+
+Add a reward to the catalog. Requires an HA administrator, or a call with no user.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | Trimmed, 1–60 characters |
+| `cost` | integer | yes | 1–100000 |
+| `description` | string | no | Trimmed, at most 500 characters |
+| `poolable` | boolean | no | Default `false` |
+
+Returns `{"id": <reward id>}` when called with `return_response`. Fires
+`lucarne_family_rewards_updated`.
+
+---
+
+## `lucarne_family.update_reward`
+
+Partial update of an active reward; existing claims keep their snapshot. Requires an HA
+administrator, or a call with no user.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reward_id` | integer | yes | |
+| `name`, `cost`, `description`, `poolable` | | no | Same rules as `create_reward` |
+
+An unknown or archived id → `ServiceValidationError`.
+
+---
+
+## `lucarne_family.archive_reward`
+
+Hide a reward from the catalog. Its pending claims can still be approved or rejected.
+Archiving an archived reward is a no-op that fires no event. Requires an HA administrator, or
+a call with no user.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reward_id` | integer | yes | |
+
+---
+
+## `lucarne_family.set_rewards_settings`
+
+Family-wide streak bonuses; omitted fields stay unchanged. Requires an HA administrator, or a
+call with no user. See [Streak computation](integration.md#streak-computation).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `streak_daily_bonus` | integer | no | 0–1000; 0 disables it |
+| `streak_milestones` | list | no | At most 20 of `{days: 1–365, points: 1–10000}` with unique `days`; stored sorted by `days` |
+
+---
+
+## `lucarne_family.claim_reward`
+
+Reserve the points for a reward. Any user may call it. Every contributor must afford their
+own share or nothing is written. Pooling needs a poolable reward; `split_shares` gives each
+of the `n` distinct contributors `cost // n` and the claimer the remainder.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `member` | string | yes | Claimer slug (`"household"` is rejected) |
+| `reward_id` | integer | yes | An active reward |
+| `pool_with` | list of strings | no | Other member slugs sharing the cost |
+
+Returns `{"claim_id": <id>, "shares": {<slug>: <points>}}` when called with `return_response`.
+Errors are `ServiceValidationError` sentences ("Not enough points: Alice needs 3 more",
+"This reward can't be shared", "This reward is no longer available", "Too many people for
+this reward"). Fires `lucarne_family_rewards_updated`.
+
+---
+
+## `lucarne_family.cancel_claim`, `approve_claim`, `reject_claim`, `refund_claim`
+
+Each takes `claim_id` (integer, required).
+
+| Service | Moves | Who | Ledger |
+|---------|-------|-----|--------|
+| `cancel_claim` | `pending` → `cancelled` | any user | releases every share |
+| `approve_claim` | `pending` → `approved` | admin | none: the reservation becomes the spend |
+| `reject_claim` | `pending` → `rejected` | admin | releases every share |
+| `refund_claim` | `approved` → `refunded` | admin | releases every share |
+
+A claim already moved on → `ServiceValidationError` "This claim was already <status>". The
+claim's own snapshot of name, cost and shares is what is released, whatever happened to the
+reward since. Admin services raise `Unauthorized` for a non-admin.
+
+---
+
 ## WebSocket API
 
 ### `lucarne_family/get_family`
@@ -291,3 +399,33 @@ Read the full family state in one round-trip. Used by the chores card.
 ```
 
 Auth: any logged-in HA user (no admin required).
+
+### `lucarne_family/get_rewards`
+
+Read balances. Open to any authenticated user.
+
+**Request**: `{"id": 1, "type": "lucarne_family/get_rewards", "history_limit": 50}` —
+`history_limit` (1–500) is optional; `history` is returned only when it is sent.
+`include_archived` (default `false`) adds archived rewards to `rewards`. `claims` holds every
+`pending` claim, plus the 50 newest resolved ones when `history_limit` is sent; each carries
+its `contributors` (`member_slug`, `share`).
+
+**Response**:
+```json
+{
+  "is_admin": false,
+  "balances": {"anna": 12, "bob": 0},
+  "rewards": [],
+  "claims": [],
+  "settings": {"streak_daily_bonus": 0, "streak_milestones": []},
+  "history": [
+    {"id": 3, "created_at": "2026-06-10T08:00:00+00:00", "member_slug": "anna", "delta": 5,
+     "kind": "earn", "summary": "Brush teeth", "reason": "", "claim_id": null,
+     "actor_name": "Parent"}
+  ]
+}
+```
+
+`balances` lists every member (0 with no rows). `history` is newest first; `actor_name` is
+`null` for an automation or the system. Earn and revoke rules: see
+[Points ledger](architecture.md#points-ledger).

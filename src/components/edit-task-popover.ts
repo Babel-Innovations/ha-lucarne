@@ -322,6 +322,8 @@ export class LucarneEditTaskPopover extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ attribute: false }) task!: RenderableTask;
   @property({ attribute: false }) members: MemberSummary[] = [];
+  /** From `rewards.is_admin`. Cosmetic: the server gates `points` regardless. */
+  @property({ type: Boolean }) isAdmin = false;
 
   @state() private _summary = '';
   @state() private _type: TaskType = 'chore';
@@ -340,6 +342,7 @@ export class LucarneEditTaskPopover extends LitElement {
   @state() private _timeOfDay: TimeOfDay = 'anytime';
   @state() private _isCustomRecurrence = false;
   @state() private _rawRecurrence = '';
+  @state() private _points = '0';
   @state() private _error = '';
   @state() private _saving = false;
   @state() private _confirmingDelete = false;
@@ -357,6 +360,7 @@ export class LucarneEditTaskPopover extends LitElement {
     this._summary = t.summary;
     this._type = t.metadata.type;
     this._icon = t.metadata.icon;
+    this._points = String(t.metadata.points ?? 0);
     this._due = t.due ?? '';
     this._assignee = t.metadata.assignee_slug;
     // Coerce defensively: an out-of-band string (typo, legacy import, future
@@ -502,6 +506,15 @@ export class LucarneEditTaskPopover extends LitElement {
     return '';
   }
 
+  /** The server rejects points on a plain household task, so the field only
+   *  shows for an admin and when the task is a member's or rotating. */
+  private _showPoints(): boolean {
+    return (
+      this.isAdmin &&
+      (this._type === 'rotating' || this.task?.metadata.member_slug !== 'household')
+    );
+  }
+
   private async _save() {
     if (this._saving) return;
     if (!this._summary.trim()) {
@@ -528,6 +541,27 @@ export class LucarneEditTaskPopover extends LitElement {
       return;
     }
 
+    const origPoints = this.task.metadata.points ?? 0;
+    // Non-admins send no `points` key at all. `undefined` here means "leave it".
+    let points: number | undefined;
+    if (this._showPoints()) {
+      const n = Number(this._points);
+      if (this._points.trim() === '' || !Number.isInteger(n) || n < 0 || n > 1000) {
+        this._error = 'Points must be a whole number from 0 to 1000';
+        return;
+      }
+      if (n !== origPoints) points = n;
+    } else if (
+      this.isAdmin &&
+      this.task.metadata.member_slug === 'household' &&
+      this._type !== 'rotating' &&
+      origPoints > 0
+    ) {
+      // The server's household rule checks the row's resulting points, so a task
+      // leaving `rotating` must drop them or the save fails.
+      points = 0;
+    }
+
     this._saving = true;
     this._error = '';
 
@@ -552,7 +586,8 @@ export class LucarneEditTaskPopover extends LitElement {
         (!isRotating && this._buildRRule() !== this.task.metadata.recurrence) ||
         this._timeOfDay !== (this.task.metadata.time_of_day ?? 'anytime') ||
         (isHousehold && !isRotating && this._assignee !== this.task.metadata.assignee_slug) ||
-        rotatingOwnersChanged;
+        rotatingOwnersChanged ||
+        points !== undefined;
       // If the current owner was removed from rotation, reset to the new first owner.
       const currentOwnerRemoved =
         isRotating &&
@@ -579,6 +614,7 @@ export class LucarneEditTaskPopover extends LitElement {
           ...(isHousehold && !isRotating && this._assignee !== this.task.metadata.assignee_slug ? { assignee: this._assignee } : {}),
           ...(rotatingOwnersChanged ? { rotation_owners: this._rotatingOwners } : {}),
           ...(currentOwnerRemoved ? { current_owner: this._rotatingOwners[0] } : {}),
+          ...(points !== undefined ? { points } : {}),
         });
       }
 
@@ -597,6 +633,7 @@ export class LucarneEditTaskPopover extends LitElement {
             icon: this._icon,
             recurrence: isRotating ? this.task.metadata.recurrence : this._buildRRule(),
             time_of_day: this._timeOfDay,
+            ...(points !== undefined ? { points } : {}),
             ...(isHousehold && !isRotating ? { assignee_slug: this._assignee } : {}),
             ...(isRotating
               ? {
@@ -1008,6 +1045,24 @@ export class LucarneEditTaskPopover extends LitElement {
           />
         </div>
         ` : ''}
+
+        ${this._showPoints()
+          ? html`
+              <div class="field">
+                <label for="et-points">Points</label>
+                <input
+                  id="et-points"
+                  type="number"
+                  min="0"
+                  max="1000"
+                  step="1"
+                  inputmode="numeric"
+                  .value=${this._points}
+                  @input=${(e: InputEvent) => (this._points = (e.target as HTMLInputElement).value)}
+                />
+              </div>
+            `
+          : ''}
 
         ${this._error ? html`<div class="error-msg">${this._error}</div>` : ''}
 

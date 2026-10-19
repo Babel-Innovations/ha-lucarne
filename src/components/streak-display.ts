@@ -11,6 +11,7 @@ export class LucarneStreakDisplay extends LitElement {
       font-family: var(--primary-font-family, sans-serif);
     }
     .streak-row {
+      min-height: var(--lucarne-streak-row-min-height, 0);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -30,6 +31,9 @@ export class LucarneStreakDisplay extends LitElement {
       font-size: clamp(1rem, 1.5vw, 1.25rem);
       font-weight: 700;
       color: var(--primary-text-color, #212121);
+    }
+    ::slotted([slot='aside']) {
+      margin-left: 12px;
     }
     .label {
       font-size: clamp(0.7rem, 0.9vw, 0.8rem);
@@ -56,6 +60,7 @@ export class LucarneStreakDisplay extends LitElement {
       <div class="streak-row">
         <span class="flame ${this._milestoneClass(s)}">🔥</span>
         <span class="count">${s}</span>
+        <slot name="aside"></slot>
       </div>
       <div class="label">${label}</div>
     `;

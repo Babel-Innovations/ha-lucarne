@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from functools import partial
 
 from homeassistant.components.todo.const import DATA_COMPONENT, TodoItemStatus
 from homeassistant.core import CALLBACK_TYPE, CoreState, Event, HomeAssistant, callback
@@ -23,6 +24,7 @@ from homeassistant.helpers.event import EventStateChangedData, async_track_state
 
 from .apple_sentinel_backfill import async_backfill_apple_sentinel
 from .const import EVENT_APPLE_WRITEBACK_REQUESTED
+from .rewards import async_record_task_transition
 from .store import LucarneFamilyStore
 from .task_adoption import resolve_member_slug
 
@@ -90,6 +92,10 @@ def async_start_completion_listener(
             result[item.uid] = (status_str, item.summary or "")
         return result
 
+    def _current_status(entity_id: str, uid: str) -> str | None:
+        entry = _read_entity_snapshot(entity_id).get(uid)
+        return entry[0] if entry else None
+
     @callback
     def _on_ha_started(_event: Event) -> None:
         # Re-snapshot all entities at start so the baseline reflects the world as
@@ -130,6 +136,10 @@ def async_start_completion_listener(
         old_snapshot = _snapshots.get(entity_id, {})
         new_snapshot = _read_entity_snapshot(entity_id)
         _snapshots[entity_id] = new_snapshot
+        # Read with the snapshot, before any await: by the time a transition is
+        # recorded below, a later change by someone else may own the entity's context.
+        state = hass.states.get(entity_id)
+        actor_user_id = state.context.user_id if state else None
 
         members_with_completions: set[str] = set()
 
@@ -218,6 +228,23 @@ def async_start_completion_listener(
                 action=action,
                 recurrence_at_time=metadata.get("recurrence", "") if metadata else "",
             )
+
+            # A rewards failure must never stop completion logging or the event.
+            try:
+                await async_record_task_transition(
+                    hass,
+                    store,
+                    entity_id=entity_id,
+                    uid=uid,
+                    action=action,
+                    metadata=metadata,
+                    member_slug=member_slug,
+                    summary=summary,
+                    actor_user_id=actor_user_id,
+                    read_status=partial(_current_status, entity_id, uid),
+                )
+            except Exception:
+                _LOGGER.exception("Recording points for %s failed", uid)
 
             # Per-item completion event — only fires for "completed" transitions.
             # "undone" and "reset" transitions should not trigger automation triggers

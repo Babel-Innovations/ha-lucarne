@@ -78,8 +78,8 @@ export class LucarneMemberAvatar extends LitElement {
       display: block;
     }
     .avatar {
-      width: clamp(48px, 6vw, 72px);
-      height: clamp(48px, 6vw, 72px);
+      width: var(--lucarne-avatar-size, clamp(48px, 6vw, 72px));
+      height: var(--lucarne-avatar-size, clamp(48px, 6vw, 72px));
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -93,7 +93,7 @@ export class LucarneMemberAvatar extends LitElement {
       object-fit: cover;
     }
     .initial {
-      font-size: clamp(1.25rem, 2.5vw, 2rem);
+      font-size: var(--lucarne-avatar-font, clamp(1.25rem, 2.5vw, 2rem));
       font-weight: 700;
       color: rgba(0, 0, 0, 0.7);
       line-height: 1;
@@ -101,7 +101,7 @@ export class LucarneMemberAvatar extends LitElement {
       font-family: var(--primary-font-family, sans-serif);
     }
     .emoji {
-      font-size: clamp(1.5rem, 3vw, 2.25rem);
+      font-size: var(--lucarne-avatar-font, clamp(1.5rem, 3vw, 2.25rem));
       line-height: 1;
     }
   `;

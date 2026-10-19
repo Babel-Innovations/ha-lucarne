@@ -115,6 +115,8 @@ export interface TaskMetadata {
   time_of_day?: TimeOfDay;
   rotation_owners?: string[];
   current_owner?: string;
+  /** Admin-set points awarded per completion; absent on an older integration. */
+  points?: number;
 }
 
 export interface RenderableTask {
@@ -181,3 +183,56 @@ export interface CalendarConfig {
    */
   label?: string;
 }
+
+export interface RewardItem {
+  id: number;
+  name: string;
+  cost: number;
+  description: string;
+  poolable: boolean;
+  archived: boolean;
+}
+
+export type ClaimStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'refunded';
+
+export interface RewardClaim {
+  id: number;
+  reward_id: number;
+  reward_name: string;
+  cost: number;
+  claimer_slug: string;
+  status: ClaimStatus;
+  created_at: string;
+  resolved_at: string | null;
+  contributors: Array<{ member_slug: string; share: number }>;
+}
+
+export interface RewardsSettings {
+  streak_daily_bonus: number;
+  streak_milestones: Array<{ days: number; points: number }>;
+}
+
+export interface LedgerRow {
+  id: number;
+  created_at: string;
+  member_slug: string;
+  delta: number;
+  kind: string;
+  summary: string;
+  reason: string;
+  claim_id: number | null;
+  actor_name: string | null;
+}
+
+/** Response of `lucarne_family/get_rewards`. */
+export interface GetRewardsResponse {
+  is_admin: boolean;
+  balances: Record<string, number>;
+  rewards: RewardItem[];
+  claims: RewardClaim[];
+  settings: RewardsSettings;
+  /** Only present when the request sent `history_limit`. */
+  history?: LedgerRow[];
+}
+
+export type RewardsState = GetRewardsResponse;

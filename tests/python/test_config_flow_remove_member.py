@@ -353,3 +353,85 @@ async def test_remove_legacy_member_with_no_stored_entity_ids_still_deletes_help
     assert er.async_get("todo.anna") is None, (
         "the canonical-id fallback deleted the helper instead of silently orphaning it"
     )
+
+
+# ---------------------------------------------------------------------------
+# Pending reward claims are released; the ledger is kept
+# ---------------------------------------------------------------------------
+
+
+async def _seed_claims(hass: HomeAssistant, entry: MockConfigEntry, store: LucarneFamilyStore):
+    from homeassistant.core import Context
+
+    from custom_components.lucarne_family.rewards import async_setup_rewards_services
+
+    await async_setup_rewards_services(hass, entry.entry_id)
+    for slug in ("anna", "bob"):
+        await hass.services.async_call(
+            DOMAIN, "grant_points", {"member": slug, "points": 20}, blocking=True,
+            context=Context(),
+        )
+    reward = (
+        await hass.services.async_call(
+            DOMAIN, "create_reward", {"name": "Movie", "cost": 10, "poolable": True},
+            blocking=True, return_response=True,
+        )
+    )["id"]
+    solo = (
+        await hass.services.async_call(
+            DOMAIN, "claim_reward", {"member": "anna", "reward_id": reward},
+            blocking=True, return_response=True,
+        )
+    )["claim_id"]
+    pooled = (
+        await hass.services.async_call(
+            DOMAIN, "claim_reward",
+            {"member": "bob", "reward_id": reward, "pool_with": ["anna"]},
+            blocking=True, return_response=True,
+        )
+    )["claim_id"]
+    return solo, pooled
+
+
+async def test_remove_member_rejects_their_pending_claims_and_keeps_ledger(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    with patch(
+        "custom_components.lucarne_family.entity_manager.async_delete_member_entities",
+        new_callable=AsyncMock,
+    ):
+        entry, store = await _setup(hass, tmp_path, ["anna", "bob"])
+        solo, pooled = await _seed_claims(hass, entry, store)
+        assert await store.async_get_balances() == {"anna": 5, "bob": 15}
+
+        await _run_remove_member(hass, entry, "anna")
+
+        assert await store.async_get_claims(["pending"]) == []
+        statuses = {c["id"]: c["status"] for c in await store.async_get_claims(["rejected"])}
+        assert statuses == {solo: "rejected", pooled: "rejected"}
+        # Everyone's points are back, and the removed member's rows survive.
+        assert await store.async_get_balances() == {"anna": 20, "bob": 20}
+        with store._db_connect() as con:
+            assert con.execute(
+                "SELECT COUNT(*) FROM points_ledger WHERE member_slug = 'anna'"
+            ).fetchone()[0] > 0
+
+
+async def test_remove_member_completes_when_claim_release_fails(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    with (
+        patch(
+            "custom_components.lucarne_family.entity_manager.async_delete_member_entities",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            LucarneFamilyStore,
+            "async_release_member_claims",
+            side_effect=RuntimeError("boom"),
+        ),
+    ):
+        entry, _store = await _setup(hass, tmp_path, ["anna", "bob"])
+        await _run_remove_member(hass, entry, "anna")
+
+    assert [m["slug"] for m in entry.data[CONF_MEMBERS]] == ["bob"]

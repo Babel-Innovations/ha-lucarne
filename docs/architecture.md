@@ -283,7 +283,17 @@ The config entry `data` dict has this shape (Phase 2):
 | Members | `config_entry.data["members"]` | Bounded (~5), visible in HA backups, easily debuggable via `.storage/core.config_entries` |
 | Task metadata | SQLite (`lucarne_family_<entry_id>.db`, table `task_metadata`) | Unbounded — could be thousands; SQLite handles this cleanly |
 | Completion history | SQLite (`completion_log` table) | Append-only audit log; foundation for streak computation and future rewards |
+| Points ledger | SQLite (`points_ledger` table) | Append-only; a balance is `SUM(delta)`, never stored. See [Points ledger](#points-ledger) |
 | Avatar files | `<config>/www/lucarne/avatars/` | Binary files stay off the database; path reference in member data |
+
+### Points ledger
+
+Points are earned and revoked in the completion listener, on the same transitions that write
+`completion_log`, so a tick from any surface counts. Every write runs through
+`LucarneFamilyStore._async_rewards_write` under `rewards_lock`, which is never held together
+with a task uid lock. Claims reserve points in the same transaction that checks every
+contributor's balance, and the streak check pays bonuses idempotently through
+`ux_ledger_idem`. The rules are in [Concepts](../features/rewards/README.md#concepts).
 
 ### The todo entity owns existence; `task_metadata` is enrichment
 

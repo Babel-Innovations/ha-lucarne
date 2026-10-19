@@ -19,6 +19,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .const import DOMAIN, HOUSEHOLD_ENTITY_ID, HOUSEHOLD_SLUG
 from .recurrence import is_valid_rrule
+from .rewards import async_require_admin
 from .rotation import parse_owners, serialize_owners
 from .store import LucarneFamilyStore
 from .task_adoption import (
@@ -35,6 +36,16 @@ _HOUSEHOLD_SLUG = HOUSEHOLD_SLUG
 _HOUSEHOLD_ENTITY_ID = HOUSEHOLD_ENTITY_ID
 _TASK_TYPES = ("routine", "chore", "rotating")
 _TIME_OF_DAY_VALUES = ("anytime", "morning", "afternoon", "night")
+_POINTS_VALIDATOR = vol.All(vol.Coerce(int), vol.Range(min=0, max=1000))
+
+
+def _check_household_points(member_slug: str, task_type: str, points: int) -> None:
+    """A plain household task has no owner to credit, so it cannot carry points."""
+    if points > 0 and member_slug == _HOUSEHOLD_SLUG and task_type != "rotating":
+        raise ServiceValidationError(
+            "Household tasks can't earn points; make it a rotating task or "
+            "assign it to a member"
+        )
 
 
 def _get_store(hass: HomeAssistant, entry_id: str) -> LucarneFamilyStore:
@@ -131,6 +142,8 @@ ADD_TASK_SCHEMA = vol.Schema(
         vol.Optional("time_of_day", default="anytime"): vol.In(list(_TIME_OF_DAY_VALUES)),
         vol.Optional("rotation_owners", default=list): [cv.string],
         vol.Optional("current_owner", default=""): cv.string,
+        # No default: the key's presence is what triggers the admin gate.
+        vol.Optional("points"): _POINTS_VALIDATOR,
     }
 )
 
@@ -144,6 +157,7 @@ UPDATE_METADATA_SCHEMA = vol.Schema(
         vol.Optional("time_of_day"): vol.In(list(_TIME_OF_DAY_VALUES)),
         vol.Optional("rotation_owners"): [cv.string],
         vol.Optional("current_owner"): cv.string,
+        vol.Optional("points"): _POINTS_VALIDATOR,
     }
 )
 
@@ -169,6 +183,11 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
         time_of_day: str = call.data.get("time_of_day", "anytime")
         rotation_owners_raw: list[str] = call.data.get("rotation_owners", [])
         current_owner_raw: str = call.data.get("current_owner", "")
+        points: int = call.data.get("points", 0)
+
+        if "points" in call.data:
+            await async_require_admin(hass, call.context)
+        _check_household_points(member_slug, task_type, points)
 
         if member_slug != _HOUSEHOLD_SLUG and member_slug not in known_slugs:
             raise ServiceValidationError(f"Unknown member: {member_slug!r}")
@@ -241,6 +260,7 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
                     time_of_day=time_of_day,
                     rotation_owners=rotation_owners_str,
                     current_owner=resolved_current_owner,
+                    points=points,
                 )
             except Exception:
                 # Best-effort rollback: remove the orphaned todo item. Its own
@@ -272,6 +292,11 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
     async def handle_update_task_metadata(call: ServiceCall) -> None:
         store = _get_store(hass, entry_id)
         uid: str = call.data["uid"]
+
+        # Before the adoption below: a refused call must not enrol the item into
+        # the daily-reset sweep.
+        if "points" in call.data:
+            await async_require_admin(hass, call.context)
 
         metadata = await store.async_get_task_metadata(uid)
         # Unlike delete/toggle, this handler needs a row to write to, so an item
@@ -306,7 +331,7 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
                 raise ServiceValidationError(f"Unknown assignee: {assignee!r}")
 
         update_fields: dict[str, Any] = {}
-        for field_name in ("icon", "recurrence", "type", "time_of_day"):
+        for field_name in ("icon", "recurrence", "type", "time_of_day", "points"):
             if field_name in call.data:
                 update_fields[field_name] = call.data[field_name]
         if "assignee" in call.data:
@@ -395,6 +420,14 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
             )
             if seeded_owners:
                 update_fields["current_owner"] = seeded_owners[0]
+
+        # Checked on every call, not only when points is sent: a type-only change
+        # can turn a pointed rotating task into a household chore.
+        _check_household_points(
+            str(metadata.get("member_slug", "")),
+            effective_type,
+            int(update_fields.get("points", metadata.get("points", 0))),
+        )
 
         # Every validation passed, so the deferred adoption is now safe to commit.
         # Skipped for a fields-less call: async_update_task_metadata early-returns
@@ -542,14 +575,23 @@ async def async_setup_services(hass: HomeAssistant, entry_id: str) -> None:
 
     async def handle_evaluate_all_streaks(_call: ServiceCall) -> None:
         from datetime import UTC, datetime
+        from zoneinfo import ZoneInfo
 
-        from .streak_logic import async_apply_streak, async_evaluate_streak
+        from .rewards import async_award_streak_bonus
+        from .streak_logic import async_apply_streak, async_evaluate_streak_run
 
         store = _get_store(hass, entry_id)
         as_of = datetime.now(UTC)
+        # The local date, not as_of.date(): at the default 21:00 check in a US
+        # time zone the UTC date is already tomorrow.
+        today = as_of.astimezone(ZoneInfo(str(hass.config.time_zone))).date()
         for member in store.get_members():
-            new_streak = await async_evaluate_streak(hass, store, member, as_of)
-            await async_apply_streak(hass, store, member, new_streak)
+            try:
+                run = await async_evaluate_streak_run(hass, store, member, as_of)
+                await async_apply_streak(hass, store, member, run.length)
+                await async_award_streak_bonus(hass, store, member, run, today)
+            except Exception:
+                _LOGGER.exception("Streak evaluation failed for %s", member.slug)
         _LOGGER.debug("Evaluated streaks for %d members", len(store.get_members()))
 
     hass.services.async_register(

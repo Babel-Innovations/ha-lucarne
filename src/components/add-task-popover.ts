@@ -322,6 +322,8 @@ export class LucarneAddTaskPopover extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ attribute: false }) member!: MemberSummary;
   @property({ attribute: false }) members: MemberSummary[] = [];
+  /** From `rewards.is_admin`. Cosmetic: the server gates `points` regardless. */
+  @property({ type: Boolean }) isAdmin = false;
 
   @state() private _selectedMemberSlug = '';
   @state() private _summary = '';
@@ -338,6 +340,7 @@ export class LucarneAddTaskPopover extends LitElement {
   @state() private _recurrenceStart = '';
   @state() private _due = '';
   @state() private _timeOfDay: TimeOfDay = 'anytime';
+  @state() private _points = '0';
   @state() private _error = '';
   @state() private _saving = false;
   @state() private _alsoAddSlugs: Set<string> = new Set();
@@ -392,6 +395,12 @@ export class LucarneAddTaskPopover extends LitElement {
     return buildRRule(start && picked.mode !== 'none' ? { ...picked, start } : picked);
   }
 
+  /** The server rejects points on a plain household task, so the field only
+   *  shows for an admin and when the target is a member list or a rotating task. */
+  private _showPoints(): boolean {
+    return this.isAdmin && (this._type === 'rotating' || this._selectedMemberSlug !== 'household');
+  }
+
   private async _submit() {
     if (this._saving) return;
     if (!this._summary.trim()) {
@@ -415,6 +424,16 @@ export class LucarneAddTaskPopover extends LitElement {
       return;
     }
 
+    // Non-admins (and a plain household task) send no `points` key at all.
+    let points: number | undefined;
+    if (this._showPoints()) {
+      points = Number(this._points);
+      if (this._points.trim() === '' || !Number.isInteger(points) || points < 0 || points > 1000) {
+        this._error = 'Points must be a whole number from 0 to 1000';
+        return;
+      }
+    }
+
     this._saving = true;
     this._error = '';
 
@@ -435,6 +454,7 @@ export class LucarneAddTaskPopover extends LitElement {
           time_of_day: this._timeOfDay,
           source: 'manual',
           rotation_owners: this._rotatingOwners,
+          ...(points !== undefined ? { points } : {}),
         });
         if (uid) {
           added.push(
@@ -442,6 +462,7 @@ export class LucarneAddTaskPopover extends LitElement {
               rotation_owners: this._rotatingOwners,
               // Server defaults current_owner to the first listed owner.
               current_owner: this._rotatingOwners[0],
+              points,
             }),
           );
         }
@@ -468,9 +489,12 @@ export class LucarneAddTaskPopover extends LitElement {
             ...(due ? { due } : {}),
             time_of_day: this._timeOfDay,
             source: 'manual',
+            ...(points !== undefined ? { points } : {}),
           });
           if (uid) {
-            added.push(this._provisionalTask(uid, slug, summary, due || null, { recurrence: rrule }));
+            added.push(
+              this._provisionalTask(uid, slug, summary, due || null, { recurrence: rrule, points }),
+            );
           }
         }
       }
@@ -496,7 +520,12 @@ export class LucarneAddTaskPopover extends LitElement {
     memberSlug: string,
     summary: string,
     due: string | null,
-    extra: { recurrence?: string; rotation_owners?: string[]; current_owner?: string } = {},
+    extra: {
+      recurrence?: string;
+      rotation_owners?: string[];
+      current_owner?: string;
+      points?: number;
+    } = {},
   ): RenderableTask {
     return {
       uid,
@@ -515,6 +544,7 @@ export class LucarneAddTaskPopover extends LitElement {
         time_of_day: this._timeOfDay,
         ...(extra.rotation_owners !== undefined ? { rotation_owners: extra.rotation_owners } : {}),
         ...(extra.current_owner !== undefined ? { current_owner: extra.current_owner } : {}),
+        ...(extra.points !== undefined ? { points: extra.points } : {}),
       },
     };
   }
@@ -914,6 +944,24 @@ export class LucarneAddTaskPopover extends LitElement {
                   type="datetime-local"
                   .value=${this._due}
                   @change=${(e: Event) => (this._due = (e.target as HTMLInputElement).value)}
+                />
+              </div>
+            `
+          : ''}
+
+        ${this._showPoints()
+          ? html`
+              <div class="field">
+                <label for="at-points">Points</label>
+                <input
+                  id="at-points"
+                  type="number"
+                  min="0"
+                  max="1000"
+                  step="1"
+                  inputmode="numeric"
+                  .value=${this._points}
+                  @input=${(e: InputEvent) => (this._points = (e.target as HTMLInputElement).value)}
                 />
               </div>
             `

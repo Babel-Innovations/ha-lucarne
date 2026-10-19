@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from homeassistant.core import HomeAssistant
 
-from .models import Member
+from .models import Member, StreakRun
 from .recurrence import make_recurrence_evaluator
 from .store import LucarneFamilyStore
 
@@ -19,6 +19,16 @@ async def async_evaluate_streak(
     member: Member,
     as_of: datetime,
 ) -> int:
+    """Recompute member's streak length; see ``async_evaluate_streak_run``."""
+    return (await async_evaluate_streak_run(hass, store, member, as_of)).length
+
+
+async def async_evaluate_streak_run(
+    hass: HomeAssistant,
+    store: LucarneFamilyStore,
+    member: Member,
+    as_of: datetime,
+) -> StreakRun:
     """Recompute member's streak from completion_log as of `as_of`.
 
     completion_log is the authoritative source; the counter entity is only a
@@ -40,7 +50,7 @@ async def async_evaluate_streak(
 
     today = as_of.astimezone(local_tz).date()
     evaluator = make_recurrence_evaluator(hass, store, member.slug)
-    return await store.async_get_streak(member.slug, today, evaluator, tz=local_tz)
+    return await store.async_get_streak_run(member.slug, today, evaluator, tz=local_tz)
 
 
 async def async_apply_streak(

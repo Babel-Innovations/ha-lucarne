@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 
@@ -97,3 +97,12 @@ class Member:
             todo_entity_id=data.get("todo_entity_id", ""),
             streak_counter_id=data.get("streak_counter_id", ""),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class StreakRun:
+    """A member's current streak: its length, first counted day, and whether today counted."""
+
+    length: int
+    run_start: date | None
+    today_counted: bool

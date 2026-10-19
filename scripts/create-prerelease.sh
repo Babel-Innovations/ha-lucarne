@@ -263,10 +263,10 @@ fi
 
 BUNDLE_SIZE=$(wc -c < "$BUNDLE")
 BUNDLE_SIZE_KIB=$((BUNDLE_SIZE / 1024))
-# Compared in bytes, not floored KiB: `$((BUNDLE_SIZE / 1024)) -gt 400` would let
-# anything up to 410,623 bytes through a nominal 400 KiB ceiling.
-if [ "$BUNDLE_SIZE" -gt $((400 * 1024)) ]; then
-    log_error "Bundle size ${BUNDLE_SIZE} bytes (${BUNDLE_SIZE_KIB} KiB) exceeds the 400 KiB limit"
+# Compared in bytes, not floored KiB: `$((BUNDLE_SIZE / 1024)) -gt 450` would let
+# anything up to 461,823 bytes through a nominal 450 KiB ceiling.
+if [ "$BUNDLE_SIZE" -gt $((450 * 1024)) ]; then
+    log_error "Bundle size ${BUNDLE_SIZE} bytes (${BUNDLE_SIZE_KIB} KiB) exceeds the 450 KiB limit"
     exit 1
 fi
 log_success "Build complete (${BUNDLE_SIZE_KIB} KiB)"

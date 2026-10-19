@@ -442,3 +442,45 @@ async def test_rename_confirm_cancel_discards_change(
     slugs = [m.slug for m in members]
     assert "anna" in slugs
     assert "annabelle" not in slugs
+
+
+async def test_rename_moves_claims_contributors_and_streak_state_and_back(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    from .test_rewards_ledger import _store
+
+    store = await _store(hass, tmp_path)
+    async with store.rewards_lock:
+        await store.async_ledger_grant("anna", 10, "", None)
+        reward_id = await store.async_create_reward("Movie", 10, "", False)
+
+        def _seed(con: Any) -> int:
+            cur = con.execute(
+                "INSERT INTO claims (reward_id, reward_name, cost, claimer_slug,"
+                " status, created_at) VALUES (?, 'Movie', 10, 'anna', 'pending', 'now')",
+                (reward_id,),
+            )
+            con.execute(
+                "INSERT INTO claim_contributors VALUES (?, 'anna', 10)", (cur.lastrowid,)
+            )
+            con.execute("INSERT INTO streak_bonus_state VALUES ('anna', 7, '2026-06-01')")
+            return int(cur.lastrowid)
+
+        claim_id = await store._async_rewards_write(_seed, "seed claim")
+
+    def _snapshot() -> tuple[Any, ...]:
+        with store._db_connect() as con:
+            return (
+                con.execute("SELECT claimer_slug FROM claims").fetchall()[0][0],
+                con.execute("SELECT member_slug FROM claim_contributors").fetchall()[0][0],
+                con.execute("SELECT member_slug FROM streak_bonus_state").fetchall()[0][0],
+                sorted({r[0] for r in con.execute("SELECT member_slug FROM points_ledger")}),
+            )
+
+    await store.async_rename_member_slug("anna", "ann")
+    assert _snapshot() == ("ann", "ann", "ann", ["ann"])
+    assert (await store.async_get_claims(["pending"]))[0]["id"] == claim_id
+
+    # The rollback of a failed rename moves everything back.
+    await store.async_rename_member_slug("ann", "anna")
+    assert _snapshot() == ("anna", "anna", "anna", ["anna"])

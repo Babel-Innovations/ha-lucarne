@@ -949,6 +949,165 @@ describe('subscribeFamilyState entity subscription lifecycle', () => {
   });
 });
 
+describe('subscribeFamilyState rewards opt-in', () => {
+  type FS = import('../../src/shared/family-subscription.js').FamilyState;
+  const HA = (h: unknown) => h as import('../../src/shared/types.js').HomeAssistant;
+  // nextTick, not setTimeout: the mock-timer tests below fake setTimeout.
+  const flush = async () => {
+    for (let i = 0; i < 25; i++) await new Promise((r) => process.nextTick(r));
+  };
+  const REWARDS = {
+    is_admin: true,
+    balances: { anna: 3 },
+    rewards: [],
+    claims: [],
+    settings: { streak_daily_bonus: 0, streak_milestones: [] },
+  };
+
+  function makeHass(opts: { rewardsFails?: boolean } = {}) {
+    const sent: Record<string, unknown>[] = [];
+    let relay: ((m: unknown) => void) | null = null;
+    let entityPush: ((m: unknown) => void) | null = null;
+    const hass = makeFakeHass();
+    hass.connection.sendMessagePromise = async (payload: Record<string, unknown>) => {
+      sent.push(payload);
+      if (payload.type === 'lucarne_family/get_family') {
+        return {
+          members: [MEMBER_ANNA],
+          task_metadata: [{ ...TASK_META, points: '4' }],
+          reset_time: '07:00',
+          streak_check_time: '22:00',
+          household_entity_id: 'todo.lucarne_household',
+        };
+      }
+      if (payload.type === 'lucarne_family/get_rewards') {
+        if (opts.rewardsFails) throw new Error('unknown command');
+        return REWARDS;
+      }
+      if (payload.type === 'call_service' && payload.domain === 'todo') {
+        const entityId = (payload.target as { entity_id: string })?.entity_id ?? '';
+        return { response: { [entityId]: { items: [] } } };
+      }
+      return undefined;
+    };
+    hass.connection.subscribeMessage = async (cb: (m: unknown) => void, payload: Record<string, unknown>) => {
+      if (payload.type === 'lucarne_family/subscribe') relay = cb;
+      if (payload.type === 'subscribe_entities') entityPush = cb;
+      return async () => {};
+    };
+    const rewardsMsgs = () => sent.filter((m) => m.type === 'lucarne_family/get_rewards');
+    return { hass, sent, rewardsMsgs, relay: () => relay!, entityPush: () => entityPush! };
+  }
+
+  it('without opts sends no get_rewards on refresh, poll or relayed event', async () => {
+    const h = makeHass();
+    const states: FS[] = [];
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      const unsub = subscribeFamilyState(HA(h.hass), (s) => states.push(s));
+      await flush();
+      mock.timers.tick(20_000);
+      await flush();
+      h.relay()({ event_type: 'lucarne_family_rewards_updated' });
+      mock.timers.tick(1000);
+      await flush();
+      unsub();
+    } finally {
+      mock.timers.reset();
+    }
+    assert.ok(h.sent.filter((m) => m.type === 'lucarne_family/get_family').length >= 3);
+    assert.equal(h.rewardsMsgs().length, 0);
+    assert.ok(states.length > 0);
+    for (const s of states) {
+      assert.equal(s.rewards, null);
+      assert.equal(s.rewardsFetchedAt, 0);
+    }
+  });
+
+  it('{ rewards: true } fetches alongside get_family, including on a relayed event', async () => {
+    const h = makeHass();
+    const states: FS[] = [];
+    try {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      const unsub = subscribeFamilyState(HA(h.hass), (s) => states.push(s), { rewards: true });
+      await flush();
+      assert.equal(h.rewardsMsgs().length, 1);
+      h.relay()({ event_type: 'lucarne_family_rewards_updated' });
+      mock.timers.tick(1000);
+      await flush();
+      assert.equal(h.rewardsMsgs().length, 2, 'relayed event refetches rewards');
+      unsub();
+    } finally {
+      mock.timers.reset();
+    }
+    for (const m of h.rewardsMsgs()) {
+      assert.deepEqual(Object.keys(m), ['type']);
+    }
+    assert.equal(states[states.length - 1].rewards?.balances.anna, 3);
+  });
+
+  it('{ rewardsHistory: 50 } alone fetches with history_limit and include_archived', async () => {
+    const h = makeHass();
+    const unsub = subscribeFamilyState(HA(h.hass), () => {}, { rewardsHistory: 50 });
+    await flush();
+    unsub();
+    assert.equal(h.rewardsMsgs().length, 1);
+    assert.equal(h.rewardsMsgs()[0].history_limit, 50);
+    assert.equal(h.rewardsMsgs()[0].include_archived, true);
+  });
+
+  it('a rejecting get_rewards yields rewards null without an integrationError', async () => {
+    const h = makeHass({ rewardsFails: true });
+    const states: FS[] = [];
+    const unsub = subscribeFamilyState(HA(h.hass), (s) => states.push(s), { rewards: true });
+    await flush();
+    unsub();
+    const last = states[states.length - 1];
+    assert.equal(last.rewards, null);
+    assert.equal(last.rewardsFetchedAt, 0);
+    assert.equal(last.integrationError, null);
+    assert.equal(last.members.length, 1);
+  });
+
+  it('rewardsFetchedAt is taken before the response resolves', async () => {
+    const h = makeHass();
+    const states: FS[] = [];
+    const unsub = subscribeFamilyState(HA(h.hass), (s) => states.push(s), { rewards: true });
+    await flush();
+    const resolvedAt = Date.now();
+    unsub();
+    const last = states[states.length - 1];
+    assert.ok(last.rewardsFetchedAt > 0);
+    assert.ok(last.rewardsFetchedAt <= resolvedAt);
+  });
+
+  it('a state emitted by a todo push still carries rewards and rewardsFetchedAt', async () => {
+    const h = makeHass();
+    const states: FS[] = [];
+    const unsub = subscribeFamilyState(HA(h.hass), (s) => states.push(s), { rewards: true });
+    await flush();
+    const before = states[states.length - 1];
+    const count = states.length;
+    h.entityPush()({ a: { 'todo.anna': { s: '0' } } });
+    h.entityPush()({ c: { 'todo.anna': { '+': { s: '1' } } } });
+    await flush();
+    unsub();
+    assert.ok(states.length > count, 'the push emitted a state');
+    const last = states[states.length - 1];
+    assert.deepEqual(last.rewards, before.rewards);
+    assert.equal(last.rewardsFetchedAt, before.rewardsFetchedAt);
+  });
+
+  it('normalizes task points to a number', async () => {
+    const h = makeHass();
+    const states: FS[] = [];
+    const unsub = subscribeFamilyState(HA(h.hass), (s) => states.push(s));
+    await flush();
+    unsub();
+    assert.strictEqual(states[states.length - 1].taskMetadataByUid.get('uid-1')?.points, 4);
+  });
+});
+
 describe('SYNTHETIC_HOUSEHOLD', () => {
   it('has slug "household" and todo_entity_id "todo.lucarne_household"', () => {
     assert.equal(SYNTHETIC_HOUSEHOLD.slug, 'household');

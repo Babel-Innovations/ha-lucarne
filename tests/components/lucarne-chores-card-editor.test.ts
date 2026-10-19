@@ -305,6 +305,19 @@ describe('lucarne-chores-card-editor', () => {
     assert.equal(events[0].detail.config.show_streak, false);
   });
 
+  it('fires config-changed when show_rewards toggled off', async () => {
+    const el = await makeEl();
+    const events: CustomEvent[] = [];
+    el.addEventListener('config-changed', (e) => events.push(e as CustomEvent));
+
+    const toggle = shadow(el, '#ed-show_rewards') as HTMLInputElement;
+    assert.equal(toggle.checked, true, 'show_rewards checked by default');
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+    assert.equal(events[0].detail.config.show_rewards, false);
+  });
+
   it('fires config-changed when hide_names toggled on (defaults unchecked)', async () => {
     const el = await makeEl();
     const events: CustomEvent[] = [];

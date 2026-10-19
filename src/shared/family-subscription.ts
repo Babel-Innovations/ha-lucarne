@@ -1,4 +1,11 @@
-import type { HomeAssistant, MemberSummary, TaskMetadata, RenderableTask } from './types.js';
+import type {
+  HomeAssistant,
+  MemberSummary,
+  TaskMetadata,
+  RenderableTask,
+  GetRewardsResponse,
+  RewardsState,
+} from './types.js';
 import { fetchTodoItems, subscribeEntityStates } from './ha-subscriptions.js';
 import type { EntityStatePhase } from './ha-subscriptions.js';
 import type { TodoItem } from './types.js';
@@ -16,6 +23,17 @@ export interface FamilyState {
   resetTime: string;
   streakCheckTime: string;
   integrationError: Error | null;
+  /** Null until fetched, when the subscriber did not opt in, or when `get_rewards` failed. */
+  rewards: RewardsState | null;
+  /** `Date.now()` taken before the `get_rewards` request was sent; 0 when `rewards` is null. */
+  rewardsFetchedAt: number;
+}
+
+export interface FamilySubscribeOptions {
+  /** Also fetch `get_rewards` on every refresh. */
+  rewards?: boolean;
+  /** Implies `rewards`; asks for this many ledger rows plus archived rewards. */
+  rewardsHistory?: number;
 }
 
 interface GetFamilyResponse {
@@ -97,8 +115,12 @@ function buildRenderableTasks(
 export function subscribeFamilyState(
   hass: HomeAssistant,
   callback: (state: FamilyState) => void,
+  opts?: FamilySubscribeOptions,
 ): () => void {
+  const wantsRewards = opts?.rewards === true || opts?.rewardsHistory !== undefined;
   let cancelled = false;
+  let rewards: RewardsState | null = null;
+  let rewardsFetchedAt = 0;
   let metadataByUid = new Map<string, TaskMetadata>();
   let allMembers: MemberSummary[] = [];
   const todoItemsByEntity = new Map<string, TodoItem[]>();
@@ -145,6 +167,8 @@ export function subscribeFamilyState(
       resetTime,
       streakCheckTime,
       integrationError: currentError,
+      rewards,
+      rewardsFetchedAt,
     });
   }
 
@@ -179,10 +203,34 @@ export function subscribeFamilyState(
 
   async function doRefreshOnce() {
     try {
-      const resp = await hass.connection.sendMessagePromise<GetFamilyResponse>({
-        type: 'lucarne_family/get_family',
-      });
+      // Taken before the request is sent: a mutation that succeeded earlier has
+      // `appliedAt` below this, so the overlay can tell this fetch already
+      // includes it.
+      const fetchStartedAt = Date.now();
+      const rewardsMsg: { type: string; history_limit?: number; include_archived?: boolean } = {
+        type: 'lucarne_family/get_rewards',
+      };
+      if (opts?.rewardsHistory !== undefined) {
+        rewardsMsg.history_limit = opts.rewardsHistory;
+        rewardsMsg.include_archived = true;
+      }
+      const [familyResult, rewardsResult] = await Promise.allSettled([
+        hass.connection.sendMessagePromise<GetFamilyResponse>({
+          type: 'lucarne_family/get_family',
+        }),
+        wantsRewards
+          ? hass.connection.sendMessagePromise<GetRewardsResponse>(rewardsMsg)
+          : Promise.resolve(null),
+      ]);
       if (cancelled) return;
+      if (familyResult.status === 'rejected') throw familyResult.reason;
+      const resp = familyResult.value;
+      if (wantsRewards) {
+        // An older integration may lack the command: isolate it from the family state.
+        const ok = rewardsResult.status === 'fulfilled' && rewardsResult.value;
+        rewards = ok ? rewardsResult.value : null;
+        rewardsFetchedAt = ok ? fetchStartedAt : 0;
+      }
 
       const metaMap = new Map<string, TaskMetadata>();
       for (const t of resp.task_metadata ?? []) {
@@ -198,7 +246,7 @@ export function subscribeFamilyState(
         } else if (Array.isArray(raw)) {
           rotation_owners = raw.map(String);
         }
-        metaMap.set(t.item_uid, { ...t, rotation_owners });
+        metaMap.set(t.item_uid, { ...t, rotation_owners, points: Number(t.points ?? 0) });
       }
       metadataByUid = metaMap;
       resetTime = resp.reset_time ?? '';
@@ -265,6 +313,7 @@ export function subscribeFamilyState(
         todoItemsByEntity.clear();
         resetTime = '';
         streakCheckTime = '';
+        rewards = null;
         emitState();
       }
     }

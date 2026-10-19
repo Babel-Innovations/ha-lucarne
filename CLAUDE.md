@@ -7,7 +7,7 @@ Working guide for AI sessions. Covers what you'd get wrong without it.
 Single-distribution HACS repo (one `integration` install ships both halves):
 
 - **Integration** (`custom_components/lucarne_family/`) — Python HA integration that owns family members, managed entities (`todo.<slug>`, `counter.<slug>_streak`), SQLite task/completion storage, and in-process time-change listeners for daily reset and streak check.
-- **Frontend** (`custom_components/lucarne_family/frontend/ha-lucarne.js`) — three Lit-based Lovelace cards: `lucarne-today-card`, `lucarne-calendar-card`, `lucarne-chores-card`. Single ESM bundle; no code splitting. The integration's `async_setup` **serves** this file at `FRONTEND_URL` (`/lucarne_family_frontend/ha-lucarne.js`) but does **not** register it as a frontend module — the loader shim below is the only importer (#101). No HACS plugin, no manual Lovelace resource.
+- **Frontend** (`custom_components/lucarne_family/frontend/ha-lucarne.js`) — four Lit-based Lovelace cards: `lucarne-today-card`, `lucarne-calendar-card`, `lucarne-chores-card`, `lucarne-rewards-admin-card`. Single ESM bundle; no code splitting. The integration's `async_setup` **serves** this file at `FRONTEND_URL` (`/lucarne_family_frontend/ha-lucarne.js`) but does **not** register it as a frontend module — the loader shim below is the only importer (#101). No HACS plugin, no manual Lovelace resource.
 - **Loader shim** (`frontend/ha-lucarne-loader.js`, ~4 kB) — the **only** module registered with the frontend. It waits for HA's legacy build to finish replacing `window.customElements`, then imports the bundle with a `.catch` attached. Both halves are the fix for #101; see the loader pitfall below and the file header in `src/loader/boot.ts`.
 
 Two test runners (node:test + pytest), one deploy target.
@@ -269,7 +269,7 @@ Single HACS item — `integration` category only. The cards ride along inside th
   `@webcomponents/scoped-custom-element-registry`, whose last statement is
   `Object.defineProperty(window, "customElements", {value: new CustomElementRegistry, ...})` —
   it installs a **brand-new registry and discards everything defined before it**. A
-  directly-registered bundle evaluated first, registered all 31 elements into the native
+  directly-registered bundle evaluated first, registered all 38 elements into the native
   registry, and lost them all: `define()` returns cleanly, nothing throws, and every card
   becomes HA's `Custom element doesn't exist: lucarne-…` panel.
   **This is not es5-only** — the polyfill is in `frontend_latest/app.js` too. What differs is
@@ -288,11 +288,11 @@ Single HACS item — `integration` category only. The cards ride along inside th
   1. `src/index.ts`'s **first** import must stay `'./shared/install-reporter.js'`. ESM hoists
      imports above the module body, so the old arrangement — a bare
      `installGlobalErrorReporter()` call at the top of the file — ran **dead last**, after all
-     31 registrations. Moving it back into the body silently disarms `window.onerror` for the
+     38 registrations. Moving it back into the body silently disarms `window.onerror` for the
      entire evaluation phase.
   2. `frontend/ha-lucarne-loader.js` is the **sole importer** of the bundle, so its `.catch`
      is the only thing that can observe a parse or evaluation failure. On failure it registers
-     the three card tags with an element that renders the exception on the dashboard; on both
+     the card tags with an element that renders the exception on the dashboard; on both
      outcomes it re-fires `ll-rebuild` at any `hui-error-card` still standing in for one of our
      cards. It resolves the bundle relative to its own URL so the `?v=<version>.<digest>`
      cache-buster carries across, and the digest covers **both** artifacts so editing either

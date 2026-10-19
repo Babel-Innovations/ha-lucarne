@@ -569,3 +569,71 @@ describe('not due today (#133)', () => {
     assert.equal(shadow(el, '.not-today-toggle'), null);
   });
 });
+
+describe('reward balance pill', () => {
+  async function withRewards(props: Partial<LucarneMemberColumn>) {
+    const el = makeEl();
+    el.showRewards = true;
+    Object.assign(el, props);
+    await el.updateComplete;
+    return el;
+  }
+
+  it('renders with a balance', async () => {
+    const el = await withRewards({ balance: 5 });
+    assert.ok(shadow(el, 'lucarne-reward-balance-pill'));
+  });
+
+  it('is hidden for null, and for 0 without active rewards, but shown for 0 with them', async () => {
+    assert.equal(shadow(await withRewards({ balance: null }), 'lucarne-reward-balance-pill'), null);
+    assert.equal(shadow(await withRewards({ balance: 0, hasActiveRewards: false }), 'lucarne-reward-balance-pill'), null);
+    assert.ok(shadow(await withRewards({ balance: 0, hasActiveRewards: true }), 'lucarne-reward-balance-pill'));
+  });
+
+  it('sits in the streak row so it centres on the count, and stands alone without a streak', async () => {
+    const withStreak = await withRewards({ balance: 5, showStreak: true });
+    const pill = shadow(withStreak, 'lucarne-reward-balance-pill')!;
+    assert.equal(pill.parentElement!.tagName.toLowerCase(), 'lucarne-streak-display');
+    assert.equal(pill.getAttribute('slot'), 'aside');
+    const streak = pill.parentElement as HTMLElement & { updateComplete: Promise<unknown> };
+    await streak.updateComplete;
+    assert.ok(streak.shadowRoot!.querySelector('.streak-row slot[name=aside]'), 'the slot is inside the count row');
+
+    assert.ok(shadow(withStreak, '.streak-area.rewards lucarne-streak-display'), 'every rewards column reserves the pill height');
+
+    const alone = await withRewards({ balance: 5, showStreak: false });
+    assert.equal(shadow(alone, 'lucarne-streak-display'), null);
+    assert.ok(shadow(alone, '.streak-area.pill-only > lucarne-reward-balance-pill'));
+  });
+
+  it('is hidden when showRewards is off', async () => {
+    const el = await withRewards({ balance: 5, showRewards: false });
+    assert.equal(shadow(el, 'lucarne-reward-balance-pill'), null);
+  });
+
+  it('renders alone when the streak is off', async () => {
+    const el = await withRewards({ balance: 5, showStreak: false });
+    assert.ok(shadow(el, '.streak-area lucarne-reward-balance-pill'));
+    assert.equal(shadow(el, 'lucarne-streak-display'), null);
+  });
+
+  it('fills the pill when affordable and fires rewards-open with the slug', async () => {
+    const el = await withRewards({ balance: 5, affordable: true });
+    const pill = shadow(el, 'lucarne-reward-balance-pill') as HTMLElement & { updateComplete: Promise<boolean> };
+    await pill.updateComplete;
+    assert.ok(pill.shadowRoot!.querySelector('button.ready'));
+    let slug = '';
+    el.addEventListener('rewards-open', (e) => (slug = (e as CustomEvent).detail.memberSlug));
+    (pill.shadowRoot!.querySelector('button') as HTMLElement).click();
+    assert.equal(slug, 'anna');
+  });
+
+  it('labels negative balances and stays unfilled when not affordable', async () => {
+    const el = await withRewards({ balance: -3 });
+    const pill = shadow(el, 'lucarne-reward-balance-pill') as HTMLElement & { updateComplete: Promise<boolean> };
+    await pill.updateComplete;
+    assert.ok(pill.shadowRoot!.textContent!.includes('−3'));
+    assert.equal(pill.shadowRoot!.querySelector('button.ready'), null);
+    assert.equal(pill.shadowRoot!.querySelector('button')!.getAttribute('aria-label'), 'Anna: -3 points');
+  });
+});

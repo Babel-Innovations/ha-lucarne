@@ -815,4 +815,82 @@ describe('lucarne-edit-task-popover', () => {
       assert.equal(shadow(el, '#et-start'), null);
     });
   });
+
+  describe('Points field', () => {
+    const pointsTask = (member = 'anna', type: 'chore' | 'rotating' = 'chore', points = 3) =>
+      makeTask({
+        metadata: {
+          item_uid: 'task-uid-1',
+          member_slug: member,
+          assignee_slug: '',
+          type,
+          recurrence: '',
+          icon: '🪥',
+          source: 'manual',
+          points,
+        },
+      });
+
+    async function setPoints(el: LucarneEditTaskPopover, value: string) {
+      const input = shadow(el, '#et-points') as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    }
+
+    async function save(el: LucarneEditTaskPopover) {
+      (shadow(el, '.btn-submit, .btn-save') as HTMLButtonElement).click();
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
+    it('is absent for a non-admin and a metadata save sends no points key', async () => {
+      const el = await makeEl(pointsTask());
+      assert.equal(shadow(el, '#et-points'), null);
+      const icon = shadow(el, '#et-icon') as HTMLInputElement;
+      icon.value = '⭐';
+      icon.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      await save(el);
+      const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+      const call = fakeHass.calls.callService.find((c: any) => c.service === 'update_task_metadata') as any;
+      assert.ok(call, 'metadata saved');
+      assert.ok(!('points' in call.payload));
+    });
+
+    it('prefills the current value and sends points: 5 for an admin', async () => {
+      const el = await makeEl(pointsTask());
+      el.isAdmin = true;
+      await el.updateComplete;
+      assert.equal((shadow(el, '#et-points') as HTMLInputElement).value, '3');
+      await setPoints(el, '5');
+      await save(el);
+      const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+      const call = fakeHass.calls.callService.find((c: any) => c.service === 'update_task_metadata') as any;
+      assert.strictEqual(call.payload.points, 5);
+    });
+
+    it('rejects 1001 inline with no service call', async () => {
+      const el = await makeEl(pointsTask());
+      el.isAdmin = true;
+      await el.updateComplete;
+      await setPoints(el, '1001');
+      await save(el);
+      await el.updateComplete;
+      const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+      assert.equal(fakeHass.calls.callService.length, 0);
+      assert.match(shadow(el, '.error-msg')!.textContent ?? '', /0 to 1000/);
+    });
+
+    it('is hidden for a household chore, which sends points: 0 if it had any', async () => {
+      const el = await makeEl(pointsTask('household', 'chore', 4));
+      el.isAdmin = true;
+      await el.updateComplete;
+      assert.equal(shadow(el, '#et-points'), null);
+      const icon = shadow(el, '#et-icon') as HTMLInputElement;
+      icon.value = '⭐';
+      icon.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      await save(el);
+      const fakeHass = el.hass as unknown as ReturnType<typeof makeFakeHass>;
+      const call = fakeHass.calls.callService.find((c: any) => c.service === 'update_task_metadata') as any;
+      assert.strictEqual(call.payload.points, 0);
+    });
+  });
 });

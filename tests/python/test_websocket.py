@@ -1,10 +1,12 @@
 """Tests for websocket_api.py — lucarne_family/get_family command."""
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import async_get as er_get
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -288,3 +290,124 @@ async def test_get_family_skips_members_whose_todo_entity_is_missing(
     assert msg["success"] is True
     slugs = [m["slug"] for m in msg["result"]["members"]]
     assert slugs == ["anna"], "the member with a missing todo entity is filtered out"
+
+
+async def _rewards_setup(hass: HomeAssistant, tmp_path: Path) -> LucarneFamilyStore:
+    members = [
+        Member(
+            slug=slug, name=slug.capitalize(), color="#ff0000", avatar=None,
+            created_at=datetime.now(UTC), preset="school-age",
+            todo_entity_id=f"todo.{slug}", streak_counter_id="",
+        ).to_dict()
+        for slug in ("anna", "bob")
+    ]
+    entry = _make_entry(hass, members=members)
+    store = await _make_store(hass, entry.entry_id, tmp_path)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"store": store}
+    async_register_websocket_commands(hass)
+    return store
+
+
+async def test_get_rewards_is_admin_flag_and_zero_balances(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    hass_read_only_access_token: str,
+    tmp_path: Path,
+) -> None:
+    await _rewards_setup(hass, tmp_path)
+
+    ws = await hass_ws_client(hass, hass_read_only_access_token)
+    await ws.send_json({"id": 1, "type": "lucarne_family/get_rewards"})
+    msg = await ws.receive_json()
+    assert msg["success"] is True
+    assert msg["result"]["is_admin"] is False
+    assert msg["result"]["balances"] == {"anna": 0, "bob": 0}
+    assert "history" not in msg["result"]
+    assert msg["result"]["rewards"] == [] and msg["result"]["claims"] == []
+
+    admin_ws = await hass_ws_client(hass)
+    await admin_ws.send_json({"id": 1, "type": "lucarne_family/get_rewards"})
+    assert (await admin_ws.receive_json())["result"]["is_admin"] is True
+
+
+async def test_get_rewards_history_newest_first(
+    hass: HomeAssistant, hass_ws_client: Any, tmp_path: Path
+) -> None:
+    store = await _rewards_setup(hass, tmp_path)
+    async with store.rewards_lock:
+        await store.async_ledger_grant("anna", 2, "first", None)
+        await store.async_ledger_grant("anna", 3, "second", None)
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "lucarne_family/get_rewards", "history_limit": 10})
+    result = (await ws.receive_json())["result"]
+
+    assert result["balances"]["anna"] == 5
+    assert [h["reason"] for h in result["history"]] == ["second", "first"]
+    assert result["history"][0]["actor_name"] is None
+    assert "actor_user_id" not in result["history"][0]
+
+
+def test_relay_forwards_rewards_updated() -> None:
+    from custom_components.lucarne_family.websocket_api import LUCARNE_FRONTEND_EVENTS
+
+    assert "lucarne_family_rewards_updated" in LUCARNE_FRONTEND_EVENTS
+
+
+async def test_get_rewards_flags_archived_rewards(
+    hass: HomeAssistant, hass_ws_client: Any, tmp_path: Path
+) -> None:
+    store = await _rewards_setup(hass, tmp_path)
+    async with store.rewards_lock:
+        await store.async_create_reward("Kept", 3, "", False)
+        archived_id = await store.async_create_reward("Gone", 5, "", False)
+        await store.async_archive_reward(archived_id)
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json(
+        {"id": 1, "type": "lucarne_family/get_rewards", "include_archived": True}
+    )
+    rewards = (await ws.receive_json())["result"]["rewards"]
+
+    assert [(r["name"], r["archived"]) for r in rewards] == [("Kept", False), ("Gone", True)]
+    assert all("archived_at" not in r for r in rewards)
+
+
+async def test_get_rewards_sends_every_claim_its_history_references(
+    hass: HomeAssistant, hass_ws_client: Any, tmp_path: Path
+) -> None:
+    store = await _rewards_setup(hass, tmp_path)
+    async with store.rewards_lock:
+        await store.async_ledger_grant("anna", 100, "", None)
+        reward_id = await store.async_create_reward("Sticker", 1, "", False)
+        oldest = await store.async_create_claim(reward_id, "anna", {"anna": 1}, None)
+        await store.async_transition_claim(oldest, "pending", "approved", None)
+        # More resolved claims than any fixed cap, all newer than the approved one.
+        for _ in range(55):
+            claim = await store.async_create_claim(reward_id, "anna", {"anna": 1}, None)
+            await store.async_transition_claim(claim, "pending", "cancelled", None)
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "lucarne_family/get_rewards", "history_limit": 500})
+    result = (await ws.receive_json())["result"]
+
+    statuses = {c["id"]: c["status"] for c in result["claims"]}
+    assert statuses[oldest] == "approved"
+    referenced = {h["claim_id"] for h in result["history"] if h["claim_id"] is not None}
+    assert referenced <= set(statuses)
+
+
+async def test_get_rewards_waits_for_rewards_lock(
+    hass: HomeAssistant, hass_ws_client: Any, tmp_path: Path
+) -> None:
+    store = await _rewards_setup(hass, tmp_path)
+    ws = await hass_ws_client(hass)
+
+    async with store.rewards_lock:
+        await ws.send_json({"id": 1, "type": "lucarne_family/get_rewards"})
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(ws.receive_json(), 0.2)
+        await store.async_ledger_grant("anna", 4, "", None)
+
+    # The read ran after the write it waited for, so the grant is in this snapshot.
+    assert (await ws.receive_json())["result"]["balances"]["anna"] == 4

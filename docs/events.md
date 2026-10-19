@@ -209,6 +209,14 @@ The frontend `family-subscription.ts` subscribes to this event to refresh member
 
 ---
 
+### lucarne_family_rewards_updated
+
+Fired after every committed points-ledger write (earn, revoke, grant). It is a refresh cue
+for the cards, relayed by `lucarne_family/subscribe`, with an empty payload and no payload
+contract: don't build automations on it.
+
+---
+
 ### lucarne_family_apple_writeback_requested
 
 Fired when a task with `source == "apple"` **and a non-empty `apple_uid`** (set by the Apple

@@ -928,65 +928,68 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                     self._entry.entry_id
                 ]["store"]
 
-                # Step 1: SQLite migration first — if this fails, nothing in the
-                # entity registry has changed yet and the user can retry cleanly.
-                try:
-                    await store.async_rename_member_slug(target.slug, new_slug)
-                except Exception as exc:
-                    _LOGGER.warning(
-                        "Failed to migrate SQLite rows for member %r: %s", target.slug, exc
-                    )
-                    errors["base"] = "entity_rename_failed"
-
-                new_todo_id = target.todo_entity_id or f"todo.{target.slug}"
-                new_counter_id = target.streak_counter_id or f"counter.{target.slug}_streak"
-
-                # Step 2: Entity registry rename — if this fails, roll back SQLite.
-                if not errors:
+                # Held through the member-list save: a grant, claim or earn waiting on
+                # it re-checks the slug once the rename has landed or rolled back.
+                async with store.rewards_lock:
+                    # Step 1: SQLite migration first — if this fails, nothing in the
+                    # entity registry has changed yet and the user can retry cleanly.
                     try:
-                        new_todo_id, new_counter_id = await async_rename_member_entities(
-                            self.hass,
-                            target.todo_entity_id or f"todo.{target.slug}",
-                            new_slug,
-                            target.streak_counter_id or f"counter.{target.slug}_streak",
-                        )
+                        await store.async_rename_member_slug(target.slug, new_slug)
                     except Exception as exc:
                         _LOGGER.warning(
-                            "Failed to rename entities for member %r: %s", target.slug, exc
+                            "Failed to migrate SQLite rows for member %r: %s", target.slug, exc
                         )
-                        try:
-                            await store.async_rename_member_slug(new_slug, target.slug)
-                        except Exception as rollback_exc:
-                            _LOGGER.error(
-                                "SQLite rollback failed for member %r after entity "
-                                "rename failure: %s",
-                                target.slug,
-                                rollback_exc,
-                            )
                         errors["base"] = "entity_rename_failed"
 
-                if not errors:
-                    sel = self._selected_member_slug
-                    pend = self._pending_rename
-                    updated = [
-                        Member(
-                            slug=new_slug if m.slug == sel else m.slug,
-                            name=pend["name"] if m.slug == sel else m.name,
-                            color=pend["color"] if m.slug == sel else m.color,
-                            avatar=m.avatar,
-                            created_at=m.created_at,
-                            preset=pend["preset"] if m.slug == sel else m.preset,
-                            todo_entity_id=new_todo_id if m.slug == sel else m.todo_entity_id,
-                            streak_counter_id=(
-                                new_counter_id if m.slug == sel else m.streak_counter_id
-                            ),
-                        )
-                        for m in members
-                    ]
-                    await self._save_members(updated)
-                    self._selected_member_slug = None
-                    self._pending_rename = None
-                    return await self.async_step_manage_members()
+                    new_todo_id = target.todo_entity_id or f"todo.{target.slug}"
+                    new_counter_id = target.streak_counter_id or f"counter.{target.slug}_streak"
+
+                    # Step 2: Entity registry rename — if this fails, roll back SQLite.
+                    if not errors:
+                        try:
+                            new_todo_id, new_counter_id = await async_rename_member_entities(
+                                self.hass,
+                                target.todo_entity_id or f"todo.{target.slug}",
+                                new_slug,
+                                target.streak_counter_id or f"counter.{target.slug}_streak",
+                            )
+                        except Exception as exc:
+                            _LOGGER.warning(
+                                "Failed to rename entities for member %r: %s", target.slug, exc
+                            )
+                            try:
+                                await store.async_rename_member_slug(new_slug, target.slug)
+                            except Exception as rollback_exc:
+                                _LOGGER.error(
+                                    "SQLite rollback failed for member %r after entity "
+                                    "rename failure: %s",
+                                    target.slug,
+                                    rollback_exc,
+                                )
+                            errors["base"] = "entity_rename_failed"
+
+                    if not errors:
+                        sel = self._selected_member_slug
+                        pend = self._pending_rename
+                        updated = [
+                            Member(
+                                slug=new_slug if m.slug == sel else m.slug,
+                                name=pend["name"] if m.slug == sel else m.name,
+                                color=pend["color"] if m.slug == sel else m.color,
+                                avatar=m.avatar,
+                                created_at=m.created_at,
+                                preset=pend["preset"] if m.slug == sel else m.preset,
+                                todo_entity_id=new_todo_id if m.slug == sel else m.todo_entity_id,
+                                streak_counter_id=(
+                                    new_counter_id if m.slug == sel else m.streak_counter_id
+                                ),
+                            )
+                            for m in members
+                        ]
+                        await self._save_members(updated)
+                        self._selected_member_slug = None
+                        self._pending_rename = None
+                        return await self.async_step_manage_members()
 
                 # Rename failed (SQLite migration or entity rename + rollback).
                 # Nothing avatar-specific to clean up — avatars aren't touched
@@ -1062,6 +1065,21 @@ class LucarneFamilyOptionsFlow(config_entries.OptionsFlow):
                 # delete failure, a raised one, or the flow task being cancelled
                 # between the awaits — lands on the harmless side.
                 await self._save_members(remaining)
+
+                # A failure leaves the claims pending, which an admin can still
+                # reject, so it must not abort the removal (same reasoning as above).
+                try:
+                    from .rewards import async_release_member_claims
+
+                    await async_release_member_claims(
+                        self.hass,
+                        self.hass.data[DOMAIN][self._entry.entry_id]["store"],
+                        removed_slug,
+                    )
+                except Exception:
+                    _LOGGER.exception(
+                        "Could not release the pending claims of %r", removed_slug
+                    )
 
                 # This issue's own text tells the user to remove the member,
                 # which they just did; it must not linger as an unactionable

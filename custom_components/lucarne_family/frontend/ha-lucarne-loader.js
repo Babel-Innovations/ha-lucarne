@@ -2,7 +2,8 @@
 var e = [
 	"lucarne-today-card",
 	"lucarne-calendar-card",
-	"lucarne-chores-card"
+	"lucarne-chores-card",
+	"lucarne-rewards-admin-card"
 ], t = "https://github.com/Babel-Innovations/ha-lucarne/issues/101", n = [3e3, 1e4], r = 25;
 function i(e, t = "./ha-lucarne.js") {
 	let n = e.split("?")[1];
