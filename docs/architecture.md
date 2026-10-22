@@ -5,17 +5,13 @@
 ```
 Apple Reminders
       │
-      │  Shortcuts.app (ha-lucarne-sync)
-      │  every 300 s via launchd
+      │  Home Assistant Companion app, "Reminders sync" (Labs):
+      │  one Reminders list ⇄ one todo entity, either direction or both
+      │  (the older Shortcuts.app + launchd + lucarne_reminders_sync
+      │   blueprint path in bridge/ is superseded)
       ▼
-    MacOS ──── POST /api/webhook/<secret> ────► Home Assistant
-                                                     │
-                                              lucarne_reminders_sync
-                                              automation (blueprint)
-                                                     │ upsert by Apple UID
-                                                     ▼
-                                            local_todo entities
-                                        (todo.<slug>, todo.lucarne_household)
+    local_todo entities ──────────────────────────────┐
+    (todo.<slug>, todo.lucarne_household)             │
                                                      │ state_changed
                                                      ▼
                                           lucarne_family completion_listener
@@ -651,7 +647,8 @@ See [features/chores-card/README.md](../features/chores-card/README.md) for the 
 
 One automation blueprint ships under `blueprints/automation/`:
 
-- **lucarne_reminders_sync** — webhook receiver, diffs by Apple UID, upserts into `local_todo`
+- **lucarne_reminders_sync** — webhook receiver for the superseded Shortcut bridge; the
+  Companion app's Reminders sync replaces it (see `docs/reminders-bridge.md`)
 
 Daily routine reset and streak checks are now managed by the `lucarne_family` integration via
 in-process time-change listeners (configured via the integration's Options Flow). The former
