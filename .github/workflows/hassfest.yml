@@ -16,4 +16,4 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Pin home-assistant/actions to a commit SHA, matching the SHA-pinning
       # convention used by the other workflows. Bump deliberately.
-      - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d # master as of 2026-10-12
+      - uses: home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6 # master as of 2026-10-12
