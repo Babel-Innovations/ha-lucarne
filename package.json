@@ -20,10 +20,10 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
-    "@typescript-eslint/eslint-plugin": "^8.71.2",
+    "@typescript-eslint/eslint-plugin": "^8.72.0",
     "@typescript-eslint/parser": "^8.0.0",
     "acorn": "^8.19.0",
-    "eslint": "^10.12.0",
+    "eslint": "^10.13.0",
     "happy-dom": "^21.0.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
