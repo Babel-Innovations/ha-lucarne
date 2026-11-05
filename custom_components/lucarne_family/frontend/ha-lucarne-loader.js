@@ -1,4 +1,4 @@
-//#region src/loader/boot.ts
+// src/loader/boot.ts
 var e = [
 	"lucarne-today-card",
 	"lucarne-calendar-card",
@@ -159,8 +159,7 @@ async function v(e) {
 	} catch {}
 	return _(i, n), i;
 }
-//#endregion
-//#region src/loader.ts
+// src/loader.ts
 var y = i(import.meta.url);
 // @vite-ignore: the specifier carries the ?v=<version>.<digest> cache-buster and
 v({
@@ -170,4 +169,3 @@ v({
 ),
 	win: window
 });
-//#endregion
