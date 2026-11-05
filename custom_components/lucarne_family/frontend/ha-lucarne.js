@@ -1,5 +1,5 @@
-//#region \0rolldown/runtime.js
-var e = Object.create, t = Object.defineProperty, n = Object.getOwnPropertyDescriptor, r = Object.getOwnPropertyNames, i = Object.getPrototypeOf, a = Object.prototype.hasOwnProperty, o = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t.exports), s = (e, i, o, s) => {
+// \0rolldown/runtime.js
+var e = Object.create, t = Object.defineProperty, n = Object.getOwnPropertyDescriptor, r = Object.getOwnPropertyNames, i = Object.getPrototypeOf, a = Object.prototype.hasOwnProperty, o = (e, t) => () => (t || (e((t = { exports: {} }).exports, t, t.exports), e = null), t.exports), s = (e, i, o, s) => {
 	if (i && typeof i == "object" || typeof i == "function") for (var c = r(i), l = 0, u = c.length, d; l < u; l++) d = c[l], !a.call(e, d) && d !== o && t(e, d, {
 		get: ((e) => i[e]).bind(null, d),
 		enumerable: !(s = n(i, d)) || s.enumerable
@@ -78,8 +78,7 @@ function O() {
 		C(e.reason) && T(e.reason, "unhandledrejection");
 	}, window.addEventListener("error", y), window.addEventListener("unhandledrejection", b));
 }
-//#endregion
-//#region src/shared/boot-marks.ts
+// src/shared/boot-marks.ts
 function k(e) {
 	try {
 		if (typeof window > "u") return;
@@ -88,8 +87,7 @@ function k(e) {
 	} catch {}
 }
 O(), k("reporter-installed");
-//#endregion
-//#region node_modules/@lit/reactive-element/css-tag.js
+// node_modules/@lit/reactive-element/css-tag.js
 var A = globalThis, j = A.ShadowRoot && (A.ShadyCSS === void 0 || A.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, M = Symbol(), re = /* @__PURE__ */ new WeakMap(), N = class {
 	constructor(e, t, n) {
 		if (this._$cssResult$ = !0, n !== M) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
@@ -365,8 +363,7 @@ var xe = class extends HTMLElement {
 	firstUpdated(e) {}
 };
 xe.elementStyles = [], xe.shadowRootOptions = { mode: "open" }, xe[_e("elementProperties")] = /* @__PURE__ */ new Map(), xe[_e("finalized")] = /* @__PURE__ */ new Map(), ge == null || ge({ ReactiveElement: xe }), (pe.reactiveElementVersions ?? (pe.reactiveElementVersions = [])).push("2.1.2");
-//#endregion
-//#region node_modules/lit-html/lit-html.js
+// node_modules/lit-html/lit-html.js
 var Se = globalThis, Ce = (e) => e, we = Se.trustedTypes, Te = we ? we.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, Ee = "$lit$", De = `lit$${Math.random().toFixed(9).slice(2)}$`, Oe = "?" + De, ke = `<${Oe}>`, Ae = document, je = () => Ae.createComment(""), Me = (e) => e === null || typeof e != "object" && typeof e != "function", Ne = Array.isArray, Pe = (e) => Ne(e) || typeof (e == null ? void 0 : e[Symbol.iterator]) == "function", Fe = "[ 	\n\f\r]", Ie = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, Le = /-->/g, Re = />/g, ze = RegExp(`>|${Fe}(?:([^\\s"'>=/]+)(${Fe}*=${Fe}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), Be = /'/g, I = /"/g, Ve = /^(?:script|style|textarea|title)$/i, He = (e) => (t, ...n) => ({
 	_$litType$: e,
 	strings: t,
@@ -630,8 +627,7 @@ var nt = (e, t, n) => {
 H._$litElement$ = !0, H.finalized = !0, (rt = it.litElementHydrateSupport) == null || rt.call(it, { LitElement: H });
 var at = it.litElementPolyfillSupport;
 at == null || at({ LitElement: H }), (it.litElementVersions ?? (it.litElementVersions = [])).push("4.2.2");
-//#endregion
-//#region node_modules/@lit/reactive-element/decorators/custom-element.js
+// node_modules/@lit/reactive-element/decorators/custom-element.js
 var U = (e) => (t, n) => {
 	n === void 0 ? customElements.define(e, t) : n.addInitializer(() => {
 		customElements.define(e, t);
@@ -671,8 +667,7 @@ function W(e) {
 		return t.constructor.createProperty(n, e), r ? Object.getOwnPropertyDescriptor(t, n) : void 0;
 	})(e, t, n);
 }
-//#endregion
-//#region node_modules/@lit/reactive-element/decorators/state.js
+// node_modules/@lit/reactive-element/decorators/state.js
 function G(e) {
 	return W({
 		...e,
@@ -680,11 +675,9 @@ function G(e) {
 		attribute: !1
 	});
 }
-//#endregion
-//#region node_modules/@lit/reactive-element/decorators/base.js
+// node_modules/@lit/reactive-element/decorators/base.js
 var ct = (e, t, n) => (n.configurable = !0, n.enumerable = !0, Reflect.decorate && typeof t != "object" && Object.defineProperty(e, t, n), n);
-//#endregion
-//#region node_modules/@lit/reactive-element/decorators/query.js
+// node_modules/@lit/reactive-element/decorators/query.js
 function lt(e, t) {
 	return (n, r, i) => {
 		let a = (t) => {
@@ -713,8 +706,7 @@ function lt(e, t) {
 		} });
 	};
 }
-//#endregion
-//#region src/shared/design-tokens.ts
+// src/shared/design-tokens.ts
 var K = F`
   :host {
     --lucarne-spacing-xs: 4px;
@@ -774,16 +766,14 @@ var K = F`
     }
   }
 `;
-//#endregion
-//#region \0@oxc-project+runtime@0.152.0/helpers/esm/decorate.js
+// \0@oxc-project+runtime@0.156.0/helpers/esm/decorate.js
 function q(e, t, n, r) {
 	var i = arguments.length, a = i < 3 ? t : r === null ? r = Object.getOwnPropertyDescriptor(t, n) : r, o;
 	if (typeof Reflect == "object" && typeof Reflect.decorate == "function") a = Reflect.decorate(e, t, n, r);
 	else for (var s = e.length - 1; s >= 0; s--) (o = e[s]) && (a = (i < 3 ? o(a) : i > 3 ? o(t, n, a) : o(t, n)) || a);
 	return i > 3 && a && Object.defineProperty(t, n, a), a;
 }
-//#endregion
-//#region src/shared/card-base.ts
+// src/shared/card-base.ts
 var ut = class extends Error {
 	constructor(e) {
 		super(e), this.name = "LucarneConfigError";
@@ -821,8 +811,7 @@ var ut = class extends Error {
 	}
 };
 q([G()], dt.prototype, "_configFailure", void 0);
-//#endregion
-//#region src/shared/ha-subscriptions.ts
+// src/shared/ha-subscriptions.ts
 var ft = "unavailable";
 function pt(e, t, n, r = {}) {
 	let i, a = !1;
@@ -847,7 +836,7 @@ function pt(e, t, n, r = {}) {
 			a || n !== c ? e() : i = e;
 		}).catch((e) => {
 			var o;
-			n === c && (i = void 0, !a && (console.warn("[lucarne] subscribe_entities failed for", t, e), (o = r.onError) == null || o.call(r, e)));
+			n === c && (i = void 0, a || (console.warn("[lucarne] subscribe_entities failed for", t, e), (o = r.onError) == null || o.call(r, e)));
 		});
 	}, d = () => {
 		a || (i = void 0, u());
@@ -922,8 +911,7 @@ function St(e, t, n) {
 		r = !0, a();
 	};
 }
-//#endregion
-//#region src/shared/date-helpers.ts
+// src/shared/date-helpers.ts
 function Ct(e, t) {
 	let n = parseInt(e.split(":")[0], 10), r = parseInt(t.split(":")[0], 10), i = [];
 	for (let e = n; e <= r; e++) i.push(e);
@@ -978,8 +966,7 @@ function Mt(e, t, n) {
 	let r = new Date(e).getTime();
 	return Number.isNaN(r) || t.getTime() - r < jt ? !1 : r < At(t, n).getTime();
 }
-//#endregion
-//#region src/shared/calendar-layout.ts
+// src/shared/calendar-layout.ts
 function Nt(e) {
 	return e.start.length === 10 && !e.start.includes("T");
 }
@@ -1090,8 +1077,7 @@ function Lt(e, t, n, r) {
 		perDay: i
 	};
 }
-//#endregion
-//#region src/shared/completed-window.ts
+// src/shared/completed-window.ts
 var Rt = /* @__PURE__ */ new Map(), zt = 0;
 function Bt(e, t, n, r) {
 	let i = J(r);
@@ -1131,8 +1117,7 @@ function Wt(e) {
 function Gt(e) {
 	for (let t of Rt.values()) (e === void 0 || t.entityId === e) && (t.away = !1);
 }
-//#endregion
-//#region src/shared/grid-preview-override.ts
+// src/shared/grid-preview-override.ts
 function Kt(e) {
 	let t = e;
 	for (; t;) {
@@ -1171,8 +1156,7 @@ function Jt(e) {
 		i.disconnect(), n ? t.style.setProperty("--grid-column-count", n) : t.style.removeProperty("--grid-column-count");
 	} };
 }
-//#endregion
-//#region src/shared/family-subscription.ts
+// src/shared/family-subscription.ts
 var Yt = "todo.lucarne_household", Xt = {
 	slug: "household",
 	name: "Household",
@@ -1289,9 +1273,7 @@ function en(e, t) {
 		if (i !== void 0) {
 			let e = parseInt(t, 10);
 			o.set(i, isNaN(e) ? 0 : e), v();
-			return;
-		}
-		d.includes(e) && r !== "snapshot" && w(e).then(v);
+		} else d.includes(e) && r !== "snapshot" && w(e).then(v);
 	}
 	let C = /* @__PURE__ */ new Map();
 	async function w(t) {
@@ -1329,8 +1311,7 @@ function en(e, t) {
 		n = !0, p !== null && clearTimeout(p), m !== null && clearTimeout(m), typeof document < "u" && document.removeEventListener("visibilitychange", T), typeof window < "u" && window.removeEventListener("pageshow", T), x(), E.forEach((e) => e());
 	};
 }
-//#endregion
-//#region src/shared/recurrence.ts
+// src/shared/recurrence.ts
 var tn = [
 	"MO",
 	"TU",
@@ -1626,8 +1607,7 @@ function bn(e, t = /* @__PURE__ */ new Date()) {
 		r.setDate(r.getDate() + 1);
 	}
 }
-//#endregion
-//#region src/shared/strings.ts
+// src/shared/strings.ts
 var Y = {
 	today: "Today",
 	tomorrow: "Tomorrow",
@@ -1844,8 +1824,7 @@ var Dn = (xn = class extends H {
       }
     `], xn);
 q([W({ type: Array })], Dn.prototype, "events", void 0), q([W({ type: Object })], Dn.prototype, "calendarColors", void 0), q([W({ type: Number })], Dn.prototype, "windowDays", void 0), Dn = q([U("lucarne-agenda-strip")], Dn);
-//#endregion
-//#region src/shared/icons.ts
+// src/shared/icons.ts
 var On = Ue`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <circle cx="12" cy="12" r="4"/>
   <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
@@ -1926,8 +1905,7 @@ var zn = {
 function Bn(e) {
 	return zn[e.toLowerCase()] ?? "#8aa0b8";
 }
-//#endregion
-//#region src/components/dressing-tip.ts
+// src/components/dressing-tip.ts
 function Vn(e) {
 	if (!e.length) return Y.dressingTipDefault;
 	let t = e[0];
@@ -1935,8 +1913,7 @@ function Vn(e) {
 	let n = t.temperature, r;
 	return r = n < 5 ? Y.dressingTipHeavyCoat : n < 12 ? Y.dressingTipCoatScarf : n < 18 ? Y.dressingTipLightJacket : n < 24 ? Y.dressingTipTShirt : Y.dressingTipShorts, (t.precipitation_probability ?? 0) > 50 && (r += Y.dressingTipUmbrella), r;
 }
-//#endregion
-//#region src/components/weather-block.ts
+// src/components/weather-block.ts
 var Hn = class extends H {
 	constructor(...e) {
 		super(...e), this.forecast = [];
@@ -2033,8 +2010,7 @@ var Hn = class extends H {
       }
     `], Hn);
 q([W({ attribute: !1 })], Un.prototype, "weatherEntity", void 0), q([W({ type: Array })], Un.prototype, "forecast", void 0), Un = q([U("lucarne-weather-block")], Un);
-//#endregion
-//#region src/shared/rotation.ts
+// src/shared/rotation.ts
 function Wn(e, t) {
 	let n = /* @__PURE__ */ new Set(), r = [];
 	for (let i of e) t.has(i) && !n.has(i) && (n.add(i), r.push(i));
@@ -2044,8 +2020,7 @@ function Gn(e, t, n) {
 	let r = Wn(e, n);
 	return r.length === 0 ? null : r.includes(t) ? r[(r.indexOf(t) + 1) % r.length] : r[0];
 }
-//#endregion
-//#region src/shared/task-notes.ts
+// src/shared/task-notes.ts
 var Kn = /\[apple:[^\]]+\]/g;
 function qn(e) {
 	return e ? e.replace(Kn, "").trim() : "";
@@ -2086,25 +2061,20 @@ function er(e) {
 	let r;
 	for (; (r = Jn.exec(e)) !== null;) {
 		let i = $n(r[0]);
-		if (!Yn.test(i)) {
-			Jn.lastIndex = r.index + r[0].length;
-			continue;
-		}
-		r.index > n && t.push({
+		Yn.test(i) ? (r.index > n && t.push({
 			text: e.slice(n, r.index),
 			href: null
 		}), t.push({
 			text: i,
 			href: i.toLowerCase().startsWith("www.") ? `https://${i}` : i
-		}), n = r.index + i.length, Jn.lastIndex = n;
+		}), n = r.index + i.length, Jn.lastIndex = n) : Jn.lastIndex = r.index + r[0].length;
 	}
 	return n < e.length && t.push({
 		text: e.slice(n),
 		href: null
 	}), t;
 }
-//#endregion
-//#region src/components/member-avatar.ts
+// src/components/member-avatar.ts
 var tr, nr = "^(?=.*[\\p{Extended_Pictographic}\\p{Regional_Indicator}])[\\p{Extended_Pictographic}\\p{Emoji_Component}\\p{Emoji_Modifier}\\p{Regional_Indicator}‍️]+$", rr = "^(?=.*[\\u{1F000}-\\u{1FAFF}\\u{2300}-\\u{27FF}\\u{2B00}-\\u{2BFF}\\u{1F1E0}-\\u{1F1FF}])[\\u{1F000}-\\u{1FAFF}\\u{2300}-\\u{27FF}\\u{2B00}-\\u{2BFF}\\u{1F1E0}-\\u{1F1FF}\\u{FE00}-\\u{FE0F}\\u{200D}\\u{20E3}\\u{1F3FB}-\\u{1F3FF}]+$", ir = /(?!)/;
 function ar(e = [nr, rr]) {
 	for (let t of e) try {
@@ -2168,8 +2138,7 @@ var or = ar(), sr = (tr = class extends H {
     }
   `, tr);
 q([W()], sr.prototype, "name", void 0), q([W()], sr.prototype, "color", void 0), q([W()], sr.prototype, "avatar", void 0), sr = q([U("lucarne-member-avatar")], sr);
-//#endregion
-//#region src/components/task-row.ts
+// src/components/task-row.ts
 var cr, lr = 500, ur = 180;
 function dr(e) {
 	var t;
@@ -2234,17 +2203,11 @@ var fr = (cr = class extends H {
 		return e.style.whiteSpace = n, e.style.height = r, i;
 	}
 	_onClick() {
-		if (!this._longPressed) {
-			if (this._notePress) {
-				this._notePress = !1;
-				return;
-			}
-			this.dispatchEvent(new CustomEvent(this.notToday ? "task-edit" : "task-toggle", {
-				detail: { task: this.task },
-				bubbles: !0,
-				composed: !0
-			}));
-		}
+		this._longPressed || (this._notePress ? this._notePress = !1 : this.dispatchEvent(new CustomEvent(this.notToday ? "task-edit" : "task-toggle", {
+			detail: { task: this.task },
+			bubbles: !0,
+			composed: !0
+		})));
 	}
 	render() {
 		if (!this.task) return L``;
@@ -2271,7 +2234,7 @@ var fr = (cr = class extends H {
         tabindex="0"
         @click=${this._onClick}
         @keydown=${(e) => {
-			dr(e) || (e.key === "Enter" || e.key === " ") && !e.repeat && (e.preventDefault(), this._onClick());
+			dr(e) || e.key !== "Enter" && e.key !== " " || e.repeat || (e.preventDefault(), this._onClick());
 		}}
         @pointerdown=${this._onPointerDown}
         @pointerup=${this._onPointerUp}
@@ -2330,11 +2293,11 @@ var fr = (cr = class extends H {
         id="task-note"
         class="note ${t ? "done" : ""} ${this._noteExpanded ? "expanded" : ""} ${this._noteAnimating ? "animating" : ""}"
         @click=${(e) => {
-			e.stopPropagation(), this._notePress = !1, !dr(e) && this._toggleNote();
+			e.stopPropagation(), this._notePress = !1, dr(e) || this._toggleNote();
 		}}
         @pointerdown=${(e) => {
 			var t, n;
-			e.stopPropagation(), !dr(e) && (this._notePress = !0, (t = (n = e.currentTarget).setPointerCapture) == null || t.call(n, e.pointerId));
+			e.stopPropagation(), dr(e) || (this._notePress = !0, (t = (n = e.currentTarget).setPointerCapture) == null || t.call(n, e.pointerId));
 		}}
       >
         ${er(e).map((e) => e.href ? L`<a
@@ -2569,8 +2532,7 @@ q([W({ attribute: !1 })], fr.prototype, "task", void 0), q([W()], fr.prototype, 
 	reflect: !0,
 	attribute: "not-today"
 })], fr.prototype, "notToday", void 0), q([G()], fr.prototype, "_noteExpanded", void 0), q([G()], fr.prototype, "_noteAnimating", void 0), fr = q([U("lucarne-task-row")], fr);
-//#endregion
-//#region src/components/tasks-summary.ts
+// src/components/tasks-summary.ts
 var pr, mr = "household";
 function hr(e) {
 	return e.length === 10 ? /* @__PURE__ */ new Date(e + "T00:00:00") : new Date(e);
@@ -2622,11 +2584,8 @@ var vr = (pr = class extends H {
 		let t = /* @__PURE__ */ new Date(), n = gr(e.filter((e) => e.status === "needs_action"), t), r = n.length, i = Bt(this.todoEntityId ?? "", this.limit, this.refillOnComplete, t), a = typeof document < "u" && document.visibilityState === "hidden", o = a || i.away, s = new Map(e.map((e) => [e.uid, e])), c = new Set(n.map((e) => e.uid));
 		for (let e of i.order) {
 			var l;
-			if (c.has(e)) {
-				Ut(i, e);
-				continue;
-			}
-			if (((l = s.get(e)) == null ? void 0 : l.status) === "completed") {
+			if (c.has(e)) Ut(i, e);
+			else if (((l = s.get(e)) == null ? void 0 : l.status) === "completed") {
 				let t = i.lastOrder.indexOf(e);
 				Ht(i, e, t === -1 ? i.lastOrder.length : t, o);
 			}
@@ -2767,8 +2726,7 @@ var vr = (pr = class extends H {
       }
     `], pr);
 q([W({ type: Array })], vr.prototype, "items", void 0), q([W({ type: String })], vr.prototype, "todoEntityId", void 0), q([W({ type: Boolean })], vr.prototype, "integrationMode", void 0), q([W({ attribute: !1 })], vr.prototype, "renderableTasks", void 0), q([W({ attribute: !1 })], vr.prototype, "members", void 0), q([W({ type: Number })], vr.prototype, "limit", void 0), q([W({ type: Boolean })], vr.prototype, "refillOnComplete", void 0), vr = q([U("lucarne-tasks-summary")], vr);
-//#endregion
-//#region src/components/presence-pills.ts
+// src/components/presence-pills.ts
 var yr = class extends H {
 	constructor(...e) {
 		super(...e), this.entries = [];
@@ -2826,8 +2784,7 @@ var yr = class extends H {
       }
     `], yr);
 q([W({ type: Array })], br.prototype, "entries", void 0), br = q([U("lucarne-presence-pills")], br);
-//#endregion
-//#region src/components/family-ready-pill.ts
+// src/components/family-ready-pill.ts
 var xr = class extends H {
 	constructor(...e) {
 		super(...e), this.members = [], this.tasksByMember = /* @__PURE__ */ new Map();
@@ -2898,8 +2855,7 @@ var xr = class extends H {
       }
     `], xr);
 q([W({ attribute: !1 })], Sr.prototype, "members", void 0), q([W({ attribute: !1 })], Sr.prototype, "tasksByMember", void 0), Sr = q([U("lucarne-family-ready-pill")], Sr);
-//#endregion
-//#region src/cards/lucarne-today-card.ts
+// src/cards/lucarne-today-card.ts
 var Cr, wr = [
 	"calendar",
 	"weather",
@@ -3289,8 +3245,7 @@ var Er = (Cr = class extends dt {
       }
     `], Cr);
 q([W({ attribute: !1 })], Er.prototype, "hass", void 0), q([G()], Er.prototype, "_config", void 0), q([G()], Er.prototype, "_calendarEvents", void 0), q([G()], Er.prototype, "_forecast", void 0), q([G()], Er.prototype, "_todoItems", void 0), q([G()], Er.prototype, "_familyState", void 0), q([G()], Er.prototype, "_optimistic", void 0), Er = q([U("lucarne-today-card")], Er);
-//#endregion
-//#region src/shared/editor-styles.ts
+// src/shared/editor-styles.ts
 var Dr = F`
   :host {
     display: flex;
@@ -3506,8 +3461,7 @@ function Nr() {
 		throw Ar = void 0, e;
 	})), Ar;
 }
-//#endregion
-//#region src/shared/fire-event.ts
+// src/shared/fire-event.ts
 function Pr(e, t, n, r = {}) {
 	let i = new CustomEvent(t, {
 		bubbles: r.bubbles ?? !0,
@@ -3517,8 +3471,7 @@ function Pr(e, t, n, r = {}) {
 	});
 	return e.dispatchEvent(i), i;
 }
-//#endregion
-//#region src/components/reorder-list.ts
+// src/components/reorder-list.ts
 var Fr = class extends H {
 	constructor(...e) {
 		super(...e), this.items = [], this.label = "Reorderable list", this._dragIndex = null, this._dragOverIndex = null;
@@ -3644,8 +3597,7 @@ var Fr = class extends H {
     }
   `, Fr);
 q([W({ attribute: !1 })], Ir.prototype, "items", void 0), q([W()], Ir.prototype, "label", void 0), q([G()], Ir.prototype, "_dragIndex", void 0), q([G()], Ir.prototype, "_dragOverIndex", void 0), Ir = q([U("lucarne-reorder-list")], Ir);
-//#endregion
-//#region src/editors/lucarne-today-card-editor.ts
+// src/editors/lucarne-today-card-editor.ts
 var Lr, Rr = {
 	calendar: "Calendar",
 	weather: "Weather",
@@ -3974,8 +3926,7 @@ var Lr, Rr = {
 	zr
 ], Lr);
 q([W({ attribute: !1 })], Br.prototype, "hass", void 0), q([G()], Br.prototype, "_config", void 0), q([G()], Br.prototype, "_haReady", void 0), Br = q([U("lucarne-today-card-editor")], Br);
-//#endregion
-//#region src/shared/calendar-helpers.ts
+// src/shared/calendar-helpers.ts
 function Vr(e, t) {
 	var n;
 	let r = t == null || (n = t.states) == null || (n = n[e.entity]) == null || (n = n.attributes) == null ? void 0 : n.friendly_name;
@@ -3987,8 +3938,7 @@ function Hr(e, t) {
 		label: Vr(e, t)
 	}));
 }
-//#endregion
-//#region src/shared/visible-window.ts
+// src/shared/visible-window.ts
 function Ur(e, t) {
 	let n = Math.min(t.minColWidth, t.maxColWidth), r = Math.max(t.minColWidth, t.maxColWidth), i = Math.min(t.minDays, t.maxDays), a = Math.max(t.minDays, t.maxDays), o = Math.max(0, e - t.timeColWidth);
 	if (o <= 0) return {
@@ -4001,8 +3951,7 @@ function Ur(e, t) {
 		dayWidthPx: o / l
 	};
 }
-//#endregion
-//#region src/shared/rolling-window.ts
+// src/shared/rolling-window.ts
 function Wr(e) {
 	return `syn:${e.start}|${e.end}|${e.summary ?? ""}`;
 }
@@ -4152,8 +4101,7 @@ var Jr = class {
 		});
 	}
 };
-//#endregion
-//#region src/shared/calendar-scroll.ts
+// src/shared/calendar-scroll.ts
 function Yr(e) {
 	let { now: t, bandStartH: n, bandEndH: r, timeGridTopPx: i, timeGridHeightPx: a, paddingPx: o, stickyHeadPx: s = 0, maxScrollTop: c } = e, l = r - n;
 	if (l <= 0) return 0;
@@ -4163,8 +4111,7 @@ function Yr(e) {
 	let d = i + (u - n) / l * a - o - s;
 	return Math.max(0, Math.min(c, d));
 }
-//#endregion
-//#region src/components/visibility-pills.ts
+// src/components/visibility-pills.ts
 var Xr = class extends H {
 	constructor(...e) {
 		super(...e), this.calendars = [], this.visibleIds = /* @__PURE__ */ new Set();
@@ -4236,8 +4183,7 @@ var Xr = class extends H {
       }
     `], Xr);
 q([W({ type: Array })], Zr.prototype, "calendars", void 0), q([W({ type: Object })], Zr.prototype, "visibleIds", void 0), Zr = q([U("lucarne-visibility-pills")], Zr);
-//#endregion
-//#region node_modules/lit-html/directive.js
+// node_modules/lit-html/directive.js
 var Qr = {
 	ATTRIBUTE: 1,
 	CHILD: 2,
@@ -4358,8 +4304,7 @@ var oi = (ii = class extends H {
       }
     `], ii);
 q([W({ type: Object })], oi.prototype, "event", void 0), q([W({ type: String })], oi.prototype, "color", void 0), q([W({ type: Number })], oi.prototype, "lane", void 0), q([W({ type: Number })], oi.prototype, "laneCount", void 0), q([W({ type: Number })], oi.prototype, "topPercent", void 0), q([W({ type: Number })], oi.prototype, "heightPercent", void 0), oi = q([U("lucarne-calendar-event-block")], oi);
-//#endregion
-//#region src/components/out-of-band-stub.ts
+// src/components/out-of-band-stub.ts
 var si = class extends H {
 	constructor(...e) {
 		super(...e), this.events = [], this.label = "earlier", this.eventColors = /* @__PURE__ */ new Map(), this._open = !1;
@@ -4489,8 +4434,7 @@ var si = class extends H {
       }
     `], si);
 q([W({ type: Array })], ci.prototype, "events", void 0), q([W({ type: String })], ci.prototype, "label", void 0), q([W({ type: Object })], ci.prototype, "eventColors", void 0), q([G()], ci.prototype, "_open", void 0), ci = q([U("lucarne-out-of-band-stub")], ci);
-//#endregion
-//#region src/components/skeleton-day-column.ts
+// src/components/skeleton-day-column.ts
 var li;
 function ui(e) {
 	return 20 + (e * 37 + 11) % 30;
@@ -4568,8 +4512,7 @@ var fi = (li = class extends H {
       }
     `], li);
 q([W({ type: String })], fi.prototype, "bandStart", void 0), q([W({ type: String })], fi.prototype, "bandEnd", void 0), q([W({ type: Number })], fi.prototype, "hourHeightPx", void 0), fi = q([U("lucarne-skeleton-day-column")], fi);
-//#endregion
-//#region src/components/calendar-grid.ts
+// src/components/calendar-grid.ts
 var pi;
 function mi(e, t) {
 	return e.getFullYear() === t.getFullYear() && e.getMonth() === t.getMonth() && e.getDate() === t.getDate();
@@ -5089,8 +5032,7 @@ var hi = (pi = class extends H {
       }
     `], pi);
 q([W({ type: Object })], hi.prototype, "layout", void 0), q([W({ type: String })], hi.prototype, "bandStart", void 0), q([W({ type: String })], hi.prototype, "bandEnd", void 0), q([W({ type: Array })], hi.prototype, "calendars", void 0), q([W({ type: Number })], hi.prototype, "hourHeightPx", void 0), q([W({ type: Boolean })], hi.prototype, "showCreateButton", void 0), q([W({ type: Number })], hi.prototype, "dayWidthPx", void 0), q([W({ type: Number })], hi.prototype, "bufferDays", void 0), q([W({ attribute: !1 })], hi.prototype, "cachedDayKeys", void 0), hi = q([U("lucarne-calendar-grid")], hi);
-//#endregion
-//#region src/shared/pan-math.ts
+// src/shared/pan-math.ts
 var gi = 500;
 function _i(e, t, n) {
 	return t <= 0 ? 0 : Math.abs(n) >= gi ? n > 0 ? Math.ceil(e / t) : Math.floor(e / t) : Math.round(e / t);
@@ -5100,8 +5042,7 @@ function vi(e, t) {
 	let n = Math.abs(e) - t;
 	return Math.sign(e) * (t + n * .33);
 }
-//#endregion
-//#region src/components/calendar-day-pan.ts
+// src/components/calendar-day-pan.ts
 var yi = class extends H {
 	constructor(...e) {
 		super(...e), this.dayWidthPx = 0, this.bufferDays = 0, this.canPanBack = !0, this.canPanForward = !0, this._startX = 0, this._startY = 0, this._startTime = 0, this._isDragging = !1, this._cachedTargets = [];
@@ -5236,8 +5177,7 @@ var yi = class extends H {
     }
   `, yi);
 q([W({ type: Number })], bi.prototype, "dayWidthPx", void 0), q([W({ type: Number })], bi.prototype, "bufferDays", void 0), q([W({ type: Boolean })], bi.prototype, "canPanBack", void 0), q([W({ type: Boolean })], bi.prototype, "canPanForward", void 0), q([lt("slot")], bi.prototype, "_slot", void 0), bi = q([U("lucarne-calendar-day-pan")], bi);
-//#endregion
-//#region src/shared/service-errors.ts
+// src/shared/service-errors.ts
 function xi(e, t) {
 	if (e instanceof Error) return Si(e.message) ?? t;
 	if (typeof e == "string") return Si(e) ?? t;
@@ -5250,8 +5190,7 @@ function xi(e, t) {
 function Si(e) {
 	return e.trim() ? e : void 0;
 }
-//#endregion
-//#region src/components/calendar-event-popover.ts
+// src/components/calendar-event-popover.ts
 var Ci;
 function wi(e) {
 	return new Date(e).toLocaleString("en-US", {
@@ -5510,8 +5449,7 @@ var Ti = (Ci = class extends H {
       }
     `], Ci);
 q([W({ attribute: !1 })], Ti.prototype, "hass", void 0), q([W({ type: Object })], Ti.prototype, "event", void 0), q([W({ type: String })], Ti.prototype, "color", void 0), q([W({ type: String })], Ti.prototype, "calendarLabel", void 0), q([W({ type: String })], Ti.prototype, "entityId", void 0), q([G()], Ti.prototype, "_confirmingDelete", void 0), q([G()], Ti.prototype, "_deleting", void 0), q([G()], Ti.prototype, "_deleteError", void 0), Ti = q([U("lucarne-calendar-event-popover")], Ti);
-//#endregion
-//#region src/components/create-event-popover.ts
+// src/components/create-event-popover.ts
 var Ei;
 function Di(e, t) {
 	let n = -(/* @__PURE__ */ new Date(`${e}T${t}:00`)).getTimezoneOffset();
@@ -5878,8 +5816,7 @@ var X = (Ei = class extends H {
       }
     `], Ei);
 q([W({ attribute: !1 })], X.prototype, "hass", void 0), q([W({ type: Object })], X.prototype, "day", void 0), q([W({ type: Number })], X.prototype, "startHour", void 0), q([W({ type: Array })], X.prototype, "calendars", void 0), q([G()], X.prototype, "_title", void 0), q([G()], X.prototype, "_calendarEntityId", void 0), q([G()], X.prototype, "_date", void 0), q([G()], X.prototype, "_startTime", void 0), q([G()], X.prototype, "_endTime", void 0), q([G()], X.prototype, "_allDay", void 0), q([G()], X.prototype, "_description", void 0), q([G()], X.prototype, "_location", void 0), q([G()], X.prototype, "_error", void 0), q([G()], X.prototype, "_saving", void 0), X = q([U("lucarne-create-event-popover")], X);
-//#endregion
-//#region src/cards/lucarne-calendar-card.ts
+// src/cards/lucarne-calendar-card.ts
 var Ai, ji = 6e4, Mi = 4, Ni = 60;
 window.customCards = window.customCards || [], window.customCards.push({
 	type: "lucarne-calendar-card",
@@ -5997,15 +5934,7 @@ var Z = (Ai = class extends dt {
 	}
 	_scheduleInitialScroll() {
 		this._initialScrollRaf = requestAnimationFrame(() => {
-			if (this._initialScrollRaf = void 0, !this.isConnected || this._didInitialScroll) {
-				this._initialScrollScheduled = !1;
-				return;
-			}
-			if (this._performAutoScroll("auto")) {
-				this._didInitialScroll = !0, this._initialScrollScheduled = !1;
-				return;
-			}
-			++this._initialScrollAttempts < Ni ? this._scheduleInitialScroll() : this._initialScrollScheduled = !1;
+			this._initialScrollRaf = void 0, !this.isConnected || this._didInitialScroll ? this._initialScrollScheduled = !1 : this._performAutoScroll("auto") ? (this._didInitialScroll = !0, this._initialScrollScheduled = !1) : ++this._initialScrollAttempts < Ni ? this._scheduleInitialScroll() : this._initialScrollScheduled = !1;
 		});
 	}
 	_performAutoScroll(e) {
@@ -6037,13 +5966,7 @@ var Z = (Ai = class extends dt {
 		var e;
 		if (!this._autoFollow || !((e = this._rolling) != null && e.isAtToday) || typeof document < "u" && document.visibilityState === "hidden") return;
 		let t = this._gridAreaEl;
-		if (t) {
-			if (this._lastAutoScrollTop !== null && Math.abs(t.scrollTop - this._lastAutoScrollTop) > Mi) {
-				this._autoFollow = !1;
-				return;
-			}
-			this._performAutoScroll("smooth");
-		}
+		t && (this._lastAutoScrollTop !== null && Math.abs(t.scrollTop - this._lastAutoScrollTop) > Mi ? this._autoFollow = !1 : this._performAutoScroll("smooth"));
 	}
 	_onTodayClick() {
 		this._rolling.goToToday(), this._autoFollow = !0, this.updateComplete.then(() => requestAnimationFrame(() => this._performAutoScroll("smooth")));
@@ -6333,8 +6256,7 @@ var Z = (Ai = class extends dt {
       }
     `], Ai);
 q([W({ attribute: !1 })], Z.prototype, "hass", void 0), q([lt(".grid-area")], Z.prototype, "_gridAreaEl", void 0), q([G()], Z.prototype, "_config", void 0), q([G()], Z.prototype, "_layout", void 0), q([G()], Z.prototype, "_visibleIds", void 0), q([G()], Z.prototype, "_openEvent", void 0), q([G()], Z.prototype, "_openEventColor", void 0), q([G()], Z.prototype, "_openEventCalLabel", void 0), q([G()], Z.prototype, "_openEventEntityId", void 0), q([G()], Z.prototype, "_createDay", void 0), q([G()], Z.prototype, "_createStartHour", void 0), q([G()], Z.prototype, "_creatableCalendars", void 0), q([G()], Z.prototype, "_dayWidthPx", void 0), q([G()], Z.prototype, "_deletedUids", void 0), Z = q([U("lucarne-calendar-card")], Z);
-//#endregion
-//#region src/editors/lucarne-calendar-card-editor.ts
+// src/editors/lucarne-calendar-card-editor.ts
 var Pi = class extends H {
 	constructor(...e) {
 		super(...e), this._haReady = !1, this._invalid = {};
@@ -6575,8 +6497,7 @@ var Pi = class extends H {
 	}
 }, Fi = (Pi.styles = [K, Dr], Pi);
 q([W({ attribute: !1 })], Fi.prototype, "hass", void 0), q([G()], Fi.prototype, "_config", void 0), q([G()], Fi.prototype, "_haReady", void 0), q([G()], Fi.prototype, "_invalid", void 0), Fi = q([U("lucarne-calendar-card-editor")], Fi);
-//#endregion
-//#region src/shared/types.ts
+// src/shared/types.ts
 var Ii = [
 	"anytime",
 	"morning",
@@ -6586,8 +6507,7 @@ var Ii = [
 function Li(e) {
 	return typeof e == "string" && Ii.includes(e) ? e : "anytime";
 }
-//#endregion
-//#region src/components/streak-display.ts
+// src/components/streak-display.ts
 var Ri = class extends H {
 	constructor(...e) {
 		super(...e), this.streak = 0;
@@ -6640,8 +6560,7 @@ var Ri = class extends H {
     }
   `, Ri);
 q([W({ type: Number })], zi.prototype, "streak", void 0), zi = q([U("lucarne-streak-display")], zi);
-//#endregion
-//#region src/components/celebration-overlay.ts
+// src/components/celebration-overlay.ts
 var Bi = class extends H {
 	constructor(...e) {
 		super(...e), this.kidSlug = "", this.active = !1, this._dots = [];
@@ -6698,8 +6617,7 @@ var Bi = class extends H {
     }
   `, Bi);
 q([W({ attribute: "kid-slug" })], Vi.prototype, "kidSlug", void 0), q([W({ type: Boolean })], Vi.prototype, "active", void 0), Vi = q([U("lucarne-celebration-overlay")], Vi);
-//#endregion
-//#region src/components/member-column.ts
+// src/components/member-column.ts
 var Hi, Ui = [
 	"morning",
 	"afternoon",
@@ -6751,11 +6669,7 @@ var Xi = (Hi = class extends H {
 		let t = this.tasks.filter((e) => e.metadata.type === "routine");
 		if (t.length === 0) return;
 		let n = t.every((e) => e.status === "completed");
-		if (this._lastAllRoutinesDone === null) {
-			this._lastAllRoutinesDone = n;
-			return;
-		}
-		!this._lastAllRoutinesDone && n && this._triggerCelebration(), this._lastAllRoutinesDone = n;
+		this._lastAllRoutinesDone === null || !this._lastAllRoutinesDone && n && this._triggerCelebration(), this._lastAllRoutinesDone = n;
 	}
 	_triggerCelebration() {
 		this._celebrating = !0, this._celebrationTimer && clearTimeout(this._celebrationTimer), this._celebrationTimer = setTimeout(() => {
@@ -6767,14 +6681,13 @@ var Xi = (Hi = class extends H {
 		super.disconnectedCallback(), this._celebrationTimer && clearTimeout(this._celebrationTimer), this._scrollRaf !== null && (cancelAnimationFrame(this._scrollRaf), this._scrollRaf = null), (e = this._listsResizeObs) == null || e.disconnect();
 	}
 	_onScrollBucketChanged() {
-		if (!this.scrollToBucket) {
-			var e;
-			this._pendingScrollBucket = !1, this._scrollRaf !== null && (cancelAnimationFrame(this._scrollRaf), this._scrollRaf = null), (e = this._listsResizeObs) == null || e.disconnect();
-			return;
-		}
-		this._pendingScrollBucket = !0, this._scrollRaf !== null && cancelAnimationFrame(this._scrollRaf), this._scrollRaf = requestAnimationFrame(() => {
+		if (this.scrollToBucket) this._pendingScrollBucket = !0, this._scrollRaf !== null && cancelAnimationFrame(this._scrollRaf), this._scrollRaf = requestAnimationFrame(() => {
 			this._scrollRaf = null, this._tryApplyScroll();
 		}), this._observeListsResize();
+		else {
+			var e;
+			this._pendingScrollBucket = !1, this._scrollRaf !== null && (cancelAnimationFrame(this._scrollRaf), this._scrollRaf = null), (e = this._listsResizeObs) == null || e.disconnect();
+		}
 	}
 	_tryApplyScroll() {
 		if (!this._pendingScrollBucket || !this.scrollToBucket) return;
@@ -7006,8 +6919,7 @@ q([W({ attribute: !1 })], Xi.prototype, "member", void 0), q([W({ attribute: !1 
 	type: Boolean,
 	attribute: "hide-name"
 })], Xi.prototype, "hideName", void 0), q([W({ attribute: "scroll-to-bucket" })], Xi.prototype, "scrollToBucket", void 0), q([G()], Xi.prototype, "_celebrating", void 0), q([G()], Xi.prototype, "_notTodayOpen", void 0), Xi = q([U("lucarne-member-column")], Xi);
-//#endregion
-//#region src/shared/integration-services.ts
+// src/shared/integration-services.ts
 async function Zi(e, t) {
 	var n;
 	let r = {
@@ -7042,8 +6954,7 @@ async function ta(e, t, n) {
 		avatar: n
 	});
 }
-//#endregion
-//#region src/components/add-task-popover.ts
+// src/components/add-task-popover.ts
 var na, ra = [
 	"🪥",
 	"🛏️",
@@ -7874,8 +7785,7 @@ var na, ra = [
       }
     `], na);
 q([W({ attribute: !1 })], Q.prototype, "hass", void 0), q([W({ attribute: !1 })], Q.prototype, "member", void 0), q([W({ attribute: !1 })], Q.prototype, "members", void 0), q([G()], Q.prototype, "_selectedMemberSlug", void 0), q([G()], Q.prototype, "_summary", void 0), q([G()], Q.prototype, "_type", void 0), q([G()], Q.prototype, "_icon", void 0), q([G()], Q.prototype, "_recurrenceMode", void 0), q([G()], Q.prototype, "_recurrenceDays", void 0), q([G()], Q.prototype, "_recurrenceInterval", void 0), q([G()], Q.prototype, "_recurrenceMonthDay", void 0), q([G()], Q.prototype, "_recurrenceNth", void 0), q([G()], Q.prototype, "_recurrenceNthDay", void 0), q([G()], Q.prototype, "_recurrenceMonth", void 0), q([G()], Q.prototype, "_recurrenceStart", void 0), q([G()], Q.prototype, "_due", void 0), q([G()], Q.prototype, "_timeOfDay", void 0), q([G()], Q.prototype, "_error", void 0), q([G()], Q.prototype, "_saving", void 0), q([G()], Q.prototype, "_alsoAddSlugs", void 0), q([G()], Q.prototype, "_rotatingOwners", void 0), Q = q([U("lucarne-add-task-popover")], Q);
-//#endregion
-//#region src/components/edit-task-popover.ts
+// src/components/edit-task-popover.ts
 var ia = class extends H {
 	constructor(...e) {
 		super(...e), this.members = [], this._summary = "", this._type = "chore", this._icon = "", this._recurrenceMode = "none", this._recurrenceDays = [], this._recurrenceInterval = 1, this._recurrenceMonthDay = 1, this._recurrenceNth = 1, this._recurrenceNthDay = "MO", this._recurrenceMonth = 1, this._recurrenceStart = "", this._due = "", this._assignee = "", this._timeOfDay = "anytime", this._isCustomRecurrence = !1, this._rawRecurrence = "", this._error = "", this._saving = !1, this._confirmingDelete = !1, this._rotatingOwners = [], this._backdropPressActive = !1;
@@ -7942,73 +7852,60 @@ var ia = class extends H {
 	}
 	async _save() {
 		if (!this._saving) {
-			if (!this._summary.trim()) {
-				this._error = "Summary is required";
-				return;
-			}
-			if (this._summary.trim().length > 200) {
-				this._error = "Summary must be 200 characters or less";
-				return;
-			}
-			if (this._recurrenceMode === "weekly" && !this._isCustomRecurrence && this._recurrenceDays.length === 0) {
-				this._error = "Select at least one day for weekly recurrence";
-				return;
-			}
-			if (!this._due && this.task.due) {
-				this._error = "Due date cannot be cleared here — delete and recreate the task to remove it";
-				return;
-			}
-			if (this._type === "rotating" && this._rotatingOwners.length < 2) {
-				this._error = "Select at least 2 owners for a rotating task";
-				return;
-			}
-			this._saving = !0, this._error = "";
-			try {
-				var e;
-				let t = this.task.metadata.member_slug === "household" ? "todo.lucarne_household" : ((e = this.members.find((e) => e.slug === this.task.metadata.member_slug)) == null ? void 0 : e.todo_entity_id) ?? "", n = this._summary.trim() !== this.task.summary, r = !!this._due && this._due !== (this.task.due ?? ""), i = this._type === "rotating", a = this.task.metadata.rotation_owners ?? [], o = i && JSON.stringify(this._rotatingOwners) !== JSON.stringify(a), s = this.task.metadata.member_slug === "household", c = this._type !== this.task.metadata.type || this._icon !== this.task.metadata.icon || !i && this._buildRRule() !== this.task.metadata.recurrence || this._timeOfDay !== (this.task.metadata.time_of_day ?? "anytime") || s && !i && this._assignee !== this.task.metadata.assignee_slug || o, l = i && !!this.task.metadata.current_owner && !this._rotatingOwners.includes(this.task.metadata.current_owner);
-				if (n || r) {
-					if (!t) throw Error("Could not resolve todo entity for this task");
-					await this.hass.callService("todo", "update_item", {
-						item: this.task.uid,
-						rename: this._summary.trim(),
-						...r ? { due_datetime: this._due } : {}
-					}, { entity_id: t });
+			if (!this._summary.trim()) this._error = "Summary is required";
+			else if (this._summary.trim().length > 200) this._error = "Summary must be 200 characters or less";
+			else if (this._recurrenceMode === "weekly" && !this._isCustomRecurrence && this._recurrenceDays.length === 0) this._error = "Select at least one day for weekly recurrence";
+			else if (!this._due && this.task.due) this._error = "Due date cannot be cleared here — delete and recreate the task to remove it";
+			else if (this._type === "rotating" && this._rotatingOwners.length < 2) this._error = "Select at least 2 owners for a rotating task";
+			else {
+				this._saving = !0, this._error = "";
+				try {
+					var e;
+					let t = this.task.metadata.member_slug === "household" ? "todo.lucarne_household" : ((e = this.members.find((e) => e.slug === this.task.metadata.member_slug)) == null ? void 0 : e.todo_entity_id) ?? "", n = this._summary.trim() !== this.task.summary, r = !!this._due && this._due !== (this.task.due ?? ""), i = this._type === "rotating", a = this.task.metadata.rotation_owners ?? [], o = i && JSON.stringify(this._rotatingOwners) !== JSON.stringify(a), s = this.task.metadata.member_slug === "household", c = this._type !== this.task.metadata.type || this._icon !== this.task.metadata.icon || !i && this._buildRRule() !== this.task.metadata.recurrence || this._timeOfDay !== (this.task.metadata.time_of_day ?? "anytime") || s && !i && this._assignee !== this.task.metadata.assignee_slug || o, l = i && !!this.task.metadata.current_owner && !this._rotatingOwners.includes(this.task.metadata.current_owner);
+					if (n || r) {
+						if (!t) throw Error("Could not resolve todo entity for this task");
+						await this.hass.callService("todo", "update_item", {
+							item: this.task.uid,
+							rename: this._summary.trim(),
+							...r ? { due_datetime: this._due } : {}
+						}, { entity_id: t });
+					}
+					if (c && await Qi(this.hass, this.task.uid, {
+						...this._type === this.task.metadata.type ? {} : { type: this._type },
+						...this._icon === this.task.metadata.icon ? {} : { icon: this._icon },
+						...!i && this._buildRRule() !== this.task.metadata.recurrence ? { recurrence: this._buildRRule() } : {},
+						...this._timeOfDay === (this.task.metadata.time_of_day ?? "anytime") ? {} : { time_of_day: this._timeOfDay },
+						...s && !i && this._assignee !== this.task.metadata.assignee_slug ? { assignee: this._assignee } : {},
+						...o ? { rotation_owners: this._rotatingOwners } : {},
+						...l ? { current_owner: this._rotatingOwners[0] } : {}
+					}), n || r || c) {
+						let e = {
+							...this.task,
+							summary: this._summary.trim(),
+							due: this._due || this.task.due,
+							metadata: {
+								...this.task.metadata,
+								type: this._type,
+								icon: this._icon,
+								recurrence: i ? this.task.metadata.recurrence : this._buildRRule(),
+								time_of_day: this._timeOfDay,
+								...s && !i ? { assignee_slug: this._assignee } : {},
+								...i ? {
+									rotation_owners: this._rotatingOwners,
+									current_owner: l ? this._rotatingOwners[0] : this.task.metadata.current_owner
+								} : {}
+							}
+						};
+						this.dispatchEvent(new CustomEvent("task-updated", {
+							detail: { task: e },
+							bubbles: !0,
+							composed: !0
+						}));
+					}
+					this._close();
+				} catch (e) {
+					this._error = xi(e, "Failed to save"), this._saving = !1;
 				}
-				if (c && await Qi(this.hass, this.task.uid, {
-					...this._type === this.task.metadata.type ? {} : { type: this._type },
-					...this._icon === this.task.metadata.icon ? {} : { icon: this._icon },
-					...!i && this._buildRRule() !== this.task.metadata.recurrence ? { recurrence: this._buildRRule() } : {},
-					...this._timeOfDay === (this.task.metadata.time_of_day ?? "anytime") ? {} : { time_of_day: this._timeOfDay },
-					...s && !i && this._assignee !== this.task.metadata.assignee_slug ? { assignee: this._assignee } : {},
-					...o ? { rotation_owners: this._rotatingOwners } : {},
-					...l ? { current_owner: this._rotatingOwners[0] } : {}
-				}), n || r || c) {
-					let e = {
-						...this.task,
-						summary: this._summary.trim(),
-						due: this._due || this.task.due,
-						metadata: {
-							...this.task.metadata,
-							type: this._type,
-							icon: this._icon,
-							recurrence: i ? this.task.metadata.recurrence : this._buildRRule(),
-							time_of_day: this._timeOfDay,
-							...s && !i ? { assignee_slug: this._assignee } : {},
-							...i ? {
-								rotation_owners: this._rotatingOwners,
-								current_owner: l ? this._rotatingOwners[0] : this.task.metadata.current_owner
-							} : {}
-						}
-					};
-					this.dispatchEvent(new CustomEvent("task-updated", {
-						detail: { task: e },
-						bubbles: !0,
-						composed: !0
-					}));
-				}
-				this._close();
-			} catch (e) {
-				this._error = xi(e, "Failed to save"), this._saving = !1;
 			}
 		}
 	}
@@ -8692,8 +8589,7 @@ var ia = class extends H {
       }
     `], ia);
 q([W({ attribute: !1 })], $.prototype, "hass", void 0), q([W({ attribute: !1 })], $.prototype, "task", void 0), q([W({ attribute: !1 })], $.prototype, "members", void 0), q([G()], $.prototype, "_summary", void 0), q([G()], $.prototype, "_type", void 0), q([G()], $.prototype, "_icon", void 0), q([G()], $.prototype, "_recurrenceMode", void 0), q([G()], $.prototype, "_recurrenceDays", void 0), q([G()], $.prototype, "_recurrenceInterval", void 0), q([G()], $.prototype, "_recurrenceMonthDay", void 0), q([G()], $.prototype, "_recurrenceNth", void 0), q([G()], $.prototype, "_recurrenceNthDay", void 0), q([G()], $.prototype, "_recurrenceMonth", void 0), q([G()], $.prototype, "_recurrenceStart", void 0), q([G()], $.prototype, "_due", void 0), q([G()], $.prototype, "_assignee", void 0), q([G()], $.prototype, "_timeOfDay", void 0), q([G()], $.prototype, "_isCustomRecurrence", void 0), q([G()], $.prototype, "_rawRecurrence", void 0), q([G()], $.prototype, "_error", void 0), q([G()], $.prototype, "_saving", void 0), q([G()], $.prototype, "_confirmingDelete", void 0), q([G()], $.prototype, "_rotatingOwners", void 0), $ = q([U("lucarne-edit-task-popover")], $);
-//#endregion
-//#region src/cards/lucarne-chores-card.ts
+// src/cards/lucarne-chores-card.ts
 var aa, oa = 1e4, sa = 3e4;
 function ca(e, t) {
 	if (e.summary !== t.summary || (e.due ?? "") !== (t.due ?? "")) return !1;
@@ -8759,12 +8655,11 @@ var la = (aa = class extends dt {
 		};
 	}
 	applyConfig(e) {
-		if ("kids" in e) {
-			this._config = e;
-			return;
+		if ("kids" in e) this._config = e;
+		else {
+			if (!Array.isArray(e.members)) throw new ut("lucarne-chores-card: members must be an array");
+			this._config = e, this.isConnected && this._scheduleScrollRefresh();
 		}
-		if (!Array.isArray(e.members)) throw new ut("lucarne-chores-card: members must be an array");
-		this._config = e, this.isConnected && this._scheduleScrollRefresh();
 	}
 	static getConfigElement() {
 		return document.createElement("lucarne-chores-card-editor");
@@ -9090,12 +8985,11 @@ var la = (aa = class extends dt {
       }
     `], aa);
 q([W({ attribute: !1 })], la.prototype, "hass", void 0), q([G()], la.prototype, "_config", void 0), q([G()], la.prototype, "_familyState", void 0), q([G()], la.prototype, "_addTaskMember", void 0), q([G()], la.prototype, "_editTask", void 0), q([G()], la.prototype, "_optimistic", void 0), q([G()], la.prototype, "_optimisticAdds", void 0), q([G()], la.prototype, "_deletedUids", void 0), q([G()], la.prototype, "_optimisticEdits", void 0), la = q([U("lucarne-chores-card")], la);
-//#endregion
-//#region src/shared/cropper-styles.ts
-var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
+// src/shared/cropper-styles.ts
+var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t, n) => {
 	(function(n, r) {
 		typeof e == "object" && t !== void 0 ? t.exports = r() : typeof define == "function" && define.amd ? define(r) : (n = typeof globalThis < "u" ? globalThis : n || self, n.Cropper = r());
-	})(e, (function() {
+	})(n, (function() {
 		function e(e, t) {
 			(t == null || t > e.length) && (t = e.length);
 			for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
@@ -9319,47 +9213,27 @@ var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 		}
 		function V(e, t) {
 			if (t) {
-				if (I(e.length)) {
-					z(e, function(e) {
-						V(e, t);
-					});
-					return;
+				if (I(e.length)) z(e, function(e) {
+					V(e, t);
+				});
+				else if (e.classList) e.classList.add(t);
+				else {
+					var n = e.className.trim();
+					n ? n.indexOf(t) < 0 && (e.className = `${n} ${t}`) : e.className = t;
 				}
-				if (e.classList) {
-					e.classList.add(t);
-					return;
-				}
-				var n = e.className.trim();
-				n ? n.indexOf(t) < 0 && (e.className = `${n} ${t}`) : e.className = t;
 			}
 		}
 		function Qe(e, t) {
-			if (t) {
-				if (I(e.length)) {
-					z(e, function(e) {
-						Qe(e, t);
-					});
-					return;
-				}
-				if (e.classList) {
-					e.classList.remove(t);
-					return;
-				}
-				e.className.indexOf(t) >= 0 && (e.className = e.className.split(Ne).filter(function(e) {
-					return e && e !== t;
-				}).join(" "));
-			}
+			t && (I(e.length) ? z(e, function(e) {
+				Qe(e, t);
+			}) : e.classList ? e.classList.remove(t) : e.className.indexOf(t) >= 0 && (e.className = e.className.split(Ne).filter(function(e) {
+				return e && e !== t;
+			}).join(" ")));
 		}
 		function $e(e, t, n) {
-			if (t) {
-				if (I(e.length)) {
-					z(e, function(e) {
-						$e(e, t, n);
-					});
-					return;
-				}
-				n ? V(e, t) : Qe(e, t);
-			}
+			t && (I(e.length) ? z(e, function(e) {
+				$e(e, t, n);
+			}) : n ? V(e, t) : Qe(e, t));
 		}
 		var et = /([a-z\d])([A-Z])/g;
 		function tt(e) {
@@ -9921,7 +9795,7 @@ var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			destroy: function() {
 				var e = this.element;
-				return e[S] ? (e[S] = void 0, this.isImg && this.replaced && (e.src = this.originalUrl), this.uncreate(), this) : this;
+				return e[S] && (e[S] = void 0, this.isImg && this.replaced && (e.src = this.originalUrl), this.uncreate()), this;
 			},
 			move: function(e) {
 				var t = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : e, n = this.canvasData, r = n.left, i = n.top;
@@ -10097,7 +9971,7 @@ var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 			},
 			wheel: function(e) {
 				var t = this, n = Number(this.options.wheelZoomRatio) || .1, r = 1;
-				this.disabled || (e.preventDefault(), !this.wheeling && (this.wheeling = !0, setTimeout(function() {
+				this.disabled || (e.preventDefault(), this.wheeling || (this.wheeling = !0, setTimeout(function() {
 					t.wheeling = !1;
 				}, 50), e.deltaY ? r = e.deltaY > 0 ? 1 : -1 : e.wheelDelta ? r = -e.wheelDelta / 120 : e.detail && (r = e.detail > 0 ? 1 : -1), Mt.call(this, -r * n, e)));
 			},
@@ -10193,110 +10067,110 @@ var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				i.left = re.left, i.top = re.top, i.width = re.width, i.height = re.height, this.action = re.action, this.renderCropBox(), ee || z(a, function(e) {
 					e.startX = e.endX, e.startY = e.endY;
 				});
-				return;
-			}
-			var N = function(e) {
-				switch (e) {
-					case T:
-						p + S.x > _ && (S.x = _ - p);
+			} else {
+				var N = function(e) {
+					switch (e) {
+						case T:
+							p + S.x > _ && (S.x = _ - p);
+							break;
+						case E:
+							c + S.x < h && (S.x = h - c);
+							break;
+						case O:
+							l + S.y < g && (S.y = g - l);
+							break;
+						case D: m + S.y > v && (S.y = v - m);
+					}
+				};
+				switch (o) {
+					case C:
+						c += S.x, l += S.y;
 						break;
-					case E:
-						c + S.x < h && (S.x = h - c);
+					case T:
+						if (S.x >= 0 && (p >= _ || s && (l <= g || m >= v))) {
+							y = !1;
+							break;
+						}
+						N(T), u += S.x, u < 0 && (o = E, u = -u, c -= u, u < i.minWidth && (u = i.minWidth, c = i.left - u)), s && (d = u / s, l += (i.height - d) / 2);
 						break;
 					case O:
-						l + S.y < g && (S.y = g - l);
+						if (S.y <= 0 && (l <= g || s && (c <= h || p >= _))) {
+							y = !1;
+							break;
+						}
+						N(O), d -= S.y, l += S.y, d < 0 && (o = D, d = -d, l -= d, d < i.minHeight && (d = i.minHeight, l = m)), s && (u = d * s, c += (i.width - u) / 2);
 						break;
-					case D: m + S.y > v && (S.y = v - m);
+					case E:
+						if (S.x <= 0 && (c <= h || s && (l <= g || m >= v))) {
+							y = !1;
+							break;
+						}
+						N(E), u -= S.x, c += S.x, u < 0 && (o = T, u = -u, c -= u, u < i.minWidth && (u = i.minWidth, c = p)), s && (d = u / s, l += (i.height - d) / 2);
+						break;
+					case D:
+						if (S.y >= 0 && (m >= v || s && (c <= h || p >= _))) {
+							y = !1;
+							break;
+						}
+						N(D), d += S.y, d < 0 && (o = O, d = -d, l -= d, d < i.minHeight && (d = i.minHeight, l = i.top - d)), s && (u = d * s, c += (i.width - u) / 2);
+						break;
+					case k:
+						if (s) {
+							if (S.y <= 0 && (l <= g || p >= _)) {
+								y = !1;
+								break;
+							}
+							N(O), d -= S.y, l += S.y, u = d * s;
+						} else N(O), N(T), S.x >= 0 ? p < _ ? u += S.x : S.y <= 0 && l <= g && (y = !1) : u += S.x, S.y <= 0 ? l > g && (d -= S.y, l += S.y) : (d -= S.y, l += S.y);
+						u < 0 && d < 0 ? (o = M, d = -d, u = -u, l -= d, c -= u) : u < 0 ? (o = A, u = -u, c -= u) : d < 0 && (o = j, d = -d, l -= d);
+						break;
+					case A:
+						if (s) {
+							if (S.y <= 0 && (l <= g || c <= h)) {
+								y = !1;
+								break;
+							}
+							N(O), d -= S.y, l += S.y, u = d * s, c += i.width - u;
+						} else N(O), N(E), S.x <= 0 ? c > h ? (u -= S.x, c += S.x) : S.y <= 0 && l <= g && (y = !1) : (u -= S.x, c += S.x), S.y <= 0 ? l > g && (d -= S.y, l += S.y) : (d -= S.y, l += S.y);
+						u < 0 && d < 0 ? (o = j, d = -d, u = -u, l -= d, c -= u) : u < 0 ? (o = k, u = -u, c -= u) : d < 0 && (o = M, d = -d, l -= d);
+						break;
+					case M:
+						if (s) {
+							if (S.x <= 0 && (c <= h || m >= v)) {
+								y = !1;
+								break;
+							}
+							N(E), u -= S.x, c += S.x, d = u / s;
+						} else N(D), N(E), S.x <= 0 ? c > h ? (u -= S.x, c += S.x) : S.y >= 0 && m >= v && (y = !1) : (u -= S.x, c += S.x), S.y >= 0 ? m < v && (d += S.y) : d += S.y;
+						u < 0 && d < 0 ? (o = k, d = -d, u = -u, l -= d, c -= u) : u < 0 ? (o = j, u = -u, c -= u) : d < 0 && (o = A, d = -d, l -= d);
+						break;
+					case j:
+						if (s) {
+							if (S.x >= 0 && (p >= _ || m >= v)) {
+								y = !1;
+								break;
+							}
+							N(T), u += S.x, d = u / s;
+						} else N(D), N(T), S.x >= 0 ? p < _ ? u += S.x : S.y >= 0 && m >= v && (y = !1) : u += S.x, S.y >= 0 ? m < v && (d += S.y) : d += S.y;
+						u < 0 && d < 0 ? (o = A, d = -d, u = -u, l -= d, c -= u) : u < 0 ? (o = M, u = -u, c -= u) : d < 0 && (o = k, d = -d, l -= d);
+						break;
+					case te:
+						this.move(S.x, S.y), y = !1;
+						break;
+					case ne:
+						Mt.call(this, q(a), e), y = !1;
+						break;
+					case w:
+						if (!S.x || !S.y) {
+							y = !1;
+							break;
+						}
+						b = st(this.cropper), c = x.startX - b.left, l = x.startY - b.top, s ? (u = Math.max(Math.abs(S.x), Math.abs(S.y) * s, i.minWidth, i.minHeight * s), d = u / s) : (u = Math.max(Math.abs(S.x), i.minWidth), d = Math.max(Math.abs(S.y), i.minHeight)), S.x > 0 ? o = S.y > 0 ? j : k : S.x < 0 && (c -= u, o = S.y > 0 ? M : A), S.y < 0 && (l -= d), this.cropped || (Qe(this.cropBox, P), this.cropped = !0, this.limited && this.limitCropBox(!0, !0));
 				}
-			};
-			switch (o) {
-				case C:
-					c += S.x, l += S.y;
-					break;
-				case T:
-					if (S.x >= 0 && (p >= _ || s && (l <= g || m >= v))) {
-						y = !1;
-						break;
-					}
-					N(T), u += S.x, u < 0 && (o = E, u = -u, c -= u, u < i.minWidth && (u = i.minWidth, c = i.left - u)), s && (d = u / s, l += (i.height - d) / 2);
-					break;
-				case O:
-					if (S.y <= 0 && (l <= g || s && (c <= h || p >= _))) {
-						y = !1;
-						break;
-					}
-					N(O), d -= S.y, l += S.y, d < 0 && (o = D, d = -d, l -= d, d < i.minHeight && (d = i.minHeight, l = m)), s && (u = d * s, c += (i.width - u) / 2);
-					break;
-				case E:
-					if (S.x <= 0 && (c <= h || s && (l <= g || m >= v))) {
-						y = !1;
-						break;
-					}
-					N(E), u -= S.x, c += S.x, u < 0 && (o = T, u = -u, c -= u, u < i.minWidth && (u = i.minWidth, c = p)), s && (d = u / s, l += (i.height - d) / 2);
-					break;
-				case D:
-					if (S.y >= 0 && (m >= v || s && (c <= h || p >= _))) {
-						y = !1;
-						break;
-					}
-					N(D), d += S.y, d < 0 && (o = O, d = -d, l -= d, d < i.minHeight && (d = i.minHeight, l = i.top - d)), s && (u = d * s, c += (i.width - u) / 2);
-					break;
-				case k:
-					if (s) {
-						if (S.y <= 0 && (l <= g || p >= _)) {
-							y = !1;
-							break;
-						}
-						N(O), d -= S.y, l += S.y, u = d * s;
-					} else N(O), N(T), S.x >= 0 ? p < _ ? u += S.x : S.y <= 0 && l <= g && (y = !1) : u += S.x, S.y <= 0 ? l > g && (d -= S.y, l += S.y) : (d -= S.y, l += S.y);
-					u < 0 && d < 0 ? (o = M, d = -d, u = -u, l -= d, c -= u) : u < 0 ? (o = A, u = -u, c -= u) : d < 0 && (o = j, d = -d, l -= d);
-					break;
-				case A:
-					if (s) {
-						if (S.y <= 0 && (l <= g || c <= h)) {
-							y = !1;
-							break;
-						}
-						N(O), d -= S.y, l += S.y, u = d * s, c += i.width - u;
-					} else N(O), N(E), S.x <= 0 ? c > h ? (u -= S.x, c += S.x) : S.y <= 0 && l <= g && (y = !1) : (u -= S.x, c += S.x), S.y <= 0 ? l > g && (d -= S.y, l += S.y) : (d -= S.y, l += S.y);
-					u < 0 && d < 0 ? (o = j, d = -d, u = -u, l -= d, c -= u) : u < 0 ? (o = k, u = -u, c -= u) : d < 0 && (o = M, d = -d, l -= d);
-					break;
-				case M:
-					if (s) {
-						if (S.x <= 0 && (c <= h || m >= v)) {
-							y = !1;
-							break;
-						}
-						N(E), u -= S.x, c += S.x, d = u / s;
-					} else N(D), N(E), S.x <= 0 ? c > h ? (u -= S.x, c += S.x) : S.y >= 0 && m >= v && (y = !1) : (u -= S.x, c += S.x), S.y >= 0 ? m < v && (d += S.y) : d += S.y;
-					u < 0 && d < 0 ? (o = k, d = -d, u = -u, l -= d, c -= u) : u < 0 ? (o = j, u = -u, c -= u) : d < 0 && (o = A, d = -d, l -= d);
-					break;
-				case j:
-					if (s) {
-						if (S.x >= 0 && (p >= _ || m >= v)) {
-							y = !1;
-							break;
-						}
-						N(T), u += S.x, d = u / s;
-					} else N(D), N(T), S.x >= 0 ? p < _ ? u += S.x : S.y >= 0 && m >= v && (y = !1) : u += S.x, S.y >= 0 ? m < v && (d += S.y) : d += S.y;
-					u < 0 && d < 0 ? (o = A, d = -d, u = -u, l -= d, c -= u) : u < 0 ? (o = M, u = -u, c -= u) : d < 0 && (o = k, d = -d, l -= d);
-					break;
-				case te:
-					this.move(S.x, S.y), y = !1;
-					break;
-				case ne:
-					Mt.call(this, q(a), e), y = !1;
-					break;
-				case w:
-					if (!S.x || !S.y) {
-						y = !1;
-						break;
-					}
-					b = st(this.cropper), c = x.startX - b.left, l = x.startY - b.top, s ? (u = Math.max(Math.abs(S.x), Math.abs(S.y) * s, i.minWidth, i.minHeight * s), d = u / s) : (u = Math.max(Math.abs(S.x), i.minWidth), d = Math.max(Math.abs(S.y), i.minHeight)), S.x > 0 ? o = S.y > 0 ? j : k : S.x < 0 && (c -= u, o = S.y > 0 ? M : A), S.y < 0 && (l -= d), this.cropped || (Qe(this.cropBox, P), this.cropped = !0, this.limited && this.limitCropBox(!0, !0));
+				y && (i.width = u, i.height = d, i.left = c, i.top = l, this.action = o, this.renderCropBox()), z(a, function(e) {
+					o !== w && !ee && (e.startX = e.endX, e.startY = e.endY);
+				});
 			}
-			y && (i.width = u, i.height = d, i.left = c, i.top = l, this.action = o, this.renderCropBox()), z(a, function(e) {
-				o !== w && !ee && (e.startX = e.endX, e.startY = e.endY);
-			});
 		} }, It = b.Cropper, Lt = /*#__PURE__*/ function() {
 			function e(t) {
 				var n = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
@@ -10324,22 +10198,18 @@ var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 						if (e) {
 							this.url = e, this.imageData = {};
 							var n = this.element, r = this.options;
-							if (!r.rotatable && !r.scalable && (r.checkOrientation = !1), !r.checkOrientation || !window.ArrayBuffer) {
-								this.clone();
-								return;
+							if (!r.rotatable && !r.scalable && (r.checkOrientation = !1), !r.checkOrientation || !window.ArrayBuffer) this.clone();
+							else if (je.test(e)) Me.test(e) ? this.read(vt(e)) : this.clone();
+							else {
+								var i = new XMLHttpRequest(), a = this.clone.bind(this);
+								this.reloading = !0, this.xhr = i, i.onabort = a, i.onerror = a, i.ontimeout = a, i.onprogress = function() {
+									i.getResponseHeader("content-type") !== ke && i.abort();
+								}, i.onload = function() {
+									t.read(i.response);
+								}, i.onloadend = function() {
+									t.reloading = !1, t.xhr = null;
+								}, r.checkCrossOrigin && ct(e) && n.crossOrigin && (e = lt(e)), i.open("GET", e, !0), i.responseType = "arraybuffer", i.withCredentials = n.crossOrigin === "use-credentials", i.send();
 							}
-							if (je.test(e)) {
-								Me.test(e) ? this.read(vt(e)) : this.clone();
-								return;
-							}
-							var i = new XMLHttpRequest(), a = this.clone.bind(this);
-							this.reloading = !0, this.xhr = i, i.onabort = a, i.onerror = a, i.ontimeout = a, i.onprogress = function() {
-								i.getResponseHeader("content-type") !== ke && i.abort();
-							}, i.onload = function() {
-								t.read(i.response);
-							}, i.onloadend = function() {
-								t.reloading = !1, t.xhr = null;
-							}, r.checkCrossOrigin && ct(e) && n.crossOrigin && (e = lt(e)), i.open("GET", e, !0), i.responseType = "arraybuffer", i.withCredentials = n.crossOrigin === "use-credentials", i.send();
 						}
 					}
 				},
@@ -10457,17 +10327,7 @@ var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 	_onFileChange(e) {
 		var t;
 		let n = e.target, r = (t = n.files) == null ? void 0 : t[0];
-		if (n.value = "", r) {
-			if (!ma.has(r.type)) {
-				this._error = "Only PNG, JPEG, and WebP images are accepted.";
-				return;
-			}
-			if (r.size > pa) {
-				this._error = "Image must be 2 MB or smaller.";
-				return;
-			}
-			this._error = null, this._setSource(URL.createObjectURL(r));
-		}
+		n.value = "", r && (ma.has(r.type) ? r.size > pa ? this._error = "Image must be 2 MB or smaller." : (this._error = null, this._setSource(URL.createObjectURL(r))) : this._error = "Only PNG, JPEG, and WebP images are accepted.");
 	}
 	_setSource(e) {
 		this._cropper && (this._cropper.destroy(), this._cropper = null), this._sourceUrl && URL.revokeObjectURL(this._sourceUrl), this._sourceUrl = e;
@@ -10505,20 +10365,17 @@ var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				} finally {
 					this._submitting = !1;
 				}
-				return;
-			}
-			if (!this._sourceUrl || !this._cropper) {
-				this._error = "Pick an image first.";
-				return;
-			}
-			this._submitting = !0;
-			try {
-				let e = await this._getCroppedFile();
-				await ea(this.hass, this.memberSlug, e), this.dispatchEvent(new CustomEvent("avatar-changed")), this._close();
-			} catch (e) {
-				this._error = xi(e, "Failed to upload avatar");
-			} finally {
-				this._submitting = !1;
+			} else if (!this._sourceUrl || !this._cropper) this._error = "Pick an image first.";
+			else {
+				this._submitting = !0;
+				try {
+					let e = await this._getCroppedFile();
+					await ea(this.hass, this.memberSlug, e), this.dispatchEvent(new CustomEvent("avatar-changed")), this._close();
+				} catch (e) {
+					this._error = xi(e, "Failed to upload avatar");
+				} finally {
+					this._submitting = !1;
+				}
 			}
 		}
 	}
@@ -10533,17 +10390,9 @@ var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
 				height: ha,
 				imageSmoothingQuality: "high"
 			});
-			if (!n) {
-				t(/* @__PURE__ */ Error("Failed to crop image"));
-				return;
-			}
-			n.toBlob((n) => {
-				if (!n) {
-					t(/* @__PURE__ */ Error("Failed to encode cropped image"));
-					return;
-				}
-				e(new File([n], "avatar.jpg", { type: "image/jpeg" }));
-			}, "image/jpeg", .9);
+			n ? n.toBlob((n) => {
+				n ? e(new File([n], "avatar.jpg", { type: "image/jpeg" })) : t(/* @__PURE__ */ Error("Failed to encode cropped image"));
+			}, "image/jpeg", .9) : t(/* @__PURE__ */ Error("Failed to crop image"));
 		});
 	}
 	disconnectedCallback() {
@@ -10829,8 +10678,7 @@ var ua = /* @__PURE__ */ c((/* @__PURE__ */ o(((e, t) => {
     `
 ], fa);
 q([W({ attribute: !1 })], _a.prototype, "hass", void 0), q([W()], _a.prototype, "memberSlug", void 0), q([W()], _a.prototype, "memberName", void 0), q([G()], _a.prototype, "_mode", void 0), q([G()], _a.prototype, "_selectedEmoji", void 0), q([G()], _a.prototype, "_sourceUrl", void 0), q([G()], _a.prototype, "_error", void 0), q([G()], _a.prototype, "_submitting", void 0), q([lt("#crop-image")], _a.prototype, "_cropImage", void 0), _a = q([U("lucarne-avatar-upload-modal")], _a);
-//#endregion
-//#region src/editors/lucarne-chores-card-editor.ts
+// src/editors/lucarne-chores-card-editor.ts
 var va = class extends H {
 	constructor(...e) {
 		super(...e), this._familyState = null, this._avatarModalMember = null;
@@ -11208,7 +11056,5 @@ var va = class extends H {
         color: var(--primary-color);
       }
     `], va);
-//#endregion
-//#region src/index.ts
+// src/index.ts
 q([W({ attribute: !1 })], ya.prototype, "hass", void 0), q([G()], ya.prototype, "_config", void 0), q([G()], ya.prototype, "_familyState", void 0), q([G()], ya.prototype, "_avatarModalMember", void 0), ya = q([U("lucarne-chores-card-editor")], ya), k("bundle-complete");
-//#endregion

@@ -46,6 +46,13 @@ updates:
       - dependency-name: "pytest"
       - dependency-name: "pytest-asyncio"
       - dependency-name: "ical"
+      # HA's tree caps dateutil below 3.0 (hass-nabucasa -> pycognito -> boto3
+      # -> botocore: python-dateutil<3.0.0), so a raised floor is unresolvable
+      # and pip dies with resolution-too-deep (PR #172). The floor has no upper
+      # cap, so CI picks up 3.x on its own once botocore lifts it; raise the
+      # floor by hand only if recurrence.py needs a 3.x API.
+      - dependency-name: "python-dateutil"
+        update-types: ["version-update:semver-major"]
 
   # CI workflows under .github/workflows
   - package-ecosystem: github-actions
