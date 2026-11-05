@@ -17,9 +17,9 @@ dev = [
     "pytest-asyncio>=0.24",
     "pytest-cov>=7.1.0",
     # phccc and ical are pinned exactly and move as a UNIT — never bump one alone.
-    # phccc pins homeassistant exactly (0.13.356 -> HA 2026.8.2), and ical must
+    # phccc pins homeassistant exactly (0.13.375 -> HA 2026.10.4), and ical must
     # equal that HA's homeassistant/components/local_todo/manifest.json pin
-    # (2026.8.2 -> ical==14.1.0). The integration drives local_todo, and phccc
+    # (2026.10.4 -> ical==14.3.0). The integration drives local_todo, and phccc
     # does not install integration requirements, so a mismatch raises no resolver
     # error — it silently tests .ics parsing against a version production HA
     # never ships. A >= floor on phccc would let HA drift away from the ical pin
