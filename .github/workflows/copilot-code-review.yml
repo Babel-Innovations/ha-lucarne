@@ -1,0 +1,19 @@
+name: Copilot Code Review
+
+# Keeps this public repo's Copilot code reviews on GitHub-hosted runners, which
+# are free for public repos, while the org default sends reviews to the fleet's
+# linux-copilot sessions (Babel-Innovations/infrastructure#197). GitHub reads only
+# the job; its key is the one GitHub's example uses.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
