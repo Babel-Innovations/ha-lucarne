@@ -20,13 +20,13 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/eslint-plugin": "^8.72.2",
     "@typescript-eslint/parser": "^8.0.0",
     "acorn": "^8.19.0",
     "eslint": "^10.14.0",
     "happy-dom": "^21.0.4",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vite": "^8.3.5"
+    "vite": "^8.3.7"
   }
 }
